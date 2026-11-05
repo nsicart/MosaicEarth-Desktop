@@ -20,12 +20,13 @@ async function displayRaster(path, revision) {
     const response = await fetch(path + "bounds.json");
     if (!response.ok) return;
     const bounds = await response.json();
-    drawn = revision;
-    viewer.entities.removeAll();
     const rectangle = Cesium.Rectangle.fromDegrees(...bounds);
-    const material = new Cesium.ImageMaterialProperty({image: path + "preview.png", transparent: true});
-    viewer.entities.add({rectangle: {coordinates: rectangle, material}});
-    viewer.camera.flyTo({destination: rectangle});
+    const provider = await Cesium.SingleTileImageryProvider.fromUrl(path + "preview.png", {rectangle});
+    if (!selected || !path.includes("/" + selected + "/")) return;
+    drawn = revision;
+    viewer.imageryLayers.removeAll();
+    viewer.imageryLayers.addImageryProvider(provider);
+    viewer.camera.setView({destination: rectangle});
 }
 
 async function refresh() {
@@ -47,7 +48,7 @@ async function refresh() {
     const files = ["job.log"];
     if (project.state === "complete") {
         if (project.mode === "odx") files.push("all.zip");
-        if (project.mode === "gaussian") files.push("output/model.ply", "output/metadata.json", "output/opensplat.log", "colmap.log");
+        if (project.mode === "gaussian") files.push("output/model.ply", "output/benchmark.json", "output/opensplat.log", "colmap.log");
         if (project.mode === "raster") await displayRaster(path, project.result);
     }
     for (const file of files) {
@@ -119,7 +120,9 @@ $("syncProject").onclick = async () => {
 };
 if (window.Cesium) {
     viewer = new Cesium.Viewer("viewer", {baseLayer: false, baseLayerPicker: false, geocoder: false,
-        animation: false, timeline: false, sceneModePicker: false, navigationHelpButton: false});
+        animation: false, timeline: false, sceneMode: Cesium.SceneMode.SCENE2D,
+        sceneModePicker: false, navigationHelpButton: false, fullscreenElement: $("viewer")});
+    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#354854");
 }
 refresh().catch(showError);
 setInterval(() => refresh().catch(showError), 3000);

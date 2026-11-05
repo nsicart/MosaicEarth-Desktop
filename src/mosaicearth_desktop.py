@@ -227,7 +227,7 @@ class Handler(BaseHTTPRequestHandler):
                 _, _, pid, name = path.split("/", 3)
                 result = workspace.project(pid)["result"]
                 if not result or name not in {"job.log", "all.zip", "preview.png", "bounds.json", "colmap.log",
-                                              "output/model.ply", "output/metadata.json", "output/opensplat.log"}:
+                                              "output/model.ply", "output/benchmark.json", "output/opensplat.log"}:
                     raise ValueError("Unknown file")
                 file = workspace.root / pid / result / name
             elif path == "/":
