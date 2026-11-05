@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=MosaicEarth Desktop
+Comment=Local photogrammetry and Gaussian splatting workspace
+Exec=mosaicearth-desktop
+Terminal=true
+Categories=Science;Geography;

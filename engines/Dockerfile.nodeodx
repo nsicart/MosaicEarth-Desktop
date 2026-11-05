@@ -1,0 +1,5 @@
+# The official ODX source is AGPL-3.0. This overlay changes the Fast cutline sample only.
+# The source revision and distribution obligations are tracked in docs/release/technical/.
+ARG NODEODX_BASE=webodm/nodeodx@sha256:f3621054cec0829ff8d94272fa4ec9138621f034135ff9a792fe309bd7d964ad
+FROM ${NODEODX_BASE}
+RUN python3 -c 'from pathlib import Path; p = Path("/code/stages/odm_georeferencing.py"); s = p.read_text(); old = "if args.fast_orthophoto:\n                        decimation_step = 4\n"; assert s.count(old) == 1; p.write_text(s.replace(old, old.replace("= 4", "= 1")))'

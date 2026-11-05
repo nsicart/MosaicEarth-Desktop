@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+/installers/*
+!/installers/README.md
+/resources/cesium/
+/build/

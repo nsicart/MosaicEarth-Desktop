@@ -1,0 +1,24 @@
+# Build and run from the same Debian ABI. Engines run with Docker --network none.
+FROM python:3.11-slim-bookworm AS build
+ARG OPENSPLAT_REV=e33f9dde8ef9c9d59852ffe4d12e0adddcf1fc1b
+ARG LIBTORCH_SHA256=c48fa4cd582022e20315b3ba4d469a64d84af9bd84dd78aefb3f6a7f6b68c34d
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential cmake ninja-build curl unzip git libopencv-dev libeigen3-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /code
+RUN git init source && git -C source remote add origin https://github.com/WebODM/OpenSplat.git \
+    && git -C source fetch --depth 1 origin "$OPENSPLAT_REV" && git -C source checkout FETCH_HEAD \
+    && git -C source submodule update --init --recursive
+RUN curl -fsSL https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.3.1%2Bcpu.zip -o torch.zip \
+    && echo "$LIBTORCH_SHA256  torch.zip" | sha256sum -c - && unzip -q torch.zip \
+    && cmake -G Ninja -S source -B out -DCMAKE_BUILD_TYPE=Release -DGPU_RUNTIME=CPU -DTorch_DIR=/code/libtorch/share/cmake/Torch \
+    && cmake --build out --parallel 2
+
+FROM python:3.11-slim-bookworm
+RUN apt-get update && apt-get install -y --no-install-recommends colmap gdal-bin proj-bin proj-data libopencv-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /code/libtorch/lib/ /opt/opensplat/lib/
+COPY --from=build /code/out/opensplat /opt/opensplat/bin/opensplat
+COPY --from=build /code/source/LICENSE.txt /opt/opensplat/LICENSE.txt
+ENV LD_LIBRARY_PATH=/opt/opensplat/lib QT_QPA_PLATFORM=offscreen OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 PROJ_NETWORK=OFF
+RUN /opt/opensplat/bin/opensplat --version
