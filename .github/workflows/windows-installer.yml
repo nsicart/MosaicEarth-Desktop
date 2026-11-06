@@ -4,15 +4,13 @@ permissions:
   contents: read
 jobs:
   windows-x64:
-    runs-on: windows-2022
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Verify source and build browser runtime
-        shell: bash
-        run: ./scripts/fetch-cesium.sh
-      - name: Compile unsigned installer
-        shell: pwsh
-        run: ./scripts/build-windows.ps1
+      - name: Install NSIS
+        run: sudo apt-get install -y --no-install-recommends nsis=3.09-4ubuntu1 nsis-common=3.09-4ubuntu1
+      - name: Cross-build unsigned installer
+        run: ./scripts/build-windows.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: MosaicEarth-Desktop-Windows-x64
