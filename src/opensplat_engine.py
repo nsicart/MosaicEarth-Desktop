@@ -34,10 +34,12 @@ def prepare_colmap(project: Path, binary: str, log_path: Path, *, timeout=600) -
                            timeout=remaining, check=True)
 
         run("feature_extractor", "--database_path", database, "--image_path", images,
-            "--SiftExtraction.use_gpu", "0")
-        run("exhaustive_matcher", "--database_path", database, "--SiftMatching.use_gpu", "0")
+            "--SiftExtraction.use_gpu", "0", "--SiftExtraction.num_threads", "2",
+            "--SiftExtraction.max_image_size", "1600")
+        run("exhaustive_matcher", "--database_path", database, "--SiftMatching.use_gpu", "0",
+            "--SiftMatching.num_threads", "2")
         run("mapper", "--database_path", database, "--image_path", images, "--output_path", str(sparse),
-            "--Mapper.min_model_size", "4")
+            "--Mapper.min_model_size", "4", "--Mapper.num_threads", "2")
         models = []
         for candidate in sorted(sparse.iterdir()):
             if (candidate / "images.bin").is_file():
