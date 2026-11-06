@@ -1,0 +1,25 @@
+# Dependency versions used for the Desktop release
+# Formats: component=release pin; docker images can be provisioned locally using BUILD.md.
+CesiumJS=1.144.0
+CPython-Windows=3.12.10-amd64
+NSIS=3.09
+NodeODX=2.4.0+02296467c0ca2142c2c7771876788bacbed102f6
+ODX=3.8.5+d1e15c7a1daf1be77713cc68cd063a05d79edbb5
+NodeODX-image=webodm/nodeodx@sha256:f3621054cec0829ff8d94272fa4ec9138621f034135ff9a792fe309bd7d964ad
+OpenSplat=e33f9dde8ef9c9d59852ffe4d12e0adddcf1fc1b
+libtorch-CPU=2.3.1+sha256:c48fa4cd582022e20315b3ba4d469a64d84af9bd84dd78aefb3f6a7f6b68c34d
+libtorch-CUDA=2.3.1+sha256:f29757bdae8b26583431d5811e627b1b993e97d00d8fe66c51fb9d192490087b
+NVIDIA-CUDA=11.8.0
+
+# CPU runtime (Debian package versions resolved at validation)
+$colmap=$3.8-1
+$gdal-bin=$3.6.2+dfsg-1+b2
+$proj-bin=$9.1.1-1+b1
+$proj-data=$9.1.1-1
+$python3=$3.11.2-1+b1
+$python3-numpy=$1:1.24.2-1+deb12u1
+
+# CUDA runtime (Ubuntu package versions resolved at validation)
+$colmap=$3.7-2
+$python3=$3.10.6-1~22.04.1
+$python3-numpy=$1:1.21.5-1ubuntu22.04.1
