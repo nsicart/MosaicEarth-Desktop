@@ -1,4 +1,6 @@
-# 0.1.3 development release
+# 0.1.4 Linux development release
+
+Linux adds optional CUDA for local Gaussian training. The CPU remains the default. Windows stays at 0.1.3 and awaits installation testing on Windows.
 
 The local workspace supports SQLite projects, GeoTIFF preview in CesiumJS, NodeODX photogrammetry, and CPU COLMAP and OpenSplat with Gaussian PLY export. The optional MyEarth sync copies the selected project name after sign-in. Imagery and model uploads remain local.
 

@@ -22,6 +22,7 @@ from urllib.parse import unquote, urlsplit
 ROOT = Path(__file__).resolve().parent.parent
 RESOURCES = ROOT / "resources"
 LOCAL_IMAGE = "mosaicearth-desktop/local-engine:0.1.0"
+CUDA_IMAGE = "mosaicearth-desktop/local-engine:0.1.0-cuda"
 ODX_IMAGE = "mosaicearth-desktop/nodeodx:0.1.0"
 MAX_UPLOAD = 3 * 1024**3
 IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
@@ -29,10 +30,11 @@ PROJECT_ID = re.compile(r"[0-9a-f]{32}")
 
 
 class Workspace:
-    def __init__(self, root, steps=2000):
+    def __init__(self, root, steps=2000, gaussian_device="cpu"):
         self.root = root.resolve()
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.steps = steps
+        self.gaussian_device = gaussian_device
         self.cloud_session = None
         self.cloud_lock = threading.Lock()
         self.docker = shlex.split(os.environ.get("ME_DOCKER", "docker"))
@@ -174,9 +176,12 @@ class Workspace:
                         if not any(Path(n).name == "odm_orthophoto.tif" for n in archive.namelist()):
                             raise ValueError("The local reconstruction did not produce an orthophoto")
                 else:
+                    use_cuda = mode == "gaussian" and self.gaussian_device == "cuda"
+                    gpu_args = ["--gpus", "all"] if use_cuda else []
                     self.docker_run(["run", "--rm", "--pull=never", "--network", "none", "--name", job_name,
-                                     *user_args, *script_dir, *work_mount, LOCAL_IMAGE, *runner,
-                                     "--steps", str(self.steps)], log, timeout=9400)
+                                     *gpu_args, *user_args, *script_dir, *work_mount,
+                                     CUDA_IMAGE if use_cuda else LOCAL_IMAGE, *runner,
+                                     "--steps", str(self.steps), "--device", "cuda" if use_cuda else "cpu"], log, timeout=9400)
         except (OSError, subprocess.SubprocessError, ValueError, zipfile.BadZipFile) as exc:
             state = "failed"
             error = str(exc) if isinstance(exc, ValueError) else f"Local processing failed ({type(exc).__name__}). See job.log."
@@ -313,9 +318,10 @@ def main():
     args.add_argument("--port", type=int, default=19754)
     args.add_argument("--no-browser", action="store_true")
     args.add_argument("--gaussian-steps", type=int, default=2000, choices=range(1, 12001), metavar="1..12000")
+    args.add_argument("--gaussian-device", choices=("cpu", "cuda"), default="cpu")
     options = args.parse_args()
     with ThreadingHTTPServer(("127.0.0.1", options.port), Handler) as server:
-        server.workspace = Workspace(options.data, options.gaussian_steps)
+        server.workspace = Workspace(options.data, options.gaussian_steps, options.gaussian_device)
         server.token = secrets.token_urlsafe(32)
         server.host = f"127.0.0.1:{server.server_port}"
         url = "http://" + server.host

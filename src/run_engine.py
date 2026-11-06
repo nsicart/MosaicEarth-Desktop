@@ -9,13 +9,15 @@ from pathlib import Path
 from opensplat_engine import OpenSplatAdapter, prepare_colmap
 
 
-def gaussian(work, steps):
+def gaussian(work, steps, device):
     from gaussian_export import export_gaussian
 
     names = prepare_colmap(work, "colmap", work / "colmap.log", timeout=1800)
-    OpenSplatAdapter("/opt/opensplat/bin/opensplat", cpu=True).train(
+    _, _, benchmark = OpenSplatAdapter("/opt/opensplat/bin/opensplat", cpu=device == "cpu").train(
         work, work / "output", "FAST", names, timeout=7200, iterations=steps,
     )
+    if benchmark["device"].lower() != device:
+        raise RuntimeError(f"OpenSplat reported {benchmark['device']} instead of the requested {device} device")
     export_gaussian(work / "output")
 
 
@@ -105,11 +107,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("engine", choices=("gaussian", "odx", "raster"))
     parser.add_argument("--steps", type=int, default=2000)
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--token", default="")
     args = parser.parse_args()
     work = Path("/work")
     if args.engine == "gaussian":
-        gaussian(work, args.steps)
+        gaussian(work, args.steps, args.device)
     elif args.engine == "raster":
         raster(work)
     else:
