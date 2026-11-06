@@ -101,7 +101,7 @@ class OpenSplatAdapter:
             raise ValueError("OpenSplat requires at least four registered views")
         output.mkdir(parents=True, exist_ok=False)
         version = subprocess.run([self.binary, "--version"], check=True, capture_output=True,
-                                 text=True, timeout=15).stdout.strip()
+                                 text=True, timeout=90).stdout.strip()
         if not version:
             raise RuntimeError("OpenSplat did not report its version")
         steps, downscale, max_splats, sh = PRESETS[preset]
