@@ -4,6 +4,7 @@ OutFile "../installers/MosaicEarth-Desktop-0.1.3-x64-Setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\MosaicEarth Desktop"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
+SetDateSave off
 
 !include "LogicLib.nsh"
 !include "x64.nsh"
