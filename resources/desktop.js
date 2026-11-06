@@ -5,6 +5,7 @@ const token = document.querySelector("meta[name=workspace-token]").content;
 let selected = "";
 let viewer;
 let drawn = "";
+let rasterSurface;
 
 async function post(path, body, filename) {
     const headers = {"X-Mosaic-Workspace": token};
@@ -21,16 +22,26 @@ async function displayRaster(path, revision) {
     if (!response.ok) return;
     const bounds = await response.json();
     const rectangle = Cesium.Rectangle.fromDegrees(...bounds);
-    const provider = await Cesium.SingleTileImageryProvider.fromUrl(path + "preview.png", {rectangle});
     if (!selected || !path.includes("/" + selected + "/")) return;
     drawn = revision;
-    viewer.imageryLayers.removeAll();
-    viewer.imageryLayers.addImageryProvider(provider);
-    viewer.camera.setView({destination: rectangle});
+    if (rasterSurface) viewer.scene.primitives.remove(rasterSurface);
+    const image = path + "preview.png";
+    rasterSurface = viewer.scene.primitives.add(new Cesium.Primitive({
+        geometryInstances: new Cesium.GeometryInstance({geometry: new Cesium.RectangleGeometry({
+            rectangle, height: 0, vertexFormat: Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT
+        })}),
+        appearance: new Cesium.EllipsoidSurfaceAppearance({aboveGround: true,
+            material: Cesium.Material.fromType("Image", {image})}),
+        asynchronous: false
+    }));
+    const center = Cesium.Rectangle.center(rectangle);
+    const height = Math.max(100, 3 * Cesium.BoundingSphere.fromRectangle3D(rectangle).radius);
+    viewer.camera.setView({destination: Cesium.Cartesian3.fromRadians(center.longitude, center.latitude, height),
+        orientation: {heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0}});
     viewer.scene.requestRender();
     viewer.render();
     $("viewer").dataset.rasterLayer = "loaded";
-    $("rasterPreview").src = path + "preview.png";
+    $("rasterPreview").src = image;
     $("rasterPreview").hidden = false;
 }
 
@@ -46,7 +57,8 @@ async function refresh() {
     $("actions").hidden = !project;
     if (!project) return;
     if (project.mode !== "raster" && drawn && viewer) {
-        viewer.imageryLayers.removeAll();
+        if (rasterSurface) viewer.scene.primitives.remove(rasterSurface);
+        rasterSurface = undefined;
         $("rasterPreview").hidden = true;
         drawn = "";
     }
@@ -132,10 +144,10 @@ $("syncProject").onclick = async () => {
 };
 if (window.Cesium) {
     viewer = new Cesium.Viewer("viewer", {baseLayer: false, baseLayerPicker: false, geocoder: false,
-        animation: false, timeline: false, sceneMode: Cesium.SceneMode.SCENE2D,
+        animation: false, timeline: false, sceneMode: Cesium.SceneMode.SCENE3D,
         sceneModePicker: false, navigationHelpButton: false, fullscreenElement: $("viewer"),
-        skyBox: false, skyAtmosphere: false});
-    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#354854");
+        skyBox: false, skyAtmosphere: false, contextOptions: {webgl: {preserveDrawingBuffer: true}}});
+    viewer.scene.globe.show = false;
 }
 refresh().catch(showError);
 setInterval(() => refresh().catch(showError), 3000);

@@ -15,4 +15,4 @@ printf '\r\n..\\src\r\n' >> build/windows-python/python312._pth
 printf '%s\n' "$source_rev" > build/SOURCE_REVISION
 python3 -m py_compile src/*.py
 makensis -V3 packaging/windows.nsi
-(cd installers && sha256sum MosaicEarth-Desktop-0.1.2-x64-Setup.exe > SHA256SUMS.windows)
+(cd installers && sha256sum MosaicEarth-Desktop-0.1.3-x64-Setup.exe > SHA256SUMS.windows)
