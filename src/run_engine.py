@@ -10,10 +10,13 @@ from opensplat_engine import OpenSplatAdapter, prepare_colmap
 
 
 def gaussian(work, steps):
+    from gaussian_export import export_gaussian
+
     names = prepare_colmap(work, "colmap", work / "colmap.log", timeout=1800)
     OpenSplatAdapter("/opt/opensplat/bin/opensplat", cpu=True).train(
         work, work / "output", "FAST", names, timeout=7200, iterations=steps,
     )
+    export_gaussian(work / "output")
 
 
 def raster(work):

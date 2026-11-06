@@ -143,7 +143,7 @@ class Workspace:
         state, error = "complete", None
         job_name = "me-desktop-" + uuid.uuid4().hex
         user_args = ["--user", f"{os.getuid()}:{os.getgid()}"] if os.name != "nt" else []
-        runner = ["python3", "/desktop/run_engine.py", mode]
+        runner = ["/usr/bin/python3", "/desktop/run_engine.py", mode]
         try:
             work.mkdir()
             script_dir = self.mount(ROOT / "src", "/desktop", True)
@@ -227,7 +227,8 @@ class Handler(BaseHTTPRequestHandler):
                 _, _, pid, name = path.split("/", 3)
                 result = workspace.project(pid)["result"]
                 if not result or name not in {"job.log", "all.zip", "preview.png", "bounds.json", "colmap.log",
-                                              "output/model.ply", "output/benchmark.json", "output/opensplat.log"}:
+                                              "output/model.ply", "output/model.spz", "output/model.splat",
+                                              "output/gaussian-3dtiles.zip", "output/benchmark.json", "output/opensplat.log"}:
                     raise ValueError("Unknown file")
                 file = workspace.root / pid / result / name
             elif path == "/":

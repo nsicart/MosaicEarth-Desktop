@@ -27,6 +27,11 @@ async function displayRaster(path, revision) {
     viewer.imageryLayers.removeAll();
     viewer.imageryLayers.addImageryProvider(provider);
     viewer.camera.setView({destination: rectangle});
+    viewer.scene.requestRender();
+    viewer.render();
+    $("viewer").dataset.rasterLayer = "loaded";
+    $("rasterPreview").src = path + "preview.png";
+    $("rasterPreview").hidden = false;
 }
 
 async function refresh() {
@@ -40,6 +45,11 @@ async function refresh() {
     const project = projects.find(p => p.id === selected);
     $("actions").hidden = !project;
     if (!project) return;
+    if (project.mode !== "raster" && drawn && viewer) {
+        viewer.imageryLayers.removeAll();
+        $("rasterPreview").hidden = true;
+        drawn = "";
+    }
     $("title").textContent = project.name;
     $("state").textContent = project.state + (project.error ? " · " + project.error : "");
     $("files").replaceChildren();
@@ -48,7 +58,9 @@ async function refresh() {
     const files = ["job.log"];
     if (project.state === "complete") {
         if (project.mode === "odx") files.push("all.zip");
-        if (project.mode === "gaussian") files.push("output/model.ply", "output/benchmark.json", "output/opensplat.log", "colmap.log");
+        if (project.mode === "gaussian") files.push("output/model.ply", "output/model.spz",
+            "output/model.splat", "output/gaussian-3dtiles.zip", "output/benchmark.json",
+            "output/opensplat.log", "colmap.log");
         if (project.mode === "raster") await displayRaster(path, project.result);
     }
     for (const file of files) {
@@ -121,7 +133,8 @@ $("syncProject").onclick = async () => {
 if (window.Cesium) {
     viewer = new Cesium.Viewer("viewer", {baseLayer: false, baseLayerPicker: false, geocoder: false,
         animation: false, timeline: false, sceneMode: Cesium.SceneMode.SCENE2D,
-        sceneModePicker: false, navigationHelpButton: false, fullscreenElement: $("viewer")});
+        sceneModePicker: false, navigationHelpButton: false, fullscreenElement: $("viewer"),
+        skyBox: false, skyAtmosphere: false});
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#354854");
 }
 refresh().catch(showError);

@@ -1,12 +1,12 @@
 [Setup]
 AppId=MosaicEarth.Desktop.Local
 AppName=MosaicEarth Desktop
-AppVersion=0.1.1
+AppVersion=0.1.2
 DefaultDirName={localappdata}\Programs\MosaicEarth Desktop
 DefaultGroupName=MosaicEarth Desktop
 PrivilegesRequired=lowest
 OutputDir=..\installers
-OutputBaseFilename=MosaicEarth-Desktop-0.1.1-x64-Setup
+OutputBaseFilename=MosaicEarth-Desktop-0.1.2-x64-Setup
 LicenseFile=..\LICENSE
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

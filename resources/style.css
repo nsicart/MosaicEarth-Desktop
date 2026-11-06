@@ -9,3 +9,4 @@ input, button { margin: .3rem; padding: .45rem; }
 #viewer { height: 54vh; min-height: 17rem; }
 a { color: #8ee5ff; }
 @media (max-width: 720px) { main { display: block; } }
+#rasterPreview { max-width: min(100%, 32rem); margin-top: 1rem; }
