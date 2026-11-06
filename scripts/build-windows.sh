@@ -7,6 +7,7 @@ test -z "$(git status --porcelain --untracked-files=normal)"
 export SOURCE_DATE_EPOCH=$(git show -s --format=%ct "$source_rev")
 version=3.12.10
 mkdir -p build/windows-python installers
+cp /usr/share/doc/nsis/copyright build/NSIS-COPYRIGHT
 curl -fsSL "https://www.python.org/ftp/python/$version/python-$version-embed-amd64.zip" -o build/python.zip
 echo "$(cat packaging/python-windows.sha256)  build/python.zip" | sha256sum -c -
 unzip -oq build/python.zip -d build/windows-python
