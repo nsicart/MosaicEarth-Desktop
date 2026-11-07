@@ -129,6 +129,7 @@ class MosaicEarthPlugin:
         self.client = Client()
         self.task = None
         self.dialog = None
+        self.packaging = False
 
     def initGui(self):
         self.action = QAction("MosaicEarth Cloud", self.iface.mainWindow())
@@ -155,7 +156,7 @@ class MosaicEarthPlugin:
         layout.addWidget(QLabel("Photos, layer data, styles and project settings are synchronized privately."))
         form = QFormLayout()
         self.email, self.password = QLineEdit(), QLineEdit()
-        self.password.setEchoMode(QLineEdit.Password)
+        self.password.setEchoMode(QLineEdit.EchoMode.Password)
         form.addRow("MosaicEarth email", self.email)
         form.addRow("Password", self.password)
         layout.addLayout(form)
@@ -163,16 +164,33 @@ class MosaicEarthPlugin:
         self.status.setWordWrap(True)
         self.progress = QProgressBar()
         self.entries = QListWidget()
+        self.buttons = {}
         for label, callback in [("Sign in", self.signin), ("Synchronize current project / resume", self.push),
             ("Browse cloud projects", self.catalog), ("Download selected project", self.pull),
             ("Pause transfer", self.pause), ("Sign out", self.signout)]:
             button = QPushButton(label)
             button.clicked.connect(callback)
             layout.addWidget(button)
+            self.buttons[callback.__name__] = button
+        self.entries.currentRowChanged.connect(self.refresh_controls)
         layout.addWidget(self.entries)
         layout.addWidget(self.progress)
         layout.addWidget(self.status)
+        self.refresh_controls()
         self.dialog.show()
+
+    def refresh_controls(self, *args):
+        if self.dialog is None:
+            return
+        busy = self.task is not None or self.packaging
+        signed_in = bool(self.client.token)
+        self.email.setEnabled(not busy and not signed_in)
+        self.password.setEnabled(not busy and not signed_in)
+        self.buttons['signin'].setEnabled(not busy and not signed_in)
+        for action in ['push', 'catalog', 'signout']:
+            self.buttons[action].setEnabled(signed_in and not busy)
+        self.buttons['pull'].setEnabled(signed_in and not busy and self.entries.currentRow() >= 0)
+        self.buttons['pause'].setEnabled(self.task is not None)
 
     def signin(self):
         email, password = self.email.text(), self.password.text()
@@ -181,7 +199,7 @@ class MosaicEarthPlugin:
                         lambda result: self.status.setText("Signed in as " + result["email"]))
 
     def background(self, title, operation, complete=None):
-        if self.task and self.task.isActive():
+        if self.task is not None or self.packaging:
             self.status.setText("Pause or finish the current transfer first.")
             return
         self.status.setText(title)
@@ -191,7 +209,11 @@ class MosaicEarthPlugin:
             self.client.progress = lambda done, total, message: task.setProgress(100 * done / total if total else 0)
             return operation(task)
         def finished(exception, result=None):
+            # QgsTaskManager owns and deletes the C++ task after completion.
+            # Never keep its Python wrapper for the next button action.
+            self.task = None
             self.client.canceled = lambda: False
+            self.client.progress = lambda *args: None
             if exception:
                 self.status.setText(str(exception))
             elif result is not None:
@@ -200,15 +222,17 @@ class MosaicEarthPlugin:
                     complete(result)
             else:
                 self.status.setText("Paused. Resume to continue from saved chunks.")
+            self.refresh_controls()
         self.task = QgsTask.fromFunction(title, run, on_finished=finished)
         self.task.progressChanged.connect(lambda value: self.progress.setValue(int(value)))
+        self.refresh_controls()
         QgsApplication.taskManager().addTask(self.task)
 
     def push(self):
         if not self.client.token:
             self.status.setText("Sign in before synchronizing")
             return
-        if self.task and self.task.isActive():
+        if self.task is not None or self.packaging:
             self.status.setText("A transfer is already running")
             return
         project = QgsProject.instance()
@@ -217,7 +241,9 @@ class MosaicEarthPlugin:
         if not re.fullmatch("[0-9a-f]{32}", origin):
             origin = uuid.uuid4().hex
         project.writeEntry("MosaicEarth", "projectId", origin)
-        base = Path(QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)) / "mosaicearth-sync" / origin
+        base = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)) / "mosaicearth-sync" / origin
+        self.packaging = True
+        self.refresh_controls()
         try:
             self.status.setText("Packaging layers, CRS and styles…")
             QApplication.processEvents()
@@ -225,6 +251,9 @@ class MosaicEarthPlugin:
         except Exception as exc:
             self.status.setText(str(exc))
             return
+        finally:
+            self.packaging = False
+            self.refresh_controls()
         name = project.title() or Path(project.fileName()).stem or "QGIS project"
         crs = project.crs().authid()
         def upload(task):
@@ -289,5 +318,8 @@ class MosaicEarthPlugin:
             self.task.cancel()
 
     def signout(self):
+        def complete(result):
+            self.entries.clear()
+            self.status.setText("Signed out")
         self.background("Signing out", lambda task: self.client.signout() or True,
-                        lambda result: self.status.setText("Signed out"))
+                        complete)
