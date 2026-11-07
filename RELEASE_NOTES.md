@@ -1,3 +1,11 @@
+# 0.2.1 — validation candidate
+
+Windows renders the UTF-8 interface correctly. The source edition hides commercial activation controls, result downloads have separate clickable targets, and missing Docker/engines produce an actionable focused alert without replacing an existing completed result.
+
+QGIS supports both 3.x (3.34+) and 4.x. The plugin releases completed task wrappers before the next action, uses Qt 6-compatible password/storage enums, and disables actions while packaging or transferring. Signing out clears the cloud catalog. WebODM/WebUI pages use the MosaicEarth page title.
+
+Validation on physical Windows includes source startup without an account, photo import, native WebODM 4.0 cloud roundtrip and viewers, and QGIS 3.44.15 / 4.2.3 project roundtrips preserving external SVG/layout resources. The QGIS task-lifecycle regression passes on both versions. OpenDroneMap WebUI 3.2.5 completed its public-cloud roundtrip in Linux. The official Windows wizard and Docker processing remain in progress; this candidate is not yet promoted.
+
 # 0.2.0
 
 This release replaces project-name-only synchronization with explicit, private transfer of originals, finished products, attachments and metadata. Desktop, WebODM, OpenDroneMap WebUI and QGIS share resumable chunks, SHA-256 verification, immutable revisions and revocable cloud sessions. Existing metadata-only endpoints are retired rather than reporting incomplete transfers as successful.
