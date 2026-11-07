@@ -9,6 +9,23 @@ let rasterSurface;
 let localTiles;
 let displayedProject = "";
 let loadingGaussian = "";
+let gaussianCameras = [];
+
+function showGaussianView() {
+    const camera = gaussianCameras[Number($("gaussianView").value)];
+    if (!camera || !localTiles) return false;
+    const frame = localTiles.modelMatrix;
+    const position = Cesium.Matrix4.multiplyByPoint(frame, new Cesium.Cartesian3(...camera.position), new Cesium.Cartesian3());
+    // OpenSplat cameras.json exports camera-to-world OpenCV axes: +Z forward, +Y down.
+    const direction = Cesium.Matrix4.multiplyByPointAsVector(frame, new Cesium.Cartesian3(...camera.rotation.map(row => row[2])), new Cesium.Cartesian3());
+    const up = Cesium.Matrix4.multiplyByPointAsVector(frame, new Cesium.Cartesian3(...camera.rotation.map(row => -row[1])), new Cesium.Cartesian3());
+    viewer.camera.setView({destination: position, orientation: {direction, up}});
+    viewer.camera.frustum.near = 0.01;
+    viewer.camera.frustum.fov = viewer.camera.frustum.aspectRatio > 1 ?
+        2 * Math.atan(camera.width / (2 * camera.fx)) : 2 * Math.atan(camera.height / (2 * camera.fy));
+    viewer.scene.requestRender();
+    return true;
+}
 
 async function post(path, body, filename) {
     $("notice").hidden = true;
@@ -54,6 +71,7 @@ async function displayGaussian(project) {
     const revision = project.result;
     const pid = project.id;
     loadingGaussian = revision;
+    $("gaussianViews").hidden = true;
     try {
     const tiles = await Cesium.Cesium3DTileset.fromUrl("/project-files/" + pid + "/" + revision + "/output/tileset.json", {maximumScreenSpaceError: 2});
     if (selected !== pid) { tiles.destroy(); return; }
@@ -65,7 +83,25 @@ async function displayGaussian(project) {
     tiles.modelMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(Cesium.Cartesian3.fromDegrees(0, 0, 1000));
     localTiles = viewer.scene.primitives.add(tiles);
     drawn = revision;
-    await viewer.zoomTo(tiles, new Cesium.HeadingPitchRange(0, -0.35, Math.max(2, tiles.boundingSphere.radius * 2.5)));
+    let camerasForProject = [];
+    try {
+        const response = await fetch("/project-files/" + pid + "/" + revision + "/output/cameras.json");
+        if (response.ok) {
+            const cameras = await response.json();
+            if (Array.isArray(cameras)) camerasForProject = cameras.filter(c =>
+                c.position?.length === 3 && c.position.every(Number.isFinite) &&
+                c.rotation?.length === 3 && c.rotation.every(row => row.length === 3 && row.every(Number.isFinite)) &&
+                [c.width, c.height, c.fx, c.fy].every(value => Number.isFinite(value) && value > 0));
+        }
+    } catch (_) { /* Older imported results can lack the training cameras. */ }
+    if (selected !== pid) return;
+    gaussianCameras = camerasForProject;
+    $("gaussianView").replaceChildren(...gaussianCameras.map((camera, index) => {
+        const option = document.createElement("option"); option.value = index; option.textContent = camera.img_name; return option;
+    }));
+    $("gaussianViews").hidden = !gaussianCameras.length;
+    $("gaussianView").value = String(Math.floor(gaussianCameras.length / 2));
+    if (!showGaussianView()) await viewer.zoomTo(tiles, new Cesium.HeadingPitchRange(0, -0.35, Math.max(2, tiles.boundingSphere.radius * 2.5)));
     $("viewer").dataset.gaussianLayer = "loaded";
     viewer.scene.requestRender();
     } finally { if (loadingGaussian === revision) loadingGaussian = ""; }
@@ -92,6 +128,7 @@ async function refresh() {
     }
     if (project.mode !== "gaussian" && localTiles && viewer) {
         viewer.scene.primitives.remove(localTiles); localTiles = undefined; drawn = "";
+        gaussianCameras = []; $("gaussianViews").hidden = true;
     }
     $("title").textContent = project.name;
     if (displayedProject !== project.id) { $("processingControls").open = project.state !== "complete"; $("allFiles").replaceChildren(); displayedProject = project.id; }
@@ -290,6 +327,7 @@ $("activateInstallation").onsubmit = async event => {
 };
 $("installEngines").onclick = () => post("/api/installation/engines").then(refresh).catch(error => {$("installationState").textContent = error.message;});
 $("checkInstallation").onclick = () => checkInstallation().catch(showError);
+$("gaussianView").onchange = showGaussianView;
 checkInstallation().catch(showError);
 fetch("/api/cloud/status").then(r => r.json()).then(data => showCloudSession(data.user)).catch(showError);
 if (window.Cesium) {
@@ -300,7 +338,9 @@ if (window.Cesium) {
     viewer.scene.globe.show = false;
     viewer.homeButton.viewModel.command.beforeExecute.addEventListener(event => {
         event.cancel = true;
-        if (localTiles) viewer.zoomTo(localTiles, new Cesium.HeadingPitchRange(0, -0.35, Math.max(2, localTiles.boundingSphere.radius * 2.5)));
+        if (localTiles) {
+            if (!showGaussianView()) viewer.zoomTo(localTiles, new Cesium.HeadingPitchRange(0, -0.35, Math.max(2, localTiles.boundingSphere.radius * 2.5)));
+        }
         else { drawn = ""; refresh().catch(showError); }
     });
 }

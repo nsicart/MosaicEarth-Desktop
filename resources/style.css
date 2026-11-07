@@ -1,5 +1,6 @@
 :root { color-scheme: dark; font: 15px/1.5 system-ui, sans-serif; background: #0e1715; color: #e9f0ed; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; }
 header { padding: 1.3rem 2rem; background: #14251f; border-bottom: 1px solid #345046; }
 header p { margin: .3rem 0 0; color: #b8cbc3; }
@@ -16,7 +17,7 @@ input[type=file] { width: 100%; }
 button { color: #f5faf7; background: #264a3a; cursor: pointer; min-height: 42px; }
 button:hover:not(:disabled) { background: #34654c; border-color: #9bcea9; }
 button:disabled { opacity: .55; cursor: not-allowed; }
-button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid #bbef86; outline-offset: 3px; }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid #bbef86; outline-offset: 3px; }
 #projects { margin: 1rem 0; }
 #projects button, #cloudCatalog button { display: block; width: 100%; text-align: left; overflow-wrap: anywhere; }
 #actions button + button { margin-left: .4rem; }
