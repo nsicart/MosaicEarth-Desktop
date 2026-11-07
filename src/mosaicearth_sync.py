@@ -28,7 +28,9 @@ def checksum(path):
 
 
 class SyncError(ValueError):
-    pass
+    def __init__(self, message, retryable=False):
+        super().__init__(message)
+        self.retryable = retryable
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -75,11 +77,36 @@ class Client:
                     reason = body.get("detail") or body.get("message") or "Request rejected"
                 except (ValueError, OSError):
                     reason = "Request rejected"
-                raise SyncError(f"{reason} (HTTP {exc.code})") from None
+                raise SyncError(f"{reason} (HTTP {exc.code})", retryable=exc.code in {429, 502, 503, 504}) from None
             except (urllib.error.URLError, http.client.HTTPException, TimeoutError, OSError) as exc:
                 if attempt == 3:
-                    raise SyncError("Cloud connection interrupted. Resume to continue safely.") from exc
+                    raise SyncError("Cloud connection interrupted. Resume to continue safely.", retryable=True) from exc
                 time.sleep(2 ** attempt)
+
+    def download_range(self, path, start, end, total):
+        """Retry a bounded chunk; only return complete, correctly located bytes."""
+        for attempt in range(6):
+            if self.canceled():
+                raise SyncError("Transfer paused. Resume to continue from the saved offset.")
+            try:
+                with self.request('GET', path, headers={'Range': f'bytes={start}-{end}'}, raw=True) as response:
+                    expected = f'bytes {start}-{end}/{total}'
+                    if response.status != 206 or response.headers.get('Content-Range') != expected:
+                        raise SyncError('The server did not return the requested file range. The partial download is preserved.')
+                    data = response.read(end - start + 2)
+                    if len(data) != end - start + 1:
+                        raise SyncError('Download interrupted before the chunk was complete.', retryable=True)
+                    return data
+            except (SyncError, http.client.HTTPException, TimeoutError, OSError) as exc:
+                if isinstance(exc, SyncError) and not exc.retryable:
+                    raise
+                if attempt == 5:
+                    raise SyncError('Connection unavailable. Retry to continue from the saved download; completed chunks are preserved.', retryable=True) from exc
+                self.progress(start, total, 'Connection interrupted. Retrying from the last saved chunk…')
+                for _ in range(min(30, 2 ** (attempt + 1))):
+                    if self.canceled():
+                        raise SyncError('Transfer paused. Resume to continue from the saved offset.')
+                    time.sleep(1)
 
     def signin(self, email, password):
         data = self.request("POST", "/api/v2/desktop/cloud-auth", {"email": email, "password": password})

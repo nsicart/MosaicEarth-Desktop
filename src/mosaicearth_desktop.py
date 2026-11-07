@@ -263,7 +263,7 @@ class Workspace:
             from mosaicearth_sync import checksum, CHUNK
             expected = json.loads((RESOURCES / "engine-payload.json").read_text())
             grant = json.loads((self.root / "account-grant.json").read_text())
-            client = Client(canceled=canceled)
+            client = Client(canceled=canceled, progress=progress)
             client.token = client.request("POST", "/api/v2/desktop/provision-session", {"grant": grant})["token"]
             archive = self.root / expected["filename"]
             offset = archive.stat().st_size if archive.exists() else 0
@@ -273,12 +273,7 @@ class Workspace:
             with archive.open("ab") as stream:
                 while offset < expected["bytes"]:
                     end = min(offset + CHUNK, expected["bytes"]) - 1
-                    with client.request("GET", "/api/v2/desktop/engine-bundle", headers={"Range": f"bytes={offset}-{end}"}, raw=True) as response:
-                        if response.status != 206:
-                            raise ValueError("The engine download did not support safe resuming")
-                        block = response.read(CHUNK + 1)
-                    if len(block) != end - offset + 1:
-                        raise ValueError("Engine download interrupted. Retry to resume.")
+                    block = client.download_range('/api/v2/desktop/engine-bundle', offset, end, expected['bytes'])
                     stream.write(block)
                     stream.flush()
                     os.fsync(stream.fileno())

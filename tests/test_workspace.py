@@ -3,13 +3,40 @@ import tempfile
 import unittest
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from mosaicearth_desktop import Workspace, docker_command
 from mosaicearth_sync import build_manifest, checksum, Client, SyncError, extract_products
 
 
 class WorkspaceTest(unittest.TestCase):
+    def test_range_download_recovers_without_accepting_partial_bytes(self):
+        client = Client()
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.status = 206
+        response.headers = {'Content-Range': 'bytes 4-7/8'}
+        response.read.side_effect = [b'ab', b'abcd']
+        with patch.object(client, 'request', return_value=response) as request, patch('mosaicearth_sync.time.sleep'):
+            self.assertEqual(client.download_range('/bundle', 4, 7, 8), b'abcd')
+        self.assertEqual(request.call_count, 2)
+        self.assertTrue(all(c.kwargs['headers']['Range'] == 'bytes=4-7' for c in request.call_args_list))
+
+    def test_range_download_rejects_wrong_offset_and_honors_pause(self):
+        client = Client()
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.status = 206
+        response.headers = {'Content-Range': 'bytes 0-3/8'}
+        with patch.object(client, 'request', return_value=response):
+            with self.assertRaisesRegex(SyncError, 'requested file range'):
+                client.download_range('/bundle', 4, 7, 8)
+        client.canceled = lambda: True
+        with patch.object(client, 'request') as request:
+            with self.assertRaisesRegex(SyncError, 'paused'):
+                client.download_range('/bundle', 4, 7, 8)
+            request.assert_not_called()
+
     def test_windows_docker_installed_after_session_started(self):
         with tempfile.TemporaryDirectory() as temp:
             executable = Path(temp) / 'Programs/DockerDesktop/resources/bin/docker.exe'
