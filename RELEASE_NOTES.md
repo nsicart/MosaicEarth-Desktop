@@ -2,9 +2,11 @@
 
 Windows renders the UTF-8 interface correctly. The source edition hides commercial activation controls, result downloads have separate clickable targets, and missing Docker/engines produce an actionable focused alert without replacing an existing completed result.
 
+Paused transfers have a direct Resume button and failed transfers have Retry. Reloading the local page restores the current cloud sign-in state. Gaussian models open from an exported reconstruction camera, with a photo viewpoint selector and a working Home reset, instead of an arbitrary view of the bounding box. This changes only the viewer camera; it does not alter the trained model or its quality.
+
 QGIS supports both 3.x (3.34+) and 4.x. The plugin releases completed task wrappers before the next action, uses Qt 6-compatible password/storage enums, and disables actions while packaging or transferring. Signing out clears the cloud catalog. WebODM/WebUI pages use the MosaicEarth page title.
 
-Validation on physical Windows includes source startup without an account, photo import, native WebODM 4.0 cloud roundtrip and viewers, and QGIS 3.44.15 / 4.2.3 project roundtrips preserving external SVG/layout resources. The QGIS task-lifecycle regression passes on both versions. OpenDroneMap WebUI 3.2.5 completed its public-cloud roundtrip in Linux. The official Windows wizard and Docker processing remain in progress; this candidate is not yet promoted.
+Validation on physical Windows includes source startup without an account, photo import, native WebODM 4.0 cloud roundtrip and viewers, and QGIS 3.44.15 / 4.2.3 project roundtrips preserving external SVG/layout resources. The QGIS task-lifecycle regression passes on both versions; QGIS 4 also completes GUI sign-in, upload, browsing, download and sign-out. A newly trained Linux Gaussian was synchronized to Windows with all 55 files / 33,139,087 bytes verified, including GUI pause/resume, and rendered in native Windows Chrome. OpenDroneMap WebUI 3.2.5 completed its public-cloud roundtrip in Linux. The official Windows wizard and Docker processing remain in progress; this candidate is not yet promoted.
 
 # 0.2.0
 
