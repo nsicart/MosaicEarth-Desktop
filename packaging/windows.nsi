@@ -6,7 +6,7 @@ Unicode true
 !include "WinVer.nsh"
 
 Name "MosaicEarth Desktop"
-OutFile "../installers/MosaicEarth-Desktop-0.2.0-x64-Setup.exe"
+OutFile "../installers/MosaicEarth-Desktop-0.2.1-x64-Setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\MosaicEarth Desktop"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
@@ -131,7 +131,7 @@ Section "MosaicEarth Desktop"
   CreateShortCut "$SMPROGRAMS\MosaicEarth Desktop\MosaicEarth Desktop.lnk" "$INSTDIR\python\pythonw.exe" '"$INSTDIR\src\mosaicearth_desktop.py"'
   CreateShortCut "$DESKTOP\MosaicEarth Desktop.lnk" "$INSTDIR\python\pythonw.exe" '"$INSTDIR\src\mosaicearth_desktop.py"'
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "DisplayName" "MosaicEarth Desktop"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "DisplayVersion" "0.2.0"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "DisplayVersion" "0.2.1"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "UninstallString" '"$INSTDIR\Uninstall.exe"'
 SectionEnd
 
