@@ -12,7 +12,7 @@ mkdir -p "$p/DEBIAN" "$p/usr/bin" "$p/usr/share/applications" "$p/usr/share/doc/
     "$p/opt/mosaicearth-desktop/src" "$p/opt/mosaicearth-desktop/resources"
 cat > "$p/DEBIAN/control" <<'EOF'
 Package: mosaicearth-desktop
-Version: 0.1.4
+Version: 0.2.0
 Architecture: amd64
 Maintainer: MosaicEarth
 Section: science
@@ -26,10 +26,13 @@ install -m 755 packaging/mosaicearth-desktop "$p/usr/bin/"
 install -m 644 packaging/mosaicearth-desktop.desktop "$p/usr/share/applications/"
 cp src/*.py "$p/opt/mosaicearth-desktop/src/"
 cp -R resources/. "$p/opt/mosaicearth-desktop/resources/"
+if [ "${ME_DESKTOP_EDITION:-commercial}" = "commercial" ]; then
+    printf '%s\n' 'Official account-associated installer' > "$p/opt/mosaicearth-desktop/resources/edition-commercial"
+fi
 cp LICENSE "$p/usr/share/doc/mosaicearth-desktop/copyright"
 cp README.md THIRD_PARTY_LICENSES.md NOTICE "$p/usr/share/doc/mosaicearth-desktop/"
 printf '%s\n' "$source_rev" > "$p/usr/share/doc/mosaicearth-desktop/SOURCE_REVISION"
 find "$p" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
-artifact="installers/mosaicearth-desktop_0.1.4_amd64.deb"
+artifact="installers/mosaicearth-desktop_0.2.0_amd64.deb"
 dpkg-deb --root-owner-group --build "$p" "$artifact"
-(cd installers && sha256sum "$(basename "$artifact")" > SHA256SUMS.linux-0.1.4)
+(cd installers && sha256sum "$(basename "$artifact")" > SHA256SUMS.linux-0.2.0)

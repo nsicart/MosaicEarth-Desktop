@@ -1,0 +1,13 @@
+.me-sync { max-width: 1100px; padding: 24px; }
+.me-sync h2 { margin: 0 0 14px; }
+.me-sync form { display: flex; gap: 16px; flex-wrap: wrap; align-items: end; margin: 24px 0; padding: 20px; border: 1px solid #879c9266; border-radius: 10px; }
+.me-sync label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; flex: 1 1 220px; min-width: 0; }
+.me-sync input, .me-sync select { min-height: 40px; padding: 8px 10px; border: 1px solid #83948b; border-radius: 5px; background: inherit; color: inherit; max-width: 100%; }
+.me-sync .btn { min-height: 40px; white-space: normal; text-align: left; }
+.me-sync .btn-primary { background: #246348; border-color: #246348; color: white; }
+.me-sync #me-status { margin: 18px 0; font-weight: 600; }
+.me-sync #me-catalog { max-height: 380px; overflow: auto; margin-top: 16px; }
+.me-sync #me-catalog .btn { width: 100%; }
+.me-sync progress { width: 100%; height: 16px; }
+.me-sync [hidden] { display: none !important; }
+@media (max-width: 600px) { .me-sync { padding: 14px 8px; } .me-sync form { padding: 14px; } }

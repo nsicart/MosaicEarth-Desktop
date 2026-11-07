@@ -1,0 +1,14 @@
+[general]
+name=MosaicEarth
+qgisMinimumVersion=3.34
+version=0.2.0
+description=Synchronize complete QGIS projects, data, styles and results with MosaicEarth Cloud.
+about=Explicit private synchronization with resumable transfers and SHA-256 verification. Local QGIS use needs no MosaicEarth account.
+author=MosaicEarth
+email=support@mosaicearth.app
+repository=https://github.com/nsicart/MosaicEarth-Desktop
+homepage=https://app.mosaicearth.app/en/Desktop
+tracker=https://github.com/nsicart/MosaicEarth-Desktop/issues
+category=Web
+experimental=False
+deprecated=False

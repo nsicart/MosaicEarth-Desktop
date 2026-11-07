@@ -35,7 +35,7 @@ def raster(work):
     warped.unlink()
 
 
-def odx(work, token):
+def odx(work, token, preset="standard"):
     import requests
 
     origin = "http://127.0.0.1:3000"
@@ -68,7 +68,7 @@ def odx(work, token):
             if attempt == 59:
                 raise
     opts = [
-        {"name": "fast-orthophoto", "value": True}, {"name": "max-concurrency", "value": 4},
+        {"name": "fast-orthophoto", "value": preset == "fast"}, {"name": "max-concurrency", "value": 4},
         {"name": "orthophoto-resolution", "value": 5}, {"name": "dsm", "value": True},
         {"name": "dtm", "value": True},
     ]
@@ -95,6 +95,13 @@ def odx(work, token):
                         if size > 8 * 1024**3:
                             raise ValueError("NodeODX result exceeds 8 GB")
                         dest.write(block)
+            from mosaicearth_sync import extract_products
+            import shutil
+            extract_products(work / "all.zip", work / "products")
+            orthophoto = next((work / "products").rglob("odm_orthophoto.tif"), None)
+            if orthophoto:
+                shutil.copyfile(orthophoto, work / "source.tif")
+                raster(work)
             return
         if code in (30, 50):
             print(request("GET", f"/task/{uid}/output").text[-6000:], flush=True)
@@ -109,6 +116,7 @@ if __name__ == "__main__":
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--token", default="")
+    parser.add_argument("--preset", choices=("fast", "standard"), default="standard")
     args = parser.parse_args()
     work = Path("/work")
     if args.engine == "gaussian":
@@ -116,4 +124,4 @@ if __name__ == "__main__":
     elif args.engine == "raster":
         raster(work)
     else:
-        odx(work, args.token)
+        odx(work, args.token, args.preset)

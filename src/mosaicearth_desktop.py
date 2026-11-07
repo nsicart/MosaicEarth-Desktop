@@ -14,9 +14,12 @@ import threading
 import uuid
 import webbrowser
 import zipfile
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
+from mosaicearth_sync import Client, SyncError, build_manifest, extract_products, checksum
+from mosaicearth_license import activate, verify_grant
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,6 +40,8 @@ class Workspace:
         self.gaussian_device = gaussian_device
         self.cloud_session = None
         self.cloud_lock = threading.Lock()
+        self.transfers = {}
+        self.transfer_lock = threading.Lock()
         self.docker = shlex.split(os.environ.get("ME_DOCKER", "docker"))
         with self.db() as db:
             db.execute("""CREATE TABLE IF NOT EXISTS project(
@@ -71,53 +76,207 @@ class Workspace:
             db.execute("INSERT INTO project(id,name) VALUES(?,?)", (project_id, name))
         return project_id
 
-    @staticmethod
-    def cloud(path, payload):
-        connection = http.client.HTTPSConnection("app.mosaicearth.app", timeout=15)
-        try:
-            connection.request("POST", "/api/v2/desktop/" + path, json.dumps(payload),
-                               {"Content-Type": "application/json"})
-            response = connection.getresponse()
-            if response.status != 200:
-                raise ValueError(f"MosaicEarth Cloud returned HTTP {response.status}")
-            data = json.loads(response.read(2 * 1024**2))
-            if data.get("ok") is not True:
-                raise ValueError("MosaicEarth Cloud rejected the request")
-            return data
-        except (OSError, http.client.HTTPException) as exc:
-            raise ValueError("MosaicEarth Cloud is unreachable") from exc
-        finally:
-            connection.close()
-
     def cloud_signin(self, email, password):
-        data = self.cloud("cloud-auth", {"email": email, "password": password})
-        uid = int(data["user"]["id"])
+        client = Client()
+        user = client.signin(email, password)
+        uid = int(user["id"])
         with self.cloud_lock:
-            self.cloud_session = {"token": data["token"], "cloud_uid": uid}
-        return {"user": data["user"]["email"]}
+            self.cloud_session = {"token": client.token, "cloud_uid": uid}
+        return {"user": user["email"]}
 
     def sync_project(self, project_id):
         project = self.project(project_id)
         with self.cloud_lock:
-            session = self.cloud_session
+            session = dict(self.cloud_session or {})
             if not session:
                 raise ValueError("Sign in to MosaicEarth Cloud before syncing")
-            uid = session["cloud_uid"]
+        if project["state"] == "running":
+            raise ValueError("Wait for local processing to finish before synchronizing")
+        return self.start_transfer(project_id, self.push_snapshot, project, session)
+
+    def start_transfer(self, key, operation, *args):
+        with self.transfer_lock:
+            if self.transfers.get(key, {}).get("status") == "running":
+                raise ValueError("A transfer is already running")
+            state = {"status": "running", "message": "Preparing transfer", "done": 0, "total": 0, "pause": False}
+            self.transfers[key] = state
+
+        def progress(done, total, message):
+            with self.transfer_lock:
+                state.update(done=done, total=total, message=message)
+
+        def run():
+            try:
+                result = operation(*args, progress=progress, canceled=lambda: state["pause"])
+                with self.transfer_lock:
+                    state.update(status="complete", message="All files synchronized and verified", result=result)
+            except (ValueError, OSError, zipfile.BadZipFile) as exc:
+                with self.transfer_lock:
+                    state.update(status="paused" if state["pause"] else "failed", message=str(exc))
+        threading.Thread(target=run, daemon=True).start()
+        return {"transfer_id": key}
+
+    def push_snapshot(self, project, session, progress, canceled):
+        root = self.root / project["id"]
+        result = project.get("result")
+        if result and project["state"] == "complete" and project["mode"] == "odx":
+            progress(0, 0, "Preparing completed NodeODX products")
+            extract_products(root / result / "all.zip", root / result / "products")
+
+        def role(path):
+            if path.startswith("images/"):
+                return "source"
+            if path == "raster.tif":
+                return "product"
+            if result and path.startswith(result + "/") and project["state"] == "complete":
+                if path.endswith("/output/model.spz") or path.endswith(".obj.zip"):
+                    return "product"
+                if "/products/" in path and Path(path).suffix.lower() in {".tif", ".tiff", ".las", ".laz", ".glb", ".geojson"}:
+                    return "product"
+            return "attachment"
+
+        manifest, paths = build_manifest(root, "desktop:" + project["id"], project["name"],
+                                         {"desktop": project}, role, progress)
+        data = Client(session["token"], progress=progress, canceled=canceled).push(manifest, paths)
+        with self.db() as db:
+            db.execute("INSERT OR REPLACE INTO cloud_sync VALUES(?,?,?)", (project["id"], session["cloud_uid"], data["project_id"]))
+        return {"cloud_id": data["project_id"], "snapshot_id": data["id"], "products": data["products"]}
+
+    def cloud_client(self):
+        with self.cloud_lock:
+            if not self.cloud_session:
+                raise ValueError("Sign in to MosaicEarth Cloud first")
+            return Client(self.cloud_session["token"])
+
+    def cloud_catalog(self):
+        client = self.cloud_client()
+        return {"snapshots": client.snapshots(), "projects": client.request("GET", "/api/v2/sync/projects")["projects"]}
+
+    def pull_project(self, snapshot_id="", cloud_project_id=0):
+        client = self.cloud_client()
+        key = "download:" + (snapshot_id or str(cloud_project_id))
+
+        def download(progress, canceled):
+            client.progress, client.canceled = progress, canceled
+            sid = snapshot_id
+            if not sid:
+                state = client.request("POST", f"/api/v2/sync/projects/{int(cloud_project_id)}/export", {})
+                sid = state["id"]
+                while state["status"] in {"QUEUED", "VERIFYING"}:
+                    progress(0, 0, "Preparing cloud project export")
+                    time.sleep(2)
+                    state = client.request("GET", f"/api/v2/sync/sessions/{sid}")
+                if state["status"] != "COMPLETE":
+                    raise ValueError(state.get("error") or "Cloud export failed")
+            state = client.request("GET", f"/api/v2/sync/sessions/{sid}")
+            # Stable local ID allows resuming a download without overwriting a working project.
+            pid = uuid.uuid5(uuid.NAMESPACE_URL, f"{client.origin}:{sid}").hex
+            destination = self.root / pid
+            client.pull(sid, destination)
+            (destination / "images").mkdir(exist_ok=True)
+            meta = state["manifest"].get("metadata", {}).get("desktop", {})
+            if not meta:
+                # Make cloud/connector originals available to local processing too.
+                for item in state["manifest"]["files"]:
+                    source = destination / item["path"]
+                    if item["role"] == "source" and source.suffix.lower() in IMAGE_TYPES:
+                        target = destination / "images" / source.name
+                        if target.exists() and checksum(target) != item["sha256"]:
+                            target = target.with_name(item["sha256"][:16] + "-" + target.name)
+                        if not target.exists():
+                            shutil.copyfile(source, target)
+            result = meta.get("result")
+            if result and not PROJECT_ID.fullmatch(result):
+                raise ValueError("Invalid local result reference")
             with self.db() as db:
-                existing = db.execute("SELECT cloud_id FROM cloud_sync WHERE project_id=? AND user_id=?", (project_id, uid)).fetchone()
-                if existing:
-                    if existing["cloud_id"]:
-                        return {"cloud_id": existing["cloud_id"]}
-                    raise ValueError("Sync outcome is uncertain. Check MyEarth before retrying this project.")
-                db.execute("INSERT INTO cloud_sync VALUES (?,?,NULL)", (project_id,uid))
-            data = self.cloud("receive-sync", {**session, "type": "project", "project": {"name": project["name"]}})
-            cloud_id = int(data["cloudProjectId"])
-            with self.db() as db:
-                db.execute("UPDATE cloud_sync SET cloud_id=? WHERE project_id=? AND user_id=?", (cloud_id,project_id,uid))
-            return {"cloud_id": cloud_id}
+                db.execute("INSERT OR IGNORE INTO project(id,name,state,mode,result) VALUES(?,?,?,?,?)",
+                           (pid, state["manifest"]["name"] + " (cloud copy)", "complete", meta.get("mode", "imported"), result))
+            return {"project_id": pid, "snapshot_id": sid}
+        return self.start_transfer(key, download)
+
+    def cloud_signout(self):
+        client = self.cloud_client()
+        with self.transfer_lock:
+            for state in self.transfers.values():
+                state["pause"] = True
+        try:
+            client.signout()
+        finally:
+            with self.cloud_lock:
+                self.cloud_session = None
+
+    def installation_status(self):
+        commercial = (RESOURCES / "edition-commercial").is_file()
+        grant, account = None, None
+        try:
+            grant = json.loads((self.root / "account-grant.json").read_text())
+            account = verify_grant(grant, json.loads((RESOURCES / "license-public.json").read_text()))
+        except (OSError, ValueError):
+            pass
+        engines = {}
+        try:
+            for image in [ODX_IMAGE, LOCAL_IMAGE]:
+                result = subprocess.run([*self.docker, "image", "inspect", image, "--format", "{{.Id}}"],
+                                        stdin=subprocess.DEVNULL, capture_output=True, timeout=10)
+                engines[image] = result.returncode == 0
+            available = subprocess.run([*self.docker, "info", "--format", "{{.OSType}}"], stdin=subprocess.DEVNULL, capture_output=True, timeout=10)
+            docker = available.returncode == 0 and available.stdout.strip() == b"linux"
+        except (OSError, subprocess.SubprocessError):
+            docker = False
+        return {"commercial": commercial, "account": account, "docker": docker, "engines": engines,
+                "gaussian_device": self.gaussian_device}
+
+    def activate_installation(self, email, password):
+        return activate(email, password, self.root, json.loads((RESOURCES / "license-public.json").read_text()))
+
+    def provision_engines(self):
+        status = self.installation_status()
+        if not status["docker"]:
+            raise ValueError("Start Docker with Linux containers, then retry. On Windows, install Docker Desktop and enable WSL 2.")
+        if not status["account"]:
+            raise ValueError("Activate this official installation first. Source builds can build the engines with scripts/provision-engines.sh.")
+
+        def provision(progress, canceled):
+            from mosaicearth_sync import checksum, CHUNK
+            expected = json.loads((RESOURCES / "engine-payload.json").read_text())
+            grant = json.loads((self.root / "account-grant.json").read_text())
+            client = Client(canceled=canceled)
+            client.token = client.request("POST", "/api/v2/desktop/provision-session", {"grant": grant})["token"]
+            archive = self.root / expected["filename"]
+            offset = archive.stat().st_size if archive.exists() else 0
+            if offset > expected["bytes"]:
+                archive.unlink()
+                offset = 0
+            with archive.open("ab") as stream:
+                while offset < expected["bytes"]:
+                    end = min(offset + CHUNK, expected["bytes"]) - 1
+                    with client.request("GET", "/api/v2/desktop/engine-bundle", headers={"Range": f"bytes={offset}-{end}"}, raw=True) as response:
+                        if response.status != 206:
+                            raise ValueError("The engine download did not support safe resuming")
+                        block = response.read(CHUNK + 1)
+                    if len(block) != end - offset + 1:
+                        raise ValueError("Engine download interrupted. Retry to resume.")
+                    stream.write(block)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                    offset += len(block)
+                    progress(offset, expected["bytes"], "Downloading local NodeODX and OpenSplat engines")
+            progress(offset, offset, "Verifying engine checksums")
+            if checksum(archive) != expected["sha256"]:
+                archive.unlink()
+                raise ValueError("Engine checksum mismatch; retry the download")
+            progress(offset, offset, "Installing verified Docker images")
+            with (self.root / "engine-install.log").open("wb") as log:
+                self.docker_run(["load", "--input", str(archive)], log, timeout=1800)
+            for name, expected_id in expected["image_ids"].items():
+                actual = subprocess.check_output([*self.docker, "image", "inspect", name, "--format", "{{.Id}}"], stdin=subprocess.DEVNULL, timeout=20).decode().strip()
+                if actual != expected_id:
+                    raise ValueError("Installed engine digest mismatch")
+            return {"engines_installed": True}
+        return self.start_transfer("engine-installation", provision)
 
     def docker_run(self, args, log=None, timeout=45, check=True):
-        return subprocess.run([*self.docker, *args], stdout=log, stderr=subprocess.STDOUT,
+        return subprocess.run([*self.docker, *args], stdin=subprocess.DEVNULL, stdout=log or subprocess.DEVNULL, stderr=subprocess.STDOUT,
                               timeout=timeout, check=check)
 
     @staticmethod
@@ -126,10 +285,20 @@ class Workspace:
             raise ValueError("Docker workspace paths cannot contain commas")
         return ["--mount", f"type=bind,src={source},dst={dest}" + (",readonly" if readonly else "")]
 
-    def run(self, project_id, mode):
+    def run(self, project_id, mode, preset="standard"):
+        if (RESOURCES / "edition-commercial").is_file():
+            try:
+                verify_grant(json.loads((self.root / "account-grant.json").read_text()),
+                             json.loads((RESOURCES / "license-public.json").read_text()))
+            except (OSError, ValueError):
+                raise ValueError("Activate or renew this official installation with your purchasing account") from None
         if mode not in {"gaussian", "odx", "raster"}:
             raise ValueError("Unknown local engine")
+        if preset not in {"fast", "standard"}:
+            raise ValueError("Unknown photogrammetry preset")
         project = self.project(project_id)
+        if self.transfers.get(project_id, {}).get("status") == "running":
+            raise ValueError("Pause the synchronization before changing local results")
         with self.db() as db:
             changed = db.execute(
                 "UPDATE project SET state='running',mode=?,result=NULL,error=NULL WHERE id=? AND state!='running'",
@@ -137,9 +306,9 @@ class Workspace:
             ).rowcount
         if not changed:
             raise ValueError("This project is already processing")
-        threading.Thread(target=self.process, args=(project["id"], mode), daemon=True).start()
+        threading.Thread(target=self.process, args=(project["id"], mode, preset), daemon=True).start()
 
-    def process(self, project_id, mode):
+    def process(self, project_id, mode, preset="standard"):
         project = self.root / project_id
         work = project / uuid.uuid4().hex
         state, error = "complete", None
@@ -169,7 +338,7 @@ class Workspace:
                                      "--network", "none", *script_dir, *work_mount, ODX_IMAGE,
                                      "--max-concurrency", "1", "--token", token], log)
                     try:
-                        self.docker_run(["exec", *user_args, job_name, *runner, "--token", token], log, timeout=14700)
+                        self.docker_run(["exec", *user_args, job_name, *runner, "--token", token, "--preset", preset], log, timeout=14700)
                     finally:
                         self.docker_run(["stop", job_name], log, check=False)
                     with zipfile.ZipFile(work / "all.zip") as archive:
@@ -228,7 +397,30 @@ class Handler(BaseHTTPRequestHandler):
                 with workspace.db() as db:
                     self.json([dict(row) for row in db.execute("SELECT * FROM project ORDER BY rowid DESC")])
                 return
-            if path.startswith("/results/"):
+            if path == "/api/transfers":
+                with workspace.transfer_lock:
+                    self.json(workspace.transfers)
+                return
+            if path == "/api/cloud/catalog":
+                self.json(workspace.cloud_catalog())
+                return
+            if path == "/api/installation":
+                self.json(workspace.installation_status())
+                return
+            if path.startswith("/api/files/"):
+                pid = path.rsplit("/", 1)[-1]
+                workspace.project(pid)
+                root = workspace.root / pid
+                self.json([p.relative_to(root).as_posix() for p in sorted(root.rglob("*")) if p.is_file() and not p.is_symlink()])
+                return
+            if path.startswith("/project-files/"):
+                _, _, pid, relative = path.split("/", 3)
+                workspace.project(pid)
+                root = workspace.root / pid
+                file = (root / unquote(relative)).resolve()
+                if not file.is_relative_to(root) or not file.is_file():
+                    raise ValueError("Unknown file")
+            elif path.startswith("/results/"):
                 _, _, pid, name = path.split("/", 3)
                 result = workspace.project(pid)["result"]
                 if not result or name not in {"job.log", "all.zip", "preview.png", "bounds.json", "colmap.log",
@@ -252,6 +444,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(file.stat().st_size))
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+            if path.startswith(("/project-files/", "/results/")):
+                # Untrusted synchronized HTML/SVG must never execute in the workspace origin.
+                if file.suffix.lower() in {".html", ".htm", ".svg", ".xhtml", ".js"}:
+                    self.send_header("Content-Disposition", "attachment")
+                self.send_header("Content-Security-Policy", "sandbox")
             self.end_headers()
             with file.open("rb") as stream:
                 shutil.copyfileobj(stream, self.wfile)
@@ -271,9 +468,32 @@ class Handler(BaseHTTPRequestHandler):
                 data = json.loads(self.rfile.read(size))
                 self.json(workspace.cloud_signin(data["email"], data["password"]))
                 return
+            if self.path == "/api/installation/activate" and 0 < size <= 8192:
+                data = json.loads(self.rfile.read(size))
+                self.json(workspace.activate_installation(data["email"], data["password"]))
+                return
+            if self.path == "/api/installation/engines":
+                self.json(workspace.provision_engines())
+                return
             if self.path == "/api/cloud/sign-out":
-                with workspace.cloud_lock:
-                    workspace.cloud_session = None
+                workspace.cloud_signout()
+                self.json({"ok": True})
+                return
+            if self.path == "/api/cloud/download" and 0 < size <= 8192:
+                data = json.loads(self.rfile.read(size))
+                self.json(workspace.pull_project(str(data.get("snapshot_id") or ""), int(data.get("project_id") or 0)))
+                return
+            if self.path == "/api/cloud/cancel-upload" and 0 < size <= 8192:
+                data = json.loads(self.rfile.read(size))
+                sid = str(data["snapshot_id"])
+                if not re.fullmatch("[0-9a-f]{64}", sid):
+                    raise ValueError("Invalid snapshot ID")
+                self.json(workspace.cloud_client().request("DELETE", "/api/v2/sync/sessions/" + sid))
+                return
+            if self.path == "/api/transfers/pause" and 0 < size <= 8192:
+                data = json.loads(self.rfile.read(size))
+                with workspace.transfer_lock:
+                    workspace.transfers[data["id"]]["pause"] = True
                 self.json({"ok": True})
                 return
             _, api, pid, operation = urlsplit(self.path).path.split("/")
@@ -284,13 +504,19 @@ class Handler(BaseHTTPRequestHandler):
                 self.json(workspace.sync_project(pid))
                 return
             if operation.startswith("run-"):
-                workspace.run(pid, operation[4:])
+                data = json.loads(self.rfile.read(size)) if 0 < size <= 8192 else {}
+                workspace.run(pid, operation[4:], data.get("preset", "standard"))
             elif operation in {"photo", "raster"} and 0 < size <= MAX_UPLOAD and project["state"] != "running":
+                if workspace.transfers.get(pid, {}).get("status") == "running":
+                    raise ValueError("Pause the synchronization before importing files")
                 suffix = Path(unquote(self.headers.get("X-File-Name", ""))).suffix.lower()
                 if suffix not in (IMAGE_TYPES if operation == "photo" else {".tif", ".tiff"}):
                     raise ValueError("Unsupported input file")
                 folder = workspace.root / pid
-                file = folder / ("raster.tif" if operation == "raster" else f"images/{uuid.uuid4().hex}{suffix}")
+                original_name = Path(unquote(self.headers.get("X-File-Name", ""))).name
+                if any(c in original_name for c in "\\/:\0") or original_name in {".", ".."}:
+                    raise ValueError("Invalid file name")
+                file = folder / ("raster.tif" if operation == "raster" else "images/" + original_name)
                 temp = file.with_suffix(f".{uuid.uuid4().hex}.tmp")
                 try:
                     with temp.open("xb") as fp:
@@ -300,7 +526,15 @@ class Handler(BaseHTTPRequestHandler):
                                 raise ValueError("Upload was interrupted")
                             fp.write(block)
                             size -= len(block)
-                    temp.replace(file)
+                    if operation == "photo" and file.exists():
+                        if checksum(temp) != checksum(file):
+                            raise ValueError("A different photo already has this name. The existing original is preserved; rename the new photo.")
+                    else:
+                        if operation == "raster":
+                            archive = folder / "raster-inputs" / uuid.uuid4().hex / original_name
+                            archive.parent.mkdir(parents=True)
+                            shutil.copyfile(temp, archive)
+                        temp.replace(file)
                 finally:
                     temp.unlink(missing_ok=True)
             else:

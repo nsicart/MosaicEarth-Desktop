@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "filename": "mosaicearth-engines-cpu-0.2.0.tar.gz",
+  "sha256": "71070728f5827d532d5179f0c001cd1e336fe0162549bf1ae6cdfdeb523eafe6",
+  "bytes": 1255475462,
+  "images": [
+    "mosaicearth-desktop/nodeodx:0.1.0",
+    "mosaicearth-desktop/local-engine:0.1.0"
+  ],
+  "image_ids": {
+    "mosaicearth-desktop/nodeodx:0.1.0": "sha256:011041ddad31014573c0c38a38b66a66cf6e0639e39c2ec35f052b0483362fff",
+    "mosaicearth-desktop/local-engine:0.1.0": "sha256:927104aa0c74ca01944fe6382771cf62e660e9a48be601874e5f1a2165a90505"
+  },
+  "source_url": "https://app.mosaicearth.app/open-source"
+}
