@@ -2,7 +2,7 @@
 
 A local workspace for photogrammetry, Gaussian splatting and georeferenced imagery, with an offline CesiumJS viewer. NodeODX runs ODX photogrammetry; COLMAP and OpenSplat reconstruct and train Gaussian models. Projects, originals and results remain on your computer until you explicitly synchronize them.
 
-**The AGPL source edition works locally without signing in.** Run `python3 src/mosaicearth_desktop.py` after provisioning the engines. No cloud processing credits are consumed by local reconstruction.
+**The AGPL source edition works locally without signing in.** Run `./scripts/fetch-cesium.sh`, provision the engines with `./scripts/provision-engines.sh`, then run `python3 src/mosaicearth_desktop.py`. No cloud processing credits are consumed by local reconstruction.
 
 **The official Windows and Linux installers require a purchasing account or an eligible Studio account.** Activation binds the official installation to a device, supports two active computers and permits 30 days of local offline operation between activations. Download/install authorization does not restrict rights granted by the AGPL. These controls protect the official distribution and provisioning service; they cannot make open-source software impossible to copy.
 

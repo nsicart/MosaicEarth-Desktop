@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from mosaicearth_desktop import Workspace
-from mosaicearth_sync import build_manifest, checksum, Client, SyncError
+from mosaicearth_sync import build_manifest, checksum, Client, SyncError, extract_products
 
 
 class WorkspaceTest(unittest.TestCase):
@@ -42,6 +42,20 @@ class WorkspaceTest(unittest.TestCase):
         with self.assertRaises(SyncError):
             Client(origin='https://username:password@example.com')
         self.assertEqual(Client(origin='http://127.0.0.1:1234').origin, 'http://127.0.0.1:1234')
+
+    def test_result_extraction_preserves_edited_local_files(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with zipfile.ZipFile(root / 'all.zip', 'w') as archive:
+                archive.writestr('result.txt', b'original')
+            extract_products(root / 'all.zip', root / 'products')
+            extract_products(root / 'all.zip', root / 'products')
+            target = root / 'products/result.txt'
+            target.write_bytes(b'my edits')
+            with self.assertRaises(SyncError):
+                extract_products(root / 'all.zip', root / 'products')
+            self.assertEqual(target.read_bytes(), b'my edits')
 
 
 if __name__ == '__main__':

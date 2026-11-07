@@ -244,6 +244,10 @@ def extract_products(archive_path, destination):
                         crc = zlib.crc32(block, crc)
                 if crc == item.CRC:
                     continue
+                raise SyncError("A local result differs from its archive: " + item.filename +
+                                ". Preserve the edited file in a separate folder before extracting again.")
+            if target.exists():
+                raise SyncError("An existing local result must not be overwritten: " + item.filename)
             temporary = target.with_name(target.name + ".mosaicearth-part")
             with archive.open(item) as source, temporary.open("wb") as output:
                 shutil.copyfileobj(source, output, CHUNK)

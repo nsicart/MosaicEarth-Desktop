@@ -1,5 +1,6 @@
 """Native QGIS project/data synchronization, AGPL-3.0-or-later."""
 import json
+import re
 import shutil
 import tempfile
 import uuid
@@ -213,6 +214,8 @@ class MosaicEarthPlugin:
         project = QgsProject.instance()
         origin = project.readEntry("MosaicEarth", "projectId", "")[0] or (
             uuid.uuid5(uuid.NAMESPACE_URL, str(Path(project.fileName()).resolve())).hex if project.fileName() else uuid.uuid4().hex)
+        if not re.fullmatch("[0-9a-f]{32}", origin):
+            origin = uuid.uuid4().hex
         project.writeEntry("MosaicEarth", "projectId", origin)
         base = Path(QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)) / "mosaicearth-sync" / origin
         try:
