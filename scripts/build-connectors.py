@@ -23,12 +23,12 @@ for target in ('webodm', 'webui', 'qgis'):
     if target != 'qgis':
         manifest = {'name': 'MosaicEarth ' + ('WebODM' if target == 'webodm' else 'WebUI'),
                     'description': 'Full private project synchronization with MosaicEarth Cloud',
-                    'version': '0.2.0', 'author': 'MosaicEarth', 'email': 'support@mosaicearth.app',
+                    'version': '0.2.1', 'author': 'MosaicEarth', 'email': 'support@mosaicearth.app',
                     'repository': 'https://github.com/nsicart/MosaicEarth-Desktop',
                     'homepage': 'https://app.mosaicearth.app/en/Desktop', 'experimental': False, 'deprecated': False,
-                    ('webodmMinVersion' if target == 'webodm' else 'webuiMinVersion'): ('2.9.4' if target == 'webodm' else '0.7.1')}
+                    ('webodmMinVersion' if target == 'webodm' else 'webuiMinVersion'): ('2.9.4' if target == 'webodm' else '3.2.5')}
         (package / 'manifest.json').write_text(json.dumps(manifest, indent=2))
-    archive = out / f'MosaicEarth-{target}-0.2.0.zip'
+    archive = out / f'MosaicEarth-{target}-0.2.1.zip'
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as target_zip:
         for file in sorted(package.rglob('*')):
             if file.is_file():
