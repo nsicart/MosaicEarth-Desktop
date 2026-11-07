@@ -1,6 +1,7 @@
 import sys
 import tempfile
 import unittest
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
@@ -9,6 +10,22 @@ from mosaicearth_sync import build_manifest, checksum, Client, SyncError, extrac
 
 
 class WorkspaceTest(unittest.TestCase):
+    def test_unavailable_engine_preserves_completed_result(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Workspace(Path(temp))
+            pid = workspace.create('Existing completed project')
+            with workspace.db() as db:
+                db.execute("UPDATE project SET state='complete',mode='odx',result='previous' WHERE id=?", (pid,))
+            before = workspace.project(pid)
+            for responses, message in [
+                ([subprocess.CompletedProcess([], 1, b'')], 'Start Docker'),
+                ([subprocess.CompletedProcess([], 0, b'linux\n'), subprocess.CompletedProcess([], 1, b'')], 'not installed'),
+            ]:
+                with patch('mosaicearth_desktop.subprocess.run', side_effect=responses):
+                    with self.assertRaisesRegex(ValueError, message):
+                        workspace.run(pid, 'odx')
+                self.assertEqual(workspace.project(pid), before)
+
     def test_local_workspace_does_not_need_account(self):
         with tempfile.TemporaryDirectory() as temp:
             workspace = Workspace(Path(temp))
