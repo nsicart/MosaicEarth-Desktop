@@ -119,7 +119,7 @@ async function refresh() {
     }
 }
 
-function showError(error) { $("notice").textContent = error.message; $("notice").hidden = false; }
+function showError(error) { $("notice").textContent = error.message; $("notice").hidden = false; $("notice").focus(); }
 
 $("create").onsubmit = async (event) => {
     event.preventDefault();
@@ -154,29 +154,29 @@ $("uploadRaster").onclick = async () => {
 for (const engine of ["odx", "gaussian"]) {
     $(engine).onclick = () => post("/api/" + selected + "/run-" + engine, JSON.stringify({preset: $("odxPreset").value})).then(refresh).catch(showError);
 }
+function showCloudSession(user) {
+    $("cloudState").textContent = user ? "Signed in as " + user : "Signed out. Local projects remain available.";
+    $("cloudLogout").hidden = !user;
+    $("cloudBrowse").hidden = !user;
+    $("cloudLogin").hidden = !!user;
+    $("syncProject").disabled = !user;
+}
 $("cloudLogin").onsubmit = async (event) => {
     event.preventDefault();
     try {
         const data = await post("/api/cloud/sign-in", JSON.stringify({
             email: $("cloudEmail").value, password: $("cloudPassword").value
         }));
-        $("cloudState").textContent = "Signed in as " + data.user;
-        $("cloudLogout").hidden = false;
-        $("cloudBrowse").hidden = false;
-        $("cloudLogin").hidden = true;
-        $("syncProject").disabled = false;
+        showCloudSession(data.user);
     } catch (error) { $("cloudState").textContent = error.message; }
     finally { $("cloudPassword").value = ""; }
 };
 $("cloudLogout").onclick = async () => {
     try { await post("/api/cloud/sign-out"); }
-    catch (error) { $("cloudState").textContent = error.message; }
+    catch (error) { showError(error); }
     finally {
-        $("cloudLogout").hidden = true;
-        $("cloudBrowse").hidden = true;
-        $("cloudLogin").hidden = false;
+        showCloudSession(null);
         $("cloudCatalog").replaceChildren();
-        $("syncProject").disabled = true;
     }
 };
 $("syncProject").onclick = async () => {
@@ -201,6 +201,22 @@ async function refreshTransfers() {
             const pause = document.createElement("button"); pause.textContent = "Pause";
             pause.onclick = () => post("/api/transfers/pause", JSON.stringify({id})).catch(showError);
             row.append(pause);
+        }
+        if (["paused", "failed"].includes(state.status)) {
+            const resume = document.createElement("button");
+            resume.textContent = state.status === "paused" ? "Resume" : "Retry";
+            resume.onclick = async () => {
+                try {
+                    if (id === "engine-installation") await post("/api/installation/engines");
+                    else if (id.startsWith("download:")) {
+                        const source = id.slice("download:".length);
+                        const body = /^[0-9a-f]{64}$/.test(source) ? {snapshot_id: source} : {project_id: Number(source)};
+                        await post("/api/cloud/download", JSON.stringify(body));
+                    } else await post("/api/" + id + "/sync");
+                    await refresh();
+                } catch (error) { showError(error); }
+            };
+            row.append(resume);
         }
         if (state.result?.cloud_id) {
             const link = document.createElement("a");
@@ -260,7 +276,9 @@ async function checkInstallation() {
     $("installationState").textContent = (data.docker ? "Docker ready. " : "Docker with Linux containers is required. ") +
         (Object.values(data.engines).filter(Boolean).length === 2 ? "Local engines installed. " : "Install the local engines before processing. ") +
         (data.account ? "Activated for " + data.account.email : data.commercial ? "Activate your purchasing account." : "Open-source edition · local use without sign-in.");
-    $("activateInstallation").hidden = !!data.account;
+    $("activateInstallation").hidden = !data.commercial || !!data.account;
+    $("installEngines").hidden = !data.commercial;
+    $("sourceProvisioning").hidden = data.commercial;
     $("installEngines").disabled = !data.docker || !data.account;
     if (!data.docker || Object.values(data.engines).filter(Boolean).length !== 2) $("installation").open = true;
 }
@@ -273,6 +291,7 @@ $("activateInstallation").onsubmit = async event => {
 $("installEngines").onclick = () => post("/api/installation/engines").then(refresh).catch(error => {$("installationState").textContent = error.message;});
 $("checkInstallation").onclick = () => checkInstallation().catch(showError);
 checkInstallation().catch(showError);
+fetch("/api/cloud/status").then(r => r.json()).then(data => showCloudSession(data.user)).catch(showError);
 if (window.Cesium) {
     viewer = new Cesium.Viewer("viewer", {baseLayer: false, baseLayerPicker: false, geocoder: false,
         animation: false, timeline: false, sceneMode: Cesium.SceneMode.SCENE3D,

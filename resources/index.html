@@ -13,7 +13,7 @@
 </head>
 <body>
 <header><h1>MosaicEarth Desktop</h1><p>Local projects</p></header>
-<p id="notice" role="alert" hidden></p>
+<p id="notice" role="alert" tabindex="-1" hidden></p>
 <main>
 <aside>
 <details id="installation"><summary>Installation and local engines</summary>
@@ -23,7 +23,7 @@
 <form id="activateInstallation"><label>Purchasing account email <input id="activationEmail" type="email" autocomplete="username" required></label>
 <label>Password <input id="activationPassword" type="password" autocomplete="current-password" required></label><button>Activate this installation</button></form>
 <button id="installEngines">Install local engines / resume</button><button id="checkInstallation">Check installation</button>
-<p>Source edition: build the engines with <code>scripts/provision-engines.sh</code>. No account is needed.</p>
+<p id="sourceProvisioning">Source edition: build the engines with <code>scripts/provision-engines.sh</code>. No account is needed.</p>
 </details>
 <form id="create"><label>Project name <input id="name" required maxlength="120"></label> <button>Create</button></form>
 <nav id="projects" aria-label="Projects"></nav>

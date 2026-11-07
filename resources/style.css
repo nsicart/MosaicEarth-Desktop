@@ -29,6 +29,8 @@ progress { width: 100%; height: 12px; accent-color: #a5d86b; }
 #notice { margin: 1rem 2rem; padding: .8rem 1rem; border-left: 4px solid #efbd70; background: #3b2c1c; color: #fff0d8; }
 #transfers > div { padding: .7rem; border: 1px solid #426353; border-radius: 8px; margin: .7rem 0; }
 #allFiles { max-height: 25rem; overflow: auto; }
+#files { display: flex; flex-wrap: wrap; gap: .6rem 1rem; }
+#files a { padding: .4rem .65rem; border: 1px solid #587566; border-radius: 6px; }
 #rasterPreview { max-width: min(100%, 32rem); margin-top: 1rem; }
 @media (max-width: 760px) { main { display: block; padding: 1rem; } header { padding: 1rem; } section { padding: 1rem; } #actions button + button { margin-left: 0; } #viewer { min-height: 18rem; } }
 
