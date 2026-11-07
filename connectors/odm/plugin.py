@@ -31,7 +31,7 @@ class Plugin(PluginBase):
     def app_mount_points(self):
         @login_required
         def home(request):
-            return render(request, self.template_path("sync.html"), {"base": self.public_url("")})
+            return render(request, self.template_path("sync.html"), {"base": self.public_url(""), "title": "MosaicEarth"})
 
         @login_required
         @require_POST
