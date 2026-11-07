@@ -81,7 +81,7 @@ class Workspace:
         user = client.signin(email, password)
         uid = int(user["id"])
         with self.cloud_lock:
-            self.cloud_session = {"token": client.token, "cloud_uid": uid}
+            self.cloud_session = {"token": client.token, "cloud_uid": uid, "user": user["email"]}
         return {"user": user["email"]}
 
     def sync_project(self, project_id):
@@ -285,6 +285,20 @@ class Workspace:
             raise ValueError("Docker workspace paths cannot contain commas")
         return ["--mount", f"type=bind,src={source},dst={dest}" + (",readonly" if readonly else "")]
 
+    def require_engine(self, mode):
+        image = ODX_IMAGE if mode == "odx" else CUDA_IMAGE if mode == "gaussian" and self.gaussian_device == "cuda" else LOCAL_IMAGE
+        try:
+            info = subprocess.run([*self.docker, "info", "--format", "{{.OSType}}"],
+                                  stdin=subprocess.DEVNULL, capture_output=True, timeout=10)
+            if info.returncode or info.stdout.strip() != b"linux":
+                raise ValueError("Start Docker with Linux containers, then retry. See Installation and local engines.")
+            installed = subprocess.run([*self.docker, "image", "inspect", image, "--format", "{{.Id}}"],
+                                       stdin=subprocess.DEVNULL, capture_output=True, timeout=10)
+            if installed.returncode:
+                raise ValueError("The required local engine is not installed. Open Installation and local engines before retrying.")
+        except (OSError, subprocess.SubprocessError):
+            raise ValueError("Docker is unavailable. Install and start Docker with Linux containers, then retry.") from None
+
     def run(self, project_id, mode, preset="standard"):
         if (RESOURCES / "edition-commercial").is_file():
             try:
@@ -297,8 +311,11 @@ class Workspace:
         if preset not in {"fast", "standard"}:
             raise ValueError("Unknown photogrammetry preset")
         project = self.project(project_id)
+        if project["state"] == "running":
+            raise ValueError("This project is already processing")
         if self.transfers.get(project_id, {}).get("status") == "running":
             raise ValueError("Pause the synchronization before changing local results")
+        self.require_engine(mode)
         with self.db() as db:
             changed = db.execute(
                 "UPDATE project SET state='running',mode=?,result=NULL,error=NULL WHERE id=? AND state!='running'",
@@ -404,6 +421,10 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/cloud/catalog":
                 self.json(workspace.cloud_catalog())
                 return
+            if path == "/api/cloud/status":
+                with workspace.cloud_lock:
+                    self.json({"user": (workspace.cloud_session or {}).get("user")})
+                return
             if path == "/api/installation":
                 self.json(workspace.installation_status())
                 return
@@ -429,7 +450,7 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Unknown file")
                 file = workspace.root / pid / result / name
             elif path == "/":
-                page = (RESOURCES / "index.html").read_text().replace("__WORKSPACE_TOKEN__", self.server.token)
+                page = (RESOURCES / "index.html").read_text(encoding="utf-8").replace("__WORKSPACE_TOKEN__", self.server.token)
                 self.send_bytes(page.encode(), "text/html; charset=utf-8")
                 return
             else:
