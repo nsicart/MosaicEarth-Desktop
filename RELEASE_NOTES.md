@@ -2,6 +2,8 @@
 
 Windows renders the UTF-8 interface correctly. The source edition hides commercial activation controls, result downloads have separate clickable targets, and missing Docker/engines produce an actionable focused alert without replacing an existing completed result.
 
+On Windows, Docker Desktop is also detected in its official per-user and system installation directories, so installing Docker does not require restarting an existing desktop session to refresh PATH.
+
 Paused transfers have a direct Resume button and failed transfers have Retry. Reloading the local page restores the current cloud sign-in state. Gaussian models open from an exported reconstruction camera, with a photo viewpoint selector and a working Home reset, instead of an arbitrary view of the bounding box. This changes only the viewer camera; it does not alter the trained model or its quality.
 
 QGIS supports both 3.x (3.34+) and 4.x. The plugin releases completed task wrappers before the next action, uses Qt 6-compatible password/storage enums, and disables actions while packaging or transferring. Signing out clears the cloud catalog. WebODM/WebUI pages use the MosaicEarth page title.

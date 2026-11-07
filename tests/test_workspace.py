@@ -5,11 +5,21 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from mosaicearth_desktop import Workspace
+from mosaicearth_desktop import Workspace, docker_command
 from mosaicearth_sync import build_manifest, checksum, Client, SyncError, extract_products
 
 
 class WorkspaceTest(unittest.TestCase):
+    def test_windows_docker_installed_after_session_started(self):
+        with tempfile.TemporaryDirectory() as temp:
+            executable = Path(temp) / 'Programs/DockerDesktop/resources/bin/docker.exe'
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            with patch.dict('os.environ', {'LOCALAPPDATA': temp}, clear=True), \
+                    patch('mosaicearth_desktop.sys.platform', 'win32'), \
+                    patch('mosaicearth_desktop.shutil.which', return_value=None):
+                self.assertEqual(docker_command(), [str(executable)])
+
     def test_unavailable_engine_preserves_completed_result(self):
         with tempfile.TemporaryDirectory() as temp:
             workspace = Workspace(Path(temp))

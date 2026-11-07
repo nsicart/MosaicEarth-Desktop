@@ -10,6 +10,7 @@ import shlex
 import shutil
 import sqlite3
 import subprocess
+import sys
 import threading
 import uuid
 import webbrowser
@@ -32,6 +33,28 @@ IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 PROJECT_ID = re.compile(r"[0-9a-f]{32}")
 
 
+def docker_command():
+    override = os.environ.get("ME_DOCKER")
+    if override:
+        return shlex.split(override)
+    executable = shutil.which("docker")
+    if executable:
+        return [executable]
+    # Docker Desktop can be installed after Explorer started. Its children may
+    # retain the old PATH until sign-out, so also check the vendor's locations.
+    if sys.platform == "win32":
+        for variable, suffix in [
+            ("LOCALAPPDATA", "Programs/DockerDesktop/resources/bin/docker.exe"),
+            ("ProgramFiles", "Docker/Docker/resources/bin/docker.exe"),
+        ]:
+            base = os.environ.get(variable)
+            if base:
+                candidate = Path(base) / suffix
+                if candidate.is_file():
+                    return [str(candidate)]
+    return ["docker"]
+
+
 class Workspace:
     def __init__(self, root, steps=2000, gaussian_device="cpu"):
         self.root = root.resolve()
@@ -42,7 +65,7 @@ class Workspace:
         self.cloud_lock = threading.Lock()
         self.transfers = {}
         self.transfer_lock = threading.Lock()
-        self.docker = shlex.split(os.environ.get("ME_DOCKER", "docker"))
+        self.docker = docker_command()
         with self.db() as db:
             db.execute("""CREATE TABLE IF NOT EXISTS project(
                 id TEXT PRIMARY KEY, name TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'ready',
