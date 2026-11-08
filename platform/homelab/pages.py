@@ -979,6 +979,8 @@ def render_home_master(
         html body .cesium-viewer-bottom {{ left: 8px !important; right: auto !important; bottom: 4px !important; width: calc(100% - 16px) !important; max-width: calc(100% - 16px) !important; }}
         html body .cesium-widget-credits {{ position: static !important; display: block !important; max-width: none !important; width: auto !important; white-space: normal !important; }}
         .cesium-widget-credits, .cesium-credit-textContainer, .cesium-credit-expand-link {{ font: 11px/1.4 sans-serif !important; }}
+        html body .mosaic-map-style-switch {{ bottom: calc(var(--mosaic-credit-height, 40px) + 14px) !important; }}
+        html body .mosaic-map-locate {{ bottom: calc(var(--mosaic-credit-height, 40px) + 66px) !important; }}
         html body .sim-hud {{ bottom: calc(var(--mosaic-credit-height, 24px) + 12px) !important; }}
         @media (max-width: 767px) {{
             html body .container-fluid2 #itemsContainer {{ position: fixed !important; bottom: calc(var(--mosaic-credit-bottom, 28px) + var(--mosaic-credit-height, 24px) + 58px) !important; }}

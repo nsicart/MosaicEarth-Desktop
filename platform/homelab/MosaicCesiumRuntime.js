@@ -227,7 +227,13 @@
             var measure = function () {
                 if (!alive(viewer)) return;
                 var rect = cc.getBoundingClientRect();
-                global.document.documentElement.style.setProperty('--mosaic-credit-height', Math.ceil(rect.height) + 'px');
+                var height = Math.ceil(rect.height) + 'px';
+                // Embedded viewers have controls beside the Cesium container.
+                // Measure their own credit strip so wrapping never covers buttons.
+                viewer.container.style.setProperty('--mosaic-credit-height', height);
+                var shell = viewer.container.closest('.mosaic-map-shell');
+                if (shell) shell.style.setProperty('--mosaic-credit-height', height);
+                global.document.documentElement.style.setProperty('--mosaic-credit-height', height);
                 global.document.documentElement.style.setProperty('--mosaic-credit-bottom', Math.max(0, Math.ceil(global.innerHeight - rect.bottom)) + 'px');
             };
             if (global.ResizeObserver) {
