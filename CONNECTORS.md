@@ -22,7 +22,7 @@ Browse and download into a chosen directory. A QGIS snapshot opens its portable 
 
 ## Desktop
 
-Open **MyEarth** or **MyMosaics**, then choose **Sign In to Cloud Account**. Local projects and scenes appear in the local section; cloud entries appear separately. **Pass to Cloud** transfers the entire selected project or MyMosaic and its referenced local data. **Copy to Local PC** restores a complete cloud revision. Originals, masters, viewer files, scene references and the project/survey/task hierarchy are preserved. **Open Local Disk Folder** opens the local files.
+Open **MyEarth** or **MyMosaics**, then choose **Sign In to Cloud Account**. Local projects and scenes appear in the local section; cloud entries appear separately. **Pass to Cloud** transfers the entire selected project or MyMosaic and its referenced local data. **Download complete local copy** restores a complete cloud revision. Originals, masters, viewer files, scene references and the project/survey/task hierarchy are preserved. **Open Local Disk Folder** opens the local files.
 
 Cloud synchronization is optional and private. A transferred MyMosaic can be edited or viewed in the destination workspace after restoration. It is a copied revision, not a shared live editing session. Signing out leaves the local copies available. A runtime restart requires signing in again to browse or synchronize cloud data.
 
