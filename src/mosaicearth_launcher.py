@@ -107,6 +107,20 @@ class PlatformLauncher:
         except (OSError, ValueError, sqlite3.Error):
             return False
 
+    def _stop_outdated_platform(self):
+        """Release old Windows bind-mount handles before refreshing migration data."""
+        existing = self.command('inspect', self.platform, check=False)
+        if existing.returncode:
+            return
+        info = json.loads(existing.stdout)[0]
+        if info['Config'].get('Labels', {}).get('mosaicearth.workspace') != self.identity:
+            raise ValueError('Another application owns this container name. Your existing containers were preserved.')
+        image_id = self.command('image', 'inspect', PLATFORM_IMAGE, '--format', '{{.Id}}').stdout.decode().strip()
+        if info['Image'] != image_id and info['State']['Running']:
+            if not self._workspace_idle():
+                raise ValueError('Finish the running tasks and transfers before updating this workspace. Your current engines remain running.')
+            self.command('stop', '--time', '30', self.platform)
+
     def _start(self):
         try:
             root = self.workspace.root
@@ -145,6 +159,7 @@ class PlatformLauncher:
                     raise ValueError('Local engines need installation. Use Install engines below, then Retry.')
                 if commercial and present.stdout.decode().strip() != expected['image_ids'].get(image):
                     raise ValueError('This runtime does not match the signed-in installer release. Install its verified engines before continuing.')
+            self._stop_outdated_platform()
             network = self.command('network', 'inspect', self.network, check=False)
             if network.returncode:
                 self.command('network', 'create', '--label', self.label, self.network)

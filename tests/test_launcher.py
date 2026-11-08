@@ -68,6 +68,22 @@ class LauncherTest(unittest.TestCase):
         self.launcher.state['status'] = 'ready'
         self.assertEqual(self.launcher.snapshot()['status'], 'failed')
 
+    def test_upgrade_releases_old_platform_handles_only_when_idle(self):
+        old = SimpleNamespace(returncode=0, stdout=json.dumps([{
+            'Config': {'Labels': {'mosaicearth.workspace': self.launcher.identity}},
+            'Image': 'sha256:old', 'State': {'Running': True}}]).encode())
+        new = SimpleNamespace(returncode=0, stdout=b'sha256:new')
+        for idle in (False, True):
+            with self.subTest(idle=idle), patch.object(self.launcher, 'command', side_effect=[old, new, None]) as command, \
+                 patch.object(self.launcher, '_workspace_idle', return_value=idle):
+                if idle:
+                    self.launcher._stop_outdated_platform()
+                    self.assertEqual(command.call_args.args, ('stop', '--time', '30', self.launcher.platform))
+                else:
+                    with self.assertRaisesRegex(ValueError, 'Finish the running'):
+                        self.launcher._stop_outdated_platform()
+                    self.assertEqual(command.call_count, 2)
+
     def test_foreign_container_is_never_stopped_or_removed(self):
         existing = SimpleNamespace(returncode=0, stdout=json.dumps([{
             'Config': {'Labels': {'mosaicearth.workspace': 'someone-else'}},
