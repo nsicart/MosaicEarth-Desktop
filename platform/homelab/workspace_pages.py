@@ -1628,7 +1628,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             <div>
                 <div style="font-size:10.5px;font-weight:700;color:#99CC00;text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <span>MOSAICEARTH DESKTOP WORKSTATION &middot; LOCAL DISK + NODEODX / OPENSPLAT + CLOUD SYNC</span>
-                    <span style="background:rgba(153,204,0,0.2);border:1px solid #99CC00;color:#fff;padding:1px 8px;border-radius:999px;font-size:10px;">0.3.0 development</span>
+                    <span style="background:rgba(153,204,0,0.2);border:1px solid #99CC00;color:#fff;padding:1px 8px;border-radius:999px;font-size:10px;">0.3.0</span>
                 </div>
                 <div style="font-size:13px;color:#fff;margin-top:4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                     <span>Local Photogrammetry Engine: <strong id="lblMyEarthNodeOdmStatus" style="color:#99CC00;">Checking NodeODX…</strong></span>

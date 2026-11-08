@@ -53,7 +53,7 @@ def host_controls():
 
 @router.get('/api/desktop/version')
 def version():
-    return {'ok': True, 'version': '0.3.0-dev', 'engine': 'NodeODX / ODX + COLMAP / OpenSplat',
+    return {'ok': True, 'version': '0.3.0', 'engine': 'NodeODX / ODX + COLMAP / OpenSplat',
             'desktop_local': True, 'automatic_update': False,
             'download_url': 'https://app.mosaicearth.app/en/Desktop'}
 

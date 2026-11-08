@@ -167,7 +167,8 @@ def pull_workspace(kind, entity_id):
 
 def storage_status_html():
     disk = shutil.disk_usage(_data)
-    return ('<section class="myearth-quota-bar" aria-label="Local storage">'
+    return ('<section class="myearth-quota-bar" aria-label="Local storage" '
+            'style="color:#e8f1e8;background:#132017;border:1px solid #526844;border-radius:10px;padding:18px">'
             '<div><strong>LOCAL WORKSPACE</strong><p style="margin:6px 0 0">'
             'Projects, surveys, tasks and layers below are stored on this computer. '
             'Cloud synchronization is an explicit action.</p></div>'

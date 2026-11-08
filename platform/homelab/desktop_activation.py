@@ -7,6 +7,7 @@ import sqlite3
 import secrets
 import subprocess
 import time
+from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from .connector_sync import context
 from .db_store import get_store
@@ -135,7 +136,7 @@ async def provision_session(request: Request):
 
 
 @router.get("/engine-bundle")
-def engine_bundle(request: Request):
+def engine_bundle(request: Request, version: str = ""):
     store = get_store()
     store.refresh_account_state()
     auth = request.headers.get("Authorization", "")
@@ -150,9 +151,16 @@ def engine_bundle(request: Request):
     if not row or not store.get_desktop_license_info(row[0]).get("licensed"):
         raise HTTPException(403, "Provisioning session expired or device revoked")
     directory = store.data_root / "desktop_distribution"
+    if version and not re.fullmatch(r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}", version):
+        raise HTTPException(400, "Invalid engine release version")
     try:
-        metadata = json.loads((directory / "engines.json").read_text())
-        path = directory / metadata["filename"]
+        # Retain engines.json for previously distributed installers. New ones
+        # select their immutable payload, so a release cannot change a resumed download.
+        manifest = "engines-" + version + ".json" if version else "engines.json"
+        metadata = json.loads((directory / manifest).read_text())
+        if version and metadata.get("version") != version:
+            raise ValueError
+        path = directory / Path(metadata["filename"]).name
         if not path.is_file() or path.stat().st_size != metadata["bytes"]:
             raise ValueError
     except (OSError, ValueError, KeyError):

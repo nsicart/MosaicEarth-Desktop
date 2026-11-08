@@ -6,11 +6,18 @@ Unicode true
 !include "WinVer.nsh"
 
 Name "MosaicEarth Desktop"
-OutFile "../installers/MosaicEarth-Desktop-0.2.1-x64-Setup.exe"
+OutFile "../installers/MosaicEarth-Desktop-0.3.0-x64-Setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\MosaicEarth Desktop"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 SetDateSave off
+!define MUI_ICON "../resources/mosaicearth.ico"
+!define MUI_UNICON "../resources/mosaicearth.ico"
+VIProductVersion "0.3.0.0"
+VIAddVersionKey "ProductName" "MosaicEarth Desktop"
+VIAddVersionKey "FileDescription" "MosaicEarth Desktop Setup"
+VIAddVersionKey "FileVersion" "0.3.0"
+VIAddVersionKey "LegalCopyright" "MosaicEarth contributors"
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\python\pythonw.exe"
 !define MUI_FINISHPAGE_RUN_PARAMETERS '$\"$INSTDIR\src\mosaicearth_desktop.py$\"'
@@ -128,10 +135,11 @@ Section "MosaicEarth Desktop"
   SetOutPath "$INSTDIR"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateDirectory "$SMPROGRAMS\MosaicEarth Desktop"
-  CreateShortCut "$SMPROGRAMS\MosaicEarth Desktop\MosaicEarth Desktop.lnk" "$INSTDIR\python\pythonw.exe" '"$INSTDIR\src\mosaicearth_desktop.py"'
-  CreateShortCut "$DESKTOP\MosaicEarth Desktop.lnk" "$INSTDIR\python\pythonw.exe" '"$INSTDIR\src\mosaicearth_desktop.py"'
+  CreateShortCut "$SMPROGRAMS\MosaicEarth Desktop\MosaicEarth Desktop.lnk" "$INSTDIR\python\pythonw.exe" '"$INSTDIR\src\mosaicearth_desktop.py"' "$INSTDIR\resources\mosaicearth.ico"
+  CreateShortCut "$DESKTOP\MosaicEarth Desktop.lnk" "$INSTDIR\python\pythonw.exe" '"$INSTDIR\src\mosaicearth_desktop.py"' "$INSTDIR\resources\mosaicearth.ico"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "DisplayName" "MosaicEarth Desktop"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "DisplayVersion" "0.2.1"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "DisplayIcon" "$INSTDIR\resources\mosaicearth.ico"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "DisplayVersion" "0.3.0"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "UninstallString" '"$INSTDIR\Uninstall.exe"'
 SectionEnd
 

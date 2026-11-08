@@ -3,5 +3,6 @@ Type=Application
 Name=MosaicEarth Desktop
 Comment=Local photogrammetry and Gaussian splatting workspace
 Exec=mosaicearth-desktop
-Terminal=true
+Icon=/opt/mosaicearth-desktop/resources/mosaicearth.png
+Terminal=false
 Categories=Science;Geography;

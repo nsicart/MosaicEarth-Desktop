@@ -41,6 +41,13 @@ def read_legacy(root):
 
 
 def legacy_status(root):
+    receipt = Path(root) / 'legacy-import/completed.json'
+    snapshot = Path(root) / 'legacy-import/snapshot.sqlite3'
+    try:
+        if snapshot.is_file() and json.loads(receipt.read_text()).get('snapshot_sha256') == hashlib.sha256(snapshot.read_bytes()).hexdigest():
+            return {'available': False, 'already_imported': True}
+    except (OSError, ValueError):
+        pass
     tables = read_legacy(root)
     projects = [p for p in tables.get('dbo.WEB_PROJECTS', [])
                 if p.get('ACTIVO', True) and int(p.get('CREATE_ID') or 0) == 1]
@@ -124,5 +131,9 @@ def migrate_legacy(root, legacy_blobs, store, blobs, progress, canceled):
     revision = hashlib.sha256(json.dumps(hashes).encode()).hexdigest()
     progress(0, total, 'Restoring a separate local copy; original files remain unchanged')
     result = import_workspace(store, blobs, 1, revision, paths)
+    receipt = Path(root) / 'legacy-import/completed.tmp'
+    receipt.write_text(json.dumps({'snapshot_sha256': hashlib.sha256(
+        (Path(root) / 'legacy-import/snapshot.sqlite3').read_bytes()).hexdigest(), 'result': result}))
+    receipt.replace(receipt.with_name('completed.json'))
     progress(total, total, 'Previous local workspace copied and verified')
     return {'workspace': result, 'unfinished_tasks': unfinished, 'original_preserved': True}

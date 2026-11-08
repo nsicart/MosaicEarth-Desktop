@@ -108,6 +108,7 @@ class WorkspaceExchangeTest(unittest.TestCase):
         result = migrate_legacy(target, source_blobs, self.dest, self.target, lambda *args: None, lambda: False)
         self.assertEqual(result['unfinished_tasks'], 1)
         self.assertTrue(result['original_preserved'])
+        self.assertTrue(legacy_status(target)['already_imported'])
         migrated = next(p for p in self.dest.tables[PROJECTS] if p.get('NAME') == 'Finished task')
         self.assertEqual(migrated['STATE_ID'], 3)
         self.assertFalse(migrated.get('NODEODM_UUID'))

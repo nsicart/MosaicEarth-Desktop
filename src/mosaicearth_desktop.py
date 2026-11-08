@@ -286,7 +286,7 @@ class Workspace:
                         client.token = client.request('POST', '/api/v2/desktop/provision-session', {'grant': grant})['token']
                         authorized_at = time.monotonic()
                     end = min(offset + CHUNK, expected["bytes"]) - 1
-                    block = client.download_range('/api/v2/desktop/engine-bundle', offset, end, expected['bytes'])
+                    block = client.download_range('/api/v2/desktop/engine-bundle?version=' + expected['version'], offset, end, expected['bytes'])
                     stream.write(block)
                     stream.flush()
                     os.fsync(stream.fileno())

@@ -7,6 +7,7 @@
   const refresh = document.createElement('button');
   refresh.type = 'button';
   refresh.className = 'btn btn-outline-secondary btn-sm';
+  refresh.style.cssText = 'color:#e8f1e8;border-color:#8aa75f;min-height:44px';
   refresh.textContent = 'Refresh public map';
   refresh.title = 'Refresh public assets and mosaics from MosaicEarth. Your local files are not uploaded.';
   item.append(refresh);
@@ -72,7 +73,7 @@
   const action = (label, parent, handler) => {
     const button = make('button', label, parent);
     button.type = 'button'; button.className = 'btn btn-sm btn-outline-secondary';
-    button.style.cssText = 'min-height:44px;margin:4px 6px 0 0';
+    button.style.cssText = 'min-height:44px;margin:4px 6px 0 0;color:#e8f1e8;border-color:#8aa75f';
     button.addEventListener('click', handler);
     return button;
   };
@@ -117,7 +118,7 @@
       const host=document.querySelector('.myearth-quota-bar');
       if (!host) return;
       const section=make('section');
-      section.style.cssText='border:1px solid #607b39;border-radius:10px;padding:16px;margin:15px 0;background:#132017';
+      section.style.cssText='border:1px solid #607b39;border-radius:10px;padding:16px;margin:15px 0;background:#132017;color:#e8f1e8';
       make('strong','Previous Desktop workspace found',section);
       make('p','Copy its local projects, photos, finished layers and MyMosaics into this version. The earlier application and its files will be preserved. Nothing is uploaded.',section);
       if (state.unfinished) make('p',state.unfinished+' unfinished task(s) will be copied with their source files so you can restart processing here.',section);
