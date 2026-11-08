@@ -14,4 +14,4 @@ Project data lives in `%LOCALAPPDATA%\mosaicearth-desktop`. Uninstall from Insta
 
 The account menu shows **Desktop activated for…** and **Cloud connected as…** separately. If cloud is disconnected, it offers **Connect cloud account**, with the same browser sign-in options. Activation does not connect or upload the workspace automatically. Edge guest mode isolates the application window from browser-profile synchronization; it is not the MosaicEarth account status.
 
-The browser account flow in this candidate has passed isolated server and Desktop tests. Its updated physical Windows installer checks are still pending; the earlier Windows processing and file-preservation proofs apply to the previous candidate.
+Browser sign-in asks you to confirm the account and the matching code shown in Desktop. If the request expires, choose **Start again** to get a new code. Canceling does not connect the cloud or activate a computer. Current validation results and release limitations are maintained in the [release notes](https://github.com/nsicart/MosaicEarth-Desktop/blob/main/RELEASE_NOTES.md).
