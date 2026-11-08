@@ -3065,11 +3065,11 @@ def render_world_simulator_page(
                 tiles_url = f"/ProcessedAssetFile.ashx/{folder}/procesado/3d_tiles/pointcloud/tileset.json"
             else:
                 tiles_url = f"/ProcessedAssetFile.ashx/{folder}/procesado/output/tileset.json"
-    elif len(parts) == 3 and parts[0] == "external" and parts[1].isdigit() and parts[2].isdigit():
-        asset_ftype = int(parts[1])
-        ext_id = int(parts[2])
+    elif len(parts) in (2, 3) and parts[0] == "external" and all(part.isdigit() for part in parts[1:]):
+        ext_id = int(parts[-1])
         ext = store.get_external_asset_by_id(ext_id)
         if ext:
+            asset_ftype = int(parts[1]) if len(parts) == 3 else int(ext.get("FILE_TYPE_ID") or 3)
             pid = int(ext.get("PROJECT_ID") or 0)
             asset_title = str(ext.get("TITLE") or ext.get("DISPLAY_NAME") or asset_title)
             lat = _try_float(ext.get("LATITUDE")) or lat

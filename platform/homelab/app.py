@@ -2389,6 +2389,29 @@ async def route_world_simulator(
     alt: float = 0.0,
     kind: str = "",
 ):
+    # Enforce the same viewing rights before rendering names, coordinates and
+    # scene membership as the model/tiles endpoints themselves.
+    store = get_store()
+    user = get_current_user(request)
+    parts = (asset_id or "").strip().lower().split("-")
+    if parts[0] == "external" and len(parts) in (2, 3) and all(p.isdigit() for p in parts[1:]):
+        ext = store.get_external_asset_by_id(int(parts[-1]))
+        if not ext:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        _enforce_project_and_asset_acl(request, store, store.get_project(int(ext.get("PROJECT_ID") or 0)), ext_asset=ext)
+    elif parts[0] == "processed" and len(parts) == 3 and all(p.isdigit() for p in parts[1:]):
+        project = store.get_project(int(parts[2]))
+        if not project:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        _enforce_project_and_asset_acl(request, store, project)
+    elif parts[0] in {"mymap", "mymosaic"} and len(parts) == 2 and parts[1].isdigit():
+        scene = store.get_mymap(parts[1])
+        if not scene:
+            raise HTTPException(status_code=404, detail="MyMosaic not found")
+        visibility = str(scene.get("VISIBILITY") or ("private" if scene.get("IS_CONTAINER_PREVIEW") else "public")).lower()
+        owner = int(scene.get("CREATE_ID") or scene.get("USER_ID") or 0)
+        if visibility == "private" and (not user or int(user["ID"]) != owner):
+            raise HTTPException(status_code=403, detail="This MyMosaic is private")
     html_doc = render_world_simulator_page(
         asset_id=asset_id,
         name=name,

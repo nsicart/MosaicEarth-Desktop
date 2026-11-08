@@ -72,6 +72,25 @@ class PlatformTest(unittest.TestCase):
         self.assertTrue(origin['local_only'])
         self.assertEqual(origin['shareOrigin'], 'http://127.0.0.1:19757')
 
+    def test_fly_loads_short_external_ids_and_protects_private_metadata(self):
+        pid = self.store.create_project(1, 'Private Fly project', kind='external')
+        aid = 999001
+        row = {'ID': aid, 'PROJECT_ID': pid, 'USER_ID': 1, 'TITLE': 'Private Fly Gaussian',
+               'VISIBILITY': 'private', 'IS_PUBLIC': 0, 'STATUS': 'private-ready',
+               'VIEWER_KIND': 'gaussian-splat', 'LATITUDE': 46.8, 'LONGITUDE': -91.9}
+        self.store.tables['dbo.MOSAICEARTH_EXTERNAL_ASSETS'].append(row)
+        self.store.persist_table('dbo.MOSAICEARTH_EXTERNAL_ASSETS')
+        for identifier in (f'external-{aid}', f'external-3-{aid}'):
+            response = self.client.get('/Fly.aspx', params={'asset_id': identifier})
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('Private Fly Gaussian', response.text)
+            self.assertIn(f'/ExternalAsset3DTile.ashx/{pid}/{aid}/tileset.json', response.text)
+            for user, expected in ((None, 401), ({'ID': 999, 'ROL_ID': 2}, 403)):
+                with patch('homelab.app.get_current_user', return_value=user):
+                    denied = self.client.get('/Fly.aspx', params={'asset_id': identifier})
+                    self.assertEqual(denied.status_code, expected)
+                    self.assertNotIn('Private Fly Gaussian', denied.text)
+
     def test_local_gaussian_photos_queue_without_cloud_billing(self):
         import hashlib
         import io

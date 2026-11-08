@@ -637,7 +637,11 @@ def open_workspace_window(url, data):
             base = os.environ.get(variable)
             edge = Path(base) / 'Microsoft/Edge/Application/msedge.exe' if base else None
             if edge and edge.is_file():
-                subprocess.Popen([str(edge), '--app=' + url, '--no-first-run',
+                # Guest mode avoids implicit Windows-account sign-in and browser
+                # data synchronization. MosaicEarth's optional cloud session is
+                # stored by its local backend, independently of this browser.
+                subprocess.Popen([str(edge), '--app=' + url, '--guest', '--no-first-run',
+                                  '--no-default-browser-check',
                                   '--user-data-dir=' + str(Path(data).resolve() / 'browser')],
                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return
