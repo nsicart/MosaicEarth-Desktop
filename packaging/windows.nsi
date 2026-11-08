@@ -25,14 +25,6 @@ VIAddVersionKey "LegalCopyright" "MosaicEarth contributors"
 !define MUI_WELCOMEPAGE_TEXT "This wizard installs MosaicEarth Desktop for your Windows account.$\r$\n$\r$\nThe official installer requires the MosaicEarth account that purchased Desktop or has an active Studio plan. Two computers can be activated. Local processing uses Docker Desktop with Linux containers; the application guides you through engine setup.$\r$\n$\r$\nThe AGPL source edition can be built and used without an account."
 
 Var AccountDialog
-Var EmailField
-Var PasswordField
-Var EmailValue
-Var PasswordValue
-Var CredentialsFile
-Var ActivationResult
-Var ActivationOutput
-Var Activated
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "../LICENSE"
@@ -61,11 +53,7 @@ Function .onInit
   SetOutPath "$PLUGINSDIR\python"
   File /r "../build/windows-python/*"
   SetOutPath "$PLUGINSDIR\src"
-  File "../src/mosaicearth_license.py"
-  File "../src/mosaicearth_sync.py"
   File "../src/mosaicearth_update.py"
-  SetOutPath "$PLUGINSDIR\resources"
-  File "../resources/license-public.json"
 FunctionEnd
 
 Function PrepareUpdate
