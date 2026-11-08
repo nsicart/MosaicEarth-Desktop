@@ -1,10 +1,10 @@
 {
   "version": "0.4.1",
   "variant": "cuda",
-  "filename": "mosaicearth-engines-cuda-0.4.1-30f56d0b03a8.tar.gz",
-  "sha256": "30f56d0b03a8ce4d32c074b8c5367c7ebfdff1c094ea2f7851f1435ceb14d466",
-  "bytes": 9070238611,
-  "unpacked_bytes": 27302318076,
+  "filename": "mosaicearth-engines-cuda-0.4.1-07ea5a4ac705.tar.gz",
+  "sha256": "07ea5a4ac7052224c2dfa30002a276d171e53ad3913df3cea8cf24f5c550ec18",
+  "bytes": 9070233561,
+  "unpacked_bytes": 27302322353,
   "images": [
     "mosaicearth-desktop/nodeodx:0.4.0-cuda",
     "mosaicearth-desktop/platform:0.4.1-cuda"
@@ -12,6 +12,6 @@
   "source_url": "https://app.mosaicearth.app/open-source",
   "image_ids": {
     "mosaicearth-desktop/nodeodx:0.4.0-cuda": "sha256:19b3059529a70ec0d131b055b68cccae2c97d3d29fbf4454b52794cfa69f599f",
-    "mosaicearth-desktop/platform:0.4.1-cuda": "sha256:355e96ec303d98b73f05d4585f5b50406b7931c96572a0e0572e9cd73dd5902c"
+    "mosaicearth-desktop/platform:0.4.1-cuda": "sha256:3607a5ee3da2b93a4d5e595e806b16f2bd272b5a4da0780bd8b72b27038cf865"
   }
 }
