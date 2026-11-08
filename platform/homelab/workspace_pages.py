@@ -4494,7 +4494,7 @@ def render_mymaps_page(user: Dict[str, Any], lang: str = "en") -> str:
             else ""
         )
         sync_mosaic_btn = (
-            f'<button type="button" class="mymosaic-btn mymosaic-btn--primary" onclick="syncLocalMyMosaicToCloud({mid}, {json.dumps(mname_raw)})" title="Upload &amp; sync this Local MyMosaic to your MosaicEarth Cloud account"><i class="fas fa-cloud-upload-alt" style="font-size:11px;"></i> Pass to Cloud</button>'
+            f'<button type="button" class="mymosaic-btn mymosaic-btn--primary" data-name="{html.escape(mname_raw, quote=True)}" onclick="syncLocalMyMosaicToCloud({mid}, this.dataset.name)" title="Upload &amp; sync this Local MyMosaic to your MosaicEarth Cloud account"><i class="fas fa-cloud-upload-alt" style="font-size:11px;"></i> Pass to Cloud</button>'
             if is_desktop_mymaps
             else ""
         )
@@ -4531,7 +4531,7 @@ def render_mymaps_page(user: Dict[str, Any], lang: str = "en") -> str:
                     <a href="/Client/MyMapDetail.aspx?id={mid}" class="mymosaic-btn" title="Edit layers and title of this MyMosaic">
                         <i class="fas fa-pen" style="font-size:11px;"></i> Edit Mosaic
                     </a>
-                    <button type="button" class="mymosaic-btn" onclick="copyMyMosaicShareLink({mid}, {json.dumps(mname_raw)})" title="Copy a link that opens this MyMosaic on this computer only">
+                    <button type="button" class="mymosaic-btn" data-name="{html.escape(mname_raw, quote=True)}" onclick="copyMyMosaicShareLink({mid}, this.dataset.name)" title="Copy a link that opens this MyMosaic on this computer only">
                         <i class="fas fa-link" style="font-size:11px;"></i> Local link
                     </button>
                     <button type="button" class="mymosaic-btn mymosaic-btn--danger" title="Delete this MyMosaic" onclick="changeDeleteBtn({mid})" data-bs-toggle="modal" data-bs-target="#staticBackdrop1">

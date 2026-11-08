@@ -120,8 +120,22 @@ class PlatformLauncher:
                 raise ValueError('Install Docker Desktop, then open MosaicEarth again. Installation help links to the official installer.') from None
             if info.returncode and os.name == 'nt':
                 self.state.update(message='Starting Docker Desktop. Your local files are preserved.')
-                self.command('desktop', 'start', timeout=60, check=False)
-                info = self.command('info', '--format', '{{.OSType}}', timeout=45, check=False)
+                # Start the official app in the launcher's interactive session.
+                # The CLI can report success before its Linux VM is available.
+                for variable, suffix in [('LOCALAPPDATA', 'Programs/DockerDesktop/Docker Desktop.exe'),
+                                         ('ProgramFiles', 'Docker/Docker/Docker Desktop.exe')]:
+                    executable = Path(os.environ.get(variable, '')) / suffix
+                    if executable.is_file():
+                        subprocess.Popen([str(executable)], stdin=subprocess.DEVNULL,
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        break
+                else:
+                    self.command('desktop', 'start', timeout=60, check=False)
+                for _ in range(60):
+                    info = self.command('info', '--format', '{{.OSType}}', timeout=15, check=False)
+                    if not info.returncode:
+                        break
+                    time.sleep(2)
             if info.returncode or info.stdout.strip() != b'linux':
                 raise ValueError('Start Docker Desktop with Linux containers, then click Retry.')
             expected = json.loads((self.resources / 'engine-payload.json').read_text())

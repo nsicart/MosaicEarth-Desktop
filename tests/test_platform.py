@@ -91,6 +91,23 @@ class PlatformTest(unittest.TestCase):
                     self.assertEqual(denied.status_code, expected)
                     self.assertNotIn('Private Fly Gaussian', denied.text)
 
+    def test_mymosaic_actions_preserve_quoted_titles_without_breaking_html(self):
+        from html.parser import HTMLParser
+        title = 'Brighton "North" & South \'local\''
+        mid = self.store.save_mymap_composition(1, 0, title, [], visibility='private')
+        class Buttons(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.actions = []
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if tag == 'button' and attrs.get('data-name') == title:
+                    self.actions.append(attrs.get('onclick'))
+        parser = Buttons()
+        parser.feed(self.client.get('/en/MyMaps').text)
+        self.assertIn(f'syncLocalMyMosaicToCloud({mid}, this.dataset.name)', parser.actions)
+        self.assertIn(f'copyMyMosaicShareLink({mid}, this.dataset.name)', parser.actions)
+
     def test_local_gaussian_photos_queue_without_cloud_billing(self):
         import hashlib
         import io
