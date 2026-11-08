@@ -99,7 +99,7 @@ class OpenSplatAdapter:
             raise ValueError("OpenSplat requires at least four registered views")
         output.mkdir(parents=True, exist_ok=False)
         version = subprocess.run([self.binary, "--version"], check=True, capture_output=True,
-                                 text=True, timeout=15).stdout.strip()
+                                 text=True, timeout=90).stdout.strip()
         if not version:
             raise RuntimeError("OpenSplat did not report its version")
         steps, downscale, max_splats, sh = PRESETS[preset]
@@ -212,3 +212,31 @@ class OpenSplatAdapter:
             }
         (output / "benchmark.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         return ply, cameras, metadata
+
+
+def train_with_cpu_fallback(binary, project, output, preset, names, *, cpu=False, fallback="", on_fallback=None, **kwargs):
+    """Retry a CUDA execution fault on CPU, preserving the failed GPU log."""
+    try:
+        return OpenSplatAdapter(binary, cpu=cpu).train(project, output, preset, names, **kwargs)
+    except RuntimeError:
+        if kwargs.get('cancelled') and kwargs['cancelled']():
+            raise
+        log_path = output / "opensplat.log"
+        error_log = log_path.read_text(errors="replace") if log_path.is_file() else ""
+        gpu_error = any(text in error_log.lower() for text in (
+            "cuda error", "cuda out of memory", "cuda runtime", "cuda driver", "cublas_status",
+            "cudnn_status", "no kernel image", "invalid device function", "cuda-capable device"))
+        if cpu or not fallback or not Path(fallback).is_file() or not gpu_error:
+            raise
+        # This directory contains only this failed attempt's generated files.
+        # The input photos and shared SfM reconstruction remain untouched.
+        shutil.rmtree(output)
+        if on_fallback:
+            on_fallback()
+        try:
+            ply, cameras, benchmark = OpenSplatAdapter(fallback, cpu=True).train(project, output, preset, names, **kwargs)
+        finally:
+            output.mkdir(parents=True, exist_ok=True)
+            (output / "opensplat-gpu-failed.log").write_text(error_log)
+        benchmark["gpu_fallback_reason"] = "CUDA execution failed; completed using the CPU engine. See opensplat-gpu-failed.log."
+        return ply, cameras, benchmark

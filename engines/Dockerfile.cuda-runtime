@@ -1,0 +1,37 @@
+# Keep the same Debian/Python ABI as the CPU runtime. CUDA development tools
+# stay in the build stage; the distributed image contains runtime libraries only.
+ARG CUDA_TOOLCHAIN=mosaicearth-desktop/cuda-build:1.2.2
+FROM ${CUDA_TOOLCHAIN} AS cuda
+FROM mosaicearth-desktop/local-engine:0.1.0 AS build
+ARG OPENSPLAT_REV=e33f9dde8ef9c9d59852ffe4d12e0adddcf1fc1b
+ARG CUDA_ARCHITECTURES=60;61;70;75;80;86;89
+RUN apt-get update && apt-get install -y --no-install-recommends g++-11 cmake ninja-build git libeigen3-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=cuda /usr/local/cuda-11.8/ /usr/local/cuda-11.8/
+COPY --from=cuda /code/libtorch/ /code/libtorch/
+ENV PATH=/usr/local/cuda-11.8/bin:$PATH CUDA_HOME=/usr/local/cuda-11.8 \
+    LD_LIBRARY_PATH=/code/libtorch/lib:/usr/local/cuda-11.8/lib64
+WORKDIR /code
+RUN git init source && git -C source remote add origin https://github.com/WebODM/OpenSplat.git \
+    && git -C source fetch --depth 1 origin "$OPENSPLAT_REV" && git -C source checkout FETCH_HEAD \
+    && git -C source submodule update --init --recursive \
+    && cmake -G Ninja -S source -B out -DCMAKE_BUILD_TYPE=Release -DGPU_RUNTIME=CUDA \
+       -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11 -DCMAKE_CUDA_HOST_COMPILER=g++-11 \
+       -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-11.8 \
+       -DCMAKE_PREFIX_PATH=/code/libtorch \
+    && cmake --build out --parallel 2
+RUN mkdir /runtime && cp -L /usr/local/cuda-11.8/lib64/libcudart.so.11.0 /runtime/ \
+    && cp -L /usr/local/cuda-11.8/lib64/libnvToolsExt.so.1 /runtime/
+
+FROM mosaicearth-desktop/local-engine:0.1.0
+COPY --from=build /code/libtorch/lib/ /opt/opensplat-cuda/lib/
+COPY --from=build /runtime/ /opt/opensplat-cuda/lib/
+COPY --from=build /code/out/opensplat /opt/opensplat-cuda/opensplat
+COPY --from=build /code/source/LICENSE.txt /opt/opensplat-cuda/LICENSE.txt
+COPY --from=build /code/libtorch/share/cmake/Torch/TorchConfig.cmake /opt/opensplat-cuda/TorchConfig.cmake
+RUN mkdir /opt/opensplat-cuda/bin && printf '%s\n' '#!/bin/sh' \
+    'export LD_LIBRARY_PATH=/opt/opensplat-cuda/lib:/usr/local/nvidia/lib64:/usr/local/nvidia/lib' \
+    'exec /opt/opensplat-cuda/opensplat "$@"' > /opt/opensplat-cuda/bin/opensplat \
+    && chmod 755 /opt/opensplat-cuda/bin/opensplat \
+    && /opt/opensplat-cuda/bin/opensplat --version
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility

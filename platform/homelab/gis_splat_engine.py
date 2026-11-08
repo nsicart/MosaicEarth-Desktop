@@ -1912,11 +1912,14 @@ def _run_sfm_and_gaussian_splat_optimization(
             registered_names = prepare_colmap(work_path, colmap_bin, out_dir / "colmap.log")
             training_dir = work_path / "training"
             try:
-                ply, cameras, benchmark = OpenSplatAdapter(
-                    opensplat_bin, cpu=force_cpu
-                ).train(work_path, training_dir, preset, registered_names,
-                        progress=(lambda step, total: stage_cb(55 + int(34 * step / total), "OpenSplat training"))
-                        if stage_cb else None)
+                from .opensplat_engine import train_with_cpu_fallback
+                ply, cameras, benchmark = train_with_cpu_fallback(
+                    opensplat_bin, work_path, training_dir, preset, registered_names,
+                    cpu=force_cpu, fallback=os.environ.get("MOSAICEARTH_OPENSPLAT_CPU_FALLBACK", ""),
+                    progress=(lambda step, total: stage_cb(55 + int(34 * step / total), "OpenSplat training")) if stage_cb else None,
+                    on_fallback=(lambda: stage_cb(55, "GPU unavailable for this task; continuing with CPU")) if stage_cb else None)
+                if (training_dir / "opensplat-gpu-failed.log").is_file():
+                    shutil.copyfile(training_dir / "opensplat-gpu-failed.log", out_dir / "opensplat-gpu-failed.log")
             finally:
                 if (training_dir / "opensplat.log").is_file():
                     shutil.copyfile(training_dir / "opensplat.log", out_dir / "opensplat.log")

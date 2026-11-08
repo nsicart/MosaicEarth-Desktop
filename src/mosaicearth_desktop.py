@@ -163,7 +163,10 @@ class Workspace:
             try:
                 result = operation(*args, progress=progress, canceled=lambda: state["pause"])
                 with self.transfer_lock:
-                    state.update(status="complete", message="All files synchronized and verified", result=result)
+                    message = "All files synchronized and verified"
+                    if key == 'engine-installation':
+                        message = result.get('gpu_warning') or 'Local engines installed and verified'
+                    state.update(status="complete", message=message, result=result)
             except (ValueError, OSError, zipfile.BadZipFile) as exc:
                 with self.transfer_lock:
                     state.update(status="paused" if state["pause"] else "failed", message=str(exc))
@@ -266,6 +269,7 @@ class Workspace:
                 self.cloud_session = None
 
     def installation_status(self):
+        from mosaicearth_gpu import preferences
         commercial = (RESOURCES / "edition-commercial").is_file()
         grant, account = None, None
         try:
@@ -284,7 +288,7 @@ class Workspace:
         except (OSError, subprocess.SubprocessError):
             docker = False
         return {"commercial": commercial, "account": account, "docker": docker, "engines": engines,
-                "gaussian_device": self.gaussian_device}
+                "gaussian_device": self.gaussian_device, "acceleration_preference": preferences(self.root)}
 
     def activate_installation(self, email, password):
         return activate(email, password, self.root, json.loads((RESOURCES / "license-public.json").read_text()))
@@ -298,43 +302,74 @@ class Workspace:
 
         def provision(progress, canceled):
             from mosaicearth_sync import checksum, CHUNK
-            expected = json.loads((RESOURCES / "engine-payload.json").read_text())
+            from mosaicearth_gpu import detect, preferences
             grant = json.loads((self.root / "account-grant.json").read_text())
             client = Client(canceled=canceled, progress=progress)
-            client.token = client.request("POST", "/api/v2/desktop/provision-session", {"grant": grant})["token"]
-            authorized_at = time.monotonic()
-            archive = self.root / expected["filename"]
-            offset = archive.stat().st_size if archive.exists() else 0
-            if offset > expected["bytes"]:
-                archive.unlink()
-                offset = 0
-            progress(offset, expected["bytes"], "Resuming saved engine download" if offset else "Downloading local NodeODX and OpenSplat engines")
-            with archive.open("ab") as stream:
-                while offset < expected["bytes"]:
-                    # A slow first install can outlast a provisioning session.
-                    # Renew using the signed device grant, never a saved password.
-                    if time.monotonic() - authorized_at >= 1800:
-                        client.token = client.request('POST', '/api/v2/desktop/provision-session', {'grant': grant})['token']
-                        authorized_at = time.monotonic()
-                    end = min(offset + CHUNK, expected["bytes"]) - 1
-                    block = client.download_range('/api/v2/desktop/engine-bundle?version=' + expected['version'], offset, end, expected['bytes'])
-                    stream.write(block)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                    offset += len(block)
-                    progress(offset, expected["bytes"], "Downloading local NodeODX and OpenSplat engines")
-            progress(offset, offset, "Verifying engine checksums")
-            if checksum(archive) != expected["sha256"]:
-                archive.unlink()
-                raise ValueError("Engine checksum mismatch; retry the download")
-            progress(offset, offset, "Installing verified Docker images")
-            with (self.root / "engine-install.log").open("wb") as log:
-                self.docker_run(["load", "--input", str(archive)], log, timeout=1800)
-            for name, expected_id in expected["image_ids"].items():
-                actual = subprocess.check_output([*self.docker, "image", "inspect", name, "--format", "{{.Id}}"], stdin=subprocess.DEVNULL, timeout=20).decode().strip()
-                if actual != expected_id:
+            authorized_at = 0.0
+
+            def install(expected, variant):
+                nonlocal authorized_at
+                def verified():
+                    for name, digest in expected["image_ids"].items():
+                        result = subprocess.run([*self.docker, "image", "inspect", name, "--format", "{{.Id}}"],
+                                                stdin=subprocess.DEVNULL, capture_output=True, timeout=20)
+                        if result.returncode or result.stdout.decode().strip() != digest:
+                            return False
+                    return True
+                if verified():
+                    return
+                archive = self.root / expected["filename"]
+                offset = archive.stat().st_size if archive.exists() else 0
+                if offset > expected["bytes"]:
+                    archive.unlink()
+                    offset = 0
+                # Docker's containerd image store can retain compressed content
+                # as well as unpacked layers while this archive is still present.
+                required = (2 * expected['bytes'] - offset
+                            + expected.get('unpacked_bytes', expected['bytes'] * 5) + 1024**3)
+                if shutil.disk_usage(self.root).free < required:
+                    raise ValueError('Free at least ' + str((required + 1024**3 - 1) // 1024**3) +
+                                     ' GiB before installing these engines. Existing CPU engines and files are preserved.')
+                label = "GPU engines" if variant == "cuda" else "CPU engines"
+                progress(offset, expected["bytes"], "Downloading " + label + " (saved downloads resume)")
+                with archive.open("ab") as stream:
+                    while offset < expected["bytes"]:
+                        if canceled():
+                            raise ValueError("Engine download paused; saved progress will resume.")
+                        if time.monotonic() - authorized_at >= 1800 or not authorized_at:
+                            client.token = client.request('POST', '/api/v2/desktop/provision-session', {'grant': grant})['token']
+                            authorized_at = time.monotonic()
+                        end = min(offset + CHUNK, expected["bytes"]) - 1
+                        path = '/api/v2/desktop/engine-bundle?version=' + expected['version'] + '&variant=' + variant
+                        block = client.download_range(path, offset, end, expected['bytes'])
+                        stream.write(block)
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                        offset += len(block)
+                        progress(offset, expected["bytes"], "Downloading " + label)
+                progress(offset, offset, "Verifying engine checksums: " + label)
+                if checksum(archive) != expected["sha256"]:
+                    archive.unlink()
+                    raise ValueError("Engine checksum mismatch; retry the download")
+                progress(offset, offset, "Installing verified Docker images: " + label)
+                with (self.root / ("engine-install-" + variant + ".log")).open("wb") as log:
+                    self.docker_run(["load", "--input", str(archive)], log, timeout=3600)
+                if not verified():
                     raise ValueError("Installed engine digest mismatch")
-            return {"engines_installed": True}
+                archive.unlink()
+
+            install(json.loads((RESOURCES / "engine-payload.json").read_text()), 'cpu')
+            progress(0, 0, "Checking GPU compatibility inside Docker")
+            hardware = detect(self.docker, RESOURCES, disabled=preferences(self.root) == 'cpu')
+            warning = None
+            if hardware['mode'] == 'cuda':
+                try:
+                    install(json.loads((RESOURCES / "engine-payload-cuda.json").read_text()), 'cuda')
+                except (ValueError, OSError, subprocess.SubprocessError) as exc:
+                    if canceled():
+                        raise
+                    warning = "GPU engines could not be installed. CPU processing is ready. Retry Install engines to resume the GPU download."
+            return {"engines_installed": True, "gpu_warning": warning}
         return self.start_transfer("engine-installation", provision)
 
     def docker_run(self, args, log=None, timeout=45, check=True):
@@ -531,8 +566,8 @@ class Handler(BaseHTTPRequestHandler):
                                               "output/gaussian-3dtiles.zip", "output/benchmark.json", "output/opensplat.log"}:
                     raise ValueError("Unknown file")
                 file = workspace.root / pid / result / name
-            elif path == "/":
-                if self.server.platform.snapshot()['status'] == 'ready':
+            elif path in {"/", "/setup"}:
+                if path == "/" and self.server.platform.snapshot()['status'] == 'ready':
                     self.send_response(303)
                     self.send_header('Location', self.server.platform.url + '/en/Map')
                     self.send_header('Content-Length', '0')
@@ -587,6 +622,10 @@ class Handler(BaseHTTPRequestHandler):
                     if not webbrowser.open(url):
                         raise ValueError('Open the sign-in link in your browser to continue.')
                     self.json({'ok':True})
+                return
+            if self.path == '/api/processing-settings' and 0 < size <= 8192:
+                data = json.loads(self.rfile.read(size))
+                self.json(self.server.platform.set_processing(data.get('acceleration')))
                 return
             if self.path == '/api/platform/start':
                 self.json(self.server.platform.start())
@@ -708,7 +747,7 @@ def main():
     args.add_argument("--port", type=int, default=19754)
     args.add_argument("--no-browser", action="store_true")
     args.add_argument("--gaussian-steps", type=int, default=2000, choices=range(1, 12001), metavar="1..12000")
-    args.add_argument("--gaussian-device", choices=("cpu",), default="cpu", help="The complete interface currently uses CPU OpenSplat")
+    args.add_argument("--gaussian-device", choices=("cpu",), default="cpu", help=argparse.SUPPRESS)
     options = args.parse_args()
     from mosaicearth_launcher import PlatformLauncher
     url = f'http://127.0.0.1:{options.port}'

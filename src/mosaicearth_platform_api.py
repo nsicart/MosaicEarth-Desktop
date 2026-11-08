@@ -1,5 +1,6 @@
 """Desktop adapters used by the shared platform interface."""
 import os
+import json
 import shutil
 import subprocess
 from fastapi import APIRouter, HTTPException, Request
@@ -60,7 +61,7 @@ def host_controls():
 
 @router.get('/api/desktop/version')
 def version():
-    return {'ok': True, 'version': '0.3.0', 'engine': 'NodeODX / ODX + COLMAP / OpenSplat',
+    return {'ok': True, 'version': '0.4.0', 'engine': 'NodeODX / ODX + COLMAP / OpenSplat',
             'desktop_local': True, 'automatic_update': False,
             'download_url': 'https://app.mosaicearth.app/en/Desktop'}
 
@@ -69,6 +70,16 @@ def version():
 def account_status():
     workspace()
     return {'license': context.license_account(), 'cloud': context.cloud_account()}
+
+
+@router.get('/api/desktop/processing-status')
+def processing_status():
+    root = workspace().root
+    try:
+        return json.loads((root / 'processing-runtime.json').read_text())
+    except (OSError, ValueError):
+        return {'mode': 'cpu', 'opensplat': 'cpu', 'nodeodx': 'cpu', 'device': None,
+                'preference': 'auto', 'reason': 'Local CPU processing is available.'}
 
 
 @router.post('/api/desktop/browser-signin/start')

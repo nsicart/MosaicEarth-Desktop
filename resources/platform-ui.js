@@ -2,6 +2,8 @@
 (() => {
   const nav = document.querySelector('#menu-nav .dropdown-menu');
   if (!nav) return;
+  nav.style.maxHeight='calc(100dvh - 76px)';
+  nav.style.overflowY='auto';
   const item = document.createElement('li');
   item.className = 'me-public-refresh';
   const refresh = document.createElement('button');
@@ -96,6 +98,20 @@
     connectButton.style.display=state.cloud.logged_in?'none':'block';
     document.querySelectorAll('[data-desktop-cloud-disconnect]').forEach(link=>{link.hidden=!state.cloud.logged_in;link.style.display=state.cloud.logged_in?'block':'none';});
   }).catch(error=>{licenseState.textContent='Account status unavailable';cloudState.textContent=error.message;});
+  const processingItem=document.createElement('li');
+  processingItem.style.cssText='padding:12px 16px;max-width:340px;white-space:normal;border-bottom:1px solid #344536';
+  const processingState=document.createElement('div'),processingDetail=document.createElement('small'),processingSettings=document.createElement('button');
+  processingState.textContent='Checking local processing…';processingDetail.style.cssText='display:block;margin:8px 0;color:#c1d2c5';
+  processingSettings.type='button';processingSettings.className='dropdown-item';processingSettings.textContent='Processing settings';
+  processingSettings.style.cssText='min-height:44px;padding-left:0;color:#bde47f';
+  processingSettings.onclick=async()=>{try{const control=await api('/api/desktop/host-controls');if(!control.url)throw Error('Reopen Desktop to change processing settings.');location.href=control.url+'/setup';}catch(error){notify(error.message,true);}};
+  processingItem.append(processingState,processingDetail,processingSettings);accountItem.insertAdjacentElement('afterend',processingItem);
+  api('/api/desktop/processing-status').then(state=>{
+    const deviceLabel=device=>device==='cuda'?'GPU':'CPU';
+    processingState.textContent='NodeODX: '+deviceLabel(state.nodeodx)+' · OpenSplat: '+deviceLabel(state.opensplat);
+    processingDetail.textContent=state.device?state.device.name:(state.preference==='cpu'?'CPU selected':'Automatic · CPU available');
+    if(state.gpu_available&&!state.gpu_installed)processingDetail.textContent+=' · GPU setup incomplete';
+  }).catch(()=>{processingState.textContent='Processing status unavailable';processingDetail.textContent='Open Processing settings to check the local engines.';});
   const loginModal=document.getElementById('modalDesktopCloudLogin');
   if(loginModal){
     const body=loginModal.querySelector('.modal-body');

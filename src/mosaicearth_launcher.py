@@ -16,9 +16,11 @@ import urllib.request
 from pathlib import Path
 
 from mosaicearth_license import device_identity, verify_grant
+from mosaicearth_gpu import (PLATFORM_CPU, PLATFORM_CUDA, NODE_CPU, NODE_CUDA,
+                             detect, preferences, required_images)
 
-PLATFORM_IMAGE = 'mosaicearth-desktop/platform:0.3.0'
-NODE_IMAGE = 'mosaicearth-desktop/nodeodx:0.1.0'
+PLATFORM_IMAGE = PLATFORM_CPU
+NODE_IMAGE = NODE_CPU
 
 
 class PlatformLauncher:
@@ -88,7 +90,7 @@ class PlatformLauncher:
             # An unreachable runtime cannot authorize an automatic upgrade.
             return False
 
-    def _stop_outdated_platform(self):
+    def _stop_outdated_platform(self, image=PLATFORM_IMAGE):
         """Release old Windows bind-mount handles before refreshing migration data."""
         existing = self.command('inspect', self.platform, check=False)
         if existing.returncode:
@@ -96,11 +98,46 @@ class PlatformLauncher:
         info = json.loads(existing.stdout)[0]
         if info['Config'].get('Labels', {}).get('mosaicearth.workspace') != self.identity:
             raise ValueError('Another application owns this container name. Your existing containers were preserved.')
-        image_id = self.command('image', 'inspect', PLATFORM_IMAGE, '--format', '{{.Id}}').stdout.decode().strip()
+        image_id = self.command('image', 'inspect', image, '--format', '{{.Id}}').stdout.decode().strip()
         if info['Image'] != image_id and info['State']['Running']:
             if not self._workspace_idle():
                 raise ValueError('Finish the running tasks and transfers before updating this workspace. Your current engines remain running.')
             self.command('stop', '--time', '30', self.platform)
+
+    def _acceleration(self, commercial):
+        self.state.update(message='Checking GPU compatibility inside Docker')
+        acceleration = detect(self.workspace.docker, self.resources,
+                              disabled=preferences(self.workspace.root) == 'cpu')
+        acceleration['preference'] = preferences(self.workspace.root)
+        acceleration['gpu_available'] = acceleration['mode'] == 'cuda'
+        acceleration['gpu_installed'] = True
+        try:
+            expected = json.loads((self.resources / 'engine-payload-cuda.json').read_text())
+        except (OSError, ValueError):
+            expected = {}
+        for image in required_images(acceleration):
+            present = self.command('image', 'inspect', image, '--format', '{{.Id}}', check=False)
+            if present.returncode or (commercial and present.stdout.decode().strip() != expected.get('image_ids', {}).get(image)):
+                acceleration['gpu_installed'] = False
+                acceleration['opensplat' if image == PLATFORM_CUDA else 'nodeodx'] = 'cpu'
+                acceleration['reason'] = 'A compatible GPU was detected. Its verified engines are not installed; CPU processing is available. Open Processing settings to install or resume them.'
+                if not commercial:
+                    acceleration['reason'] = 'A compatible GPU was detected. CPU processing is ready. Build the GPU engines with scripts/provision-cuda.sh and reopen Desktop; no account is required.'
+        acceleration['mode'] = 'cuda' if 'cuda' in (acceleration['opensplat'], acceleration['nodeodx']) else 'cpu'
+        return acceleration
+
+    def set_processing(self, preference):
+        if preference not in {'auto', 'cpu'}:
+            raise ValueError('Choose automatic GPU detection or CPU.')
+        if self.state['status'] == 'starting':
+            raise ValueError('Wait for the local workspace to finish starting.')
+        if self.state['status'] == 'ready' and not self._workspace_idle():
+            raise ValueError('Finish the running tasks and transfers before changing processing settings.')
+        target = self.workspace.root / 'processing-settings.json'
+        temporary = target.with_suffix('.tmp')
+        temporary.write_text(json.dumps({'acceleration': preference}))
+        temporary.replace(target)
+        return self.start()
 
     def _start(self):
         try:
@@ -143,7 +180,8 @@ class PlatformLauncher:
                     raise ValueError('Local engines need installation. Use Install engines below, then Retry.')
                 if commercial and present.stdout.decode().strip() != expected['image_ids'].get(image):
                     raise ValueError('This runtime does not match the signed-in installer release. Install its verified engines before continuing.')
-            self._stop_outdated_platform()
+            acceleration = self._acceleration(commercial)
+            platform_image = PLATFORM_CUDA if acceleration['opensplat'] == 'cuda' else PLATFORM_IMAGE
             network = self.command('network', 'inspect', self.network, check=False)
             if network.returncode:
                 self.command('network', 'create', '--label', self.label, self.network)
@@ -160,8 +198,21 @@ class PlatformLauncher:
             (root / 'tmp').mkdir(exist_ok=True)
             self.state.update(message='Starting NodeODX and the complete MosaicEarth interface')
             # NodeODX is reachable only on this private Docker network, not LAN.
-            self._container(self.node, NODE_IMAGE, self.workspace.mount(node_data, '/var/www/data'),
-                            ['--max-concurrency', '1', '--token', token])
+            gpu_args = ['--gpus', 'device=' + str(acceleration['device']['index'])] if acceleration['device'] else []
+            node_args = self.workspace.mount(node_data, '/var/www/data')
+            node_command = ['--max-concurrency', '1', '--token', token]
+            if acceleration['nodeodx'] == 'cuda':
+                try:
+                    self._container(self.node, NODE_CUDA, [*gpu_args, *node_args], node_command)
+                except (ValueError, subprocess.SubprocessError):
+                    self._container(self.node, NODE_IMAGE, node_args, node_command)
+                    acceleration.update(nodeodx='cpu', reason='NodeODX could not start with GPU. It is running on CPU; local data was preserved.')
+            else:
+                self._container(self.node, NODE_IMAGE, node_args, node_command)
+            # Check/replace NodeODX while the current platform can still report
+            # whether its workspace is idle. Stopping it before this check made
+            # a switch between CPU and GPU fail closed halfway through.
+            self._stop_outdated_platform(platform_image)
             args = ['--cap-drop=ALL', '--security-opt=no-new-privileges',
                     '-p', f'127.0.0.1:{self.port}:{self.port}',
                     '-e', 'MOSAICEARTH_LOCAL_NODEODX=http://' + self.node + ':3000',
@@ -182,7 +233,24 @@ class PlatformLauncher:
             if self.host_port and self.host_token:
                 args += ['-e', f'MOSAICEARTH_LAUNCHER_URL=http://127.0.0.1:{self.host_port}',
                          '-e', 'MOSAICEARTH_LAUNCHER_TOKEN=' + self.host_token]
-            self._container(self.platform, PLATFORM_IMAGE, args, ['--port', str(self.port)])
+            if acceleration['opensplat'] == 'cuda':
+                try:
+                    self._container(self.platform, PLATFORM_CUDA,
+                                    [*gpu_args, *args, '-e', 'MOSAICEARTH_OPENSPLAT_CPU=0',
+                                     '-e', 'MOSAICEARTH_OPENSPLAT_BIN=/opt/opensplat-cuda/bin/opensplat',
+                                     '-e', 'MOSAICEARTH_OPENSPLAT_CPU_FALLBACK=/opt/opensplat/bin/opensplat'],
+                                    ['--port', str(self.port)])
+                except (ValueError, subprocess.SubprocessError):
+                    self._container(self.platform, PLATFORM_IMAGE, args, ['--port', str(self.port)])
+                    acceleration.update(opensplat='cpu', reason='OpenSplat could not start with GPU. It is running on CPU; local data was preserved.')
+            else:
+                self._container(self.platform, PLATFORM_IMAGE, args, ['--port', str(self.port)])
+            acceleration['mode'] = 'cuda' if 'cuda' in (acceleration['opensplat'], acceleration['nodeodx']) else 'cpu'
+            target = root / 'processing-runtime.json'
+            temporary = target.with_suffix('.tmp')
+            temporary.write_text(json.dumps(acceleration))
+            temporary.replace(target)
+            self.state['acceleration'] = acceleration
             for _ in range(90):
                 try:
                     with urllib.request.urlopen(self.url + '/api/desktop/version', timeout=3) as response:

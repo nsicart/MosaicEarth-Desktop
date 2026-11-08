@@ -1628,7 +1628,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             <div>
                 <div style="font-size:10.5px;font-weight:700;color:#99CC00;text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <span>MOSAICEARTH DESKTOP WORKSTATION &middot; LOCAL DISK + NODEODX / OPENSPLAT + CLOUD SYNC</span>
-                    <span style="background:rgba(153,204,0,0.2);border:1px solid #99CC00;color:#fff;padding:1px 8px;border-radius:999px;font-size:10px;">0.3.0</span>
+                    <span style="background:rgba(153,204,0,0.2);border:1px solid #99CC00;color:#fff;padding:1px 8px;border-radius:999px;font-size:10px;">0.4.0</span>
                 </div>
                 <div style="font-size:13px;color:#fff;margin-top:4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                     <span>Local Photogrammetry Engine: <strong id="lblMyEarthNodeOdmStatus" style="color:#99CC00;">Checking NodeODX…</strong></span>
@@ -3538,7 +3538,7 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                                 <span id="localEngineStatusBadge" style="font-size:10.5px;padding:2px 8px;border-radius:99px;background:rgba(153,204,0,0.22);color:#99CC00;">ONLINE &middot; Built-in Local ODM Engine (0.00 &euro;)</span>
                             </div>
                             <p style="font-size:12px;color:#dce6dc;margin:0 0 8px;line-height:1.5;">
-                                Processes your drone images at <strong>0.00 &euro;</strong> using your computer's CPU via MosaicEarth Desktop's built-in <strong>NodeODX / ODX</strong> engine — completely integrated inside the application without external windows.
+                                Processes your drone images at <strong>0.00 &euro;</strong> using your computer's CPU or compatible GPU via MosaicEarth Desktop's built-in <strong>NodeODX / ODX</strong> engine — completely integrated inside the application without external windows.
                             </p>
                             <div id="localEngineHowTo" style="font-size:11.5px;color:#b8c6be;background:#0b100d;border:1px solid #28362e;border-radius:6px;padding:10px;line-height:1.5;">
                                 <div style="font-size:11px;color:#99CC00;font-weight:700;">
@@ -6583,7 +6583,7 @@ def _render_unified_task_upload_page(
             </div>
         </div>"""
     if is_gaussian and os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1":
-        upfront_task_quote_banner = '<section style="margin-bottom:18px;padding:16px;border:1px solid #607b39;border-radius:10px;background:#132017"><strong>Local COLMAP + OpenSplat · 0.00 €</strong><p>Photos and videos are reconstructed on this computer using its CPU. Local processing uses no cloud credits or storage quota. Finished Gaussian files can also be imported directly.</p></section>'
+        upfront_task_quote_banner = '<section style="margin-bottom:18px;padding:16px;border:1px solid #607b39;border-radius:10px;background:#132017"><strong>Local COLMAP + OpenSplat · 0.00 €</strong><p>Photos and videos are reconstructed on this computer. Automatic mode uses a compatible GPU when available and falls back to CPU. See Processing settings in the account menu for the active engines. Local processing uses no cloud credits or storage quota. Finished Gaussian files can also be imported directly.</p></section>'
     format_pills_html = (
         """
         <span class="workflow-pill">Gaussian Splatting Task</span>
