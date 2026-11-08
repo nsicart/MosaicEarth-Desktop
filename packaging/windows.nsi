@@ -37,6 +37,7 @@ Var Activated
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "../LICENSE"
 Page custom AccountPage AccountLeave
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE PrepareUpdate
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -62,8 +63,19 @@ Function .onInit
   SetOutPath "$PLUGINSDIR\src"
   File "../src/mosaicearth_license.py"
   File "../src/mosaicearth_sync.py"
+  File "../src/mosaicearth_update.py"
   SetOutPath "$PLUGINSDIR\resources"
   File "../resources/license-public.json"
+FunctionEnd
+
+Function PrepareUpdate
+  nsExec::ExecToStack '"$PLUGINSDIR\python\python.exe" "$PLUGINSDIR\src\mosaicearth_update.py" "$INSTDIR"'
+  Pop $0
+  Pop $1
+  ${If} $0 != "0"
+    MessageBox MB_ICONEXCLAMATION "$1"
+    Abort
+  ${EndIf}
 FunctionEnd
 
 Function AccountPage
