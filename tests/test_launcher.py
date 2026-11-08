@@ -15,6 +15,9 @@ from mosaicearth_launcher import PlatformLauncher
 
 class LauncherTest(unittest.TestCase):
     def setUp(self):
+        self.http = patch('urllib.request.urlopen', side_effect=OSError('runtime unavailable'))
+        self.http.start()
+        self.addCleanup(self.http.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.launcher = PlatformLauncher(SimpleNamespace(root=self.root), self.root, 19757)
@@ -42,17 +45,24 @@ class LauncherTest(unittest.TestCase):
     def test_transfer_blocks_update_even_when_models_have_finished(self):
         self.row('dbo.WEB_PROJECTS', [{'STATE_ID': 4}])
         response = io.BytesIO(json.dumps({'transfers': {'a': {'status': 'running'}}}).encode())
-        with patch('urllib.request.urlopen', return_value=response):
+        with patch('urllib.request.urlopen', side_effect=[OSError('older runtime'), response]):
             self.assertFalse(self.launcher._workspace_idle())
 
     def test_idle_update_ignores_public_catalog_jobs(self):
         self.row('dbo.WEB_PROJECTS', [{'STATE_ID': 2, 'DESKTOP_PUBLIC_CATALOG': True}, {'STATE_ID': 4}])
-        with patch('urllib.request.urlopen', return_value=io.BytesIO(b'{"transfers":{}}')):
+        with patch('urllib.request.urlopen', side_effect=[OSError('older runtime'), io.BytesIO(b'{"transfers":{}}')]):
             self.assertTrue(self.launcher._workspace_idle())
 
     def test_unreachable_runtime_is_not_assumed_idle(self):
         with patch('urllib.request.urlopen', side_effect=OSError('offline')):
             self.assertFalse(self.launcher._workspace_idle())
+
+    def test_running_platform_answers_without_opening_its_database_on_the_host(self):
+        for idle in (True, False):
+            with self.subTest(idle=idle), patch('urllib.request.urlopen', return_value=io.BytesIO(
+                    json.dumps({'idle': idle}).encode())), patch('sqlite3.connect') as connection:
+                self.assertEqual(self.launcher._workspace_idle(), idle)
+                connection.assert_not_called()
 
     def test_foreign_container_is_never_stopped_or_removed(self):
         existing = SimpleNamespace(returncode=0, stdout=json.dumps([{

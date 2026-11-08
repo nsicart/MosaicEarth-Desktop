@@ -10,6 +10,7 @@ import json
 import os
 import sqlite3
 import threading
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -22,8 +23,10 @@ def prepare_legacy(root):
     target = Path(root) / 'legacy-import'
     target.mkdir(mode=0o700, exist_ok=True)
     temporary = target / 'snapshot.tmp'
-    with sqlite3.connect(database.resolve().as_uri() + '?mode=ro', uri=True, timeout=5) as old:
-        with sqlite3.connect(temporary) as new:
+    # sqlite3's connection context manager commits but does not close handles.
+    # Windows cannot rename an open SQLite file, so close both before promotion.
+    with closing(sqlite3.connect(database.resolve().as_uri() + '?mode=ro', uri=True, timeout=5)) as old:
+        with closing(sqlite3.connect(temporary)) as new:
             old.backup(new)
     temporary.replace(target / 'snapshot.sqlite3')
     return source / 'blobs'
@@ -33,7 +36,7 @@ def read_legacy(root):
     database = Path(root) / 'legacy-import/snapshot.sqlite3'
     if not database.is_file():
         return {}
-    with sqlite3.connect(database.resolve().as_uri() + '?mode=ro', uri=True) as db:
+    with closing(sqlite3.connect(database.resolve().as_uri() + '?mode=ro', uri=True)) as db:
         return {name: json.loads(value) for name, value in db.execute('SELECT table_name, rows_json FROM table_overrides')}
 
 

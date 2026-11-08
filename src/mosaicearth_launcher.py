@@ -12,6 +12,7 @@ import subprocess
 import threading
 import time
 import urllib.request
+from contextlib import closing
 from pathlib import Path
 
 from mosaicearth_license import device_identity, verify_grant
@@ -75,11 +76,16 @@ class PlatformLauncher:
 
     def _workspace_idle(self):
         """Fail closed if an existing workspace cannot be inspected coherently."""
+        try:
+            with urllib.request.urlopen(self.url + '/api/desktop/runtime-idle', timeout=3) as response:
+                return json.load(response).get('idle') is True
+        except (OSError, ValueError):
+            pass
         database = self.workspace.root / 'platform/db/mosaicearth_state.sqlite3'
         if not database.exists():
             return True
         try:
-            with sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=5) as db:
+            with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=5)) as db:
                 rows = db.execute('SELECT table_name, rows_json FROM table_overrides').fetchall()
             for table, serialized in rows:
                 if table == 'dbo.WEB_PROJECTS':
@@ -163,7 +169,7 @@ class PlatformLauncher:
                     pass
                 time.sleep(1)
             raise ValueError('The local interface did not become ready. Check the engine setup log and retry.')
-        except (ValueError, OSError, subprocess.SubprocessError) as exc:
+        except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
             self.state.update(status='failed', message=str(exc))
 
     def snapshot(self):

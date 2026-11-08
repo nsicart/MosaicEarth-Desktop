@@ -144,6 +144,20 @@ def transfers():
         return {'ok': True, 'transfers': {key: dict(value) for key, value in local.transfers.items()}}
 
 
+@router.get('/api/desktop/runtime-idle')
+def runtime_idle():
+    from homelab.db_store import get_store
+    local = workspace()
+    store = get_store()
+    with store.lock, local.transfer_lock:
+        active = any(not p.get('DESKTOP_PUBLIC_CATALOG') and int(p.get('STATE_ID') or 0) in (1, 2)
+                     for p in store.tables.get('dbo.WEB_PROJECTS', []))
+        active = active or any(j.get('STATUS') in {'QUEUED', 'RUNNING', 'RETRY'}
+                               for j in store.tables.get('dbo.MOSAICEARTH_BACKGROUND_JOBS', []))
+        active = active or any(t.get('status') == 'running' for t in local.transfers.values())
+    return {'idle': not active}
+
+
 @router.get('/api/desktop/legacy-workspace')
 def legacy_workspace():
     from mosaicearth_migration import legacy_status
