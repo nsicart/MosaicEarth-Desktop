@@ -14,5 +14,10 @@ unzip -oq build/python.zip -d build/windows-python
 printf 'python312.zip\r\n.\r\n..\\src\r\n' > build/windows-python/python312._pth
 printf '%s\n' "$source_rev" > build/SOURCE_REVISION
 python3 -m py_compile src/*.py
-makensis -V3 packaging/windows.nsi
+if [ -n "${ME_SIGNING_COMMAND:-}" ]; then
+    test -x "$ME_SIGNING_COMMAND"
+    makensis -V3 "-DME_SIGNING_COMMAND=$ME_SIGNING_COMMAND" packaging/windows.nsi
+else
+    makensis -V3 packaging/windows.nsi
+fi
 (cd installers && sha256sum MosaicEarth-Desktop-0.3.0-x64-Setup.exe > SHA256SUMS.windows)
