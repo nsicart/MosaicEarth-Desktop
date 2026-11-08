@@ -2,6 +2,8 @@
 
 All connectors are AGPL-3.0-or-later and work with an existing MosaicEarth Cloud account for cloud transfers. Local use of their host applications does not require MosaicEarth sign-in. Passwords are used only for sign-in; revocable session tokens remain in the host session or process. Sign out to revoke them.
 
+The connectors sign in with a MosaicEarth email and password. If you normally use Google, GitHub or Microsoft on the website, open [MosaicEarth sign-in](https://app.mosaicearth.app/Default.aspx), choose **Forgot your password?**, and set a MosaicEarth password for the same account email. Use that password in the connector; do not enter your Google, GitHub or Microsoft password. Desktop also offers browser sign-in with those providers.
+
 Transfers include actual original bytes, finished products, textures and metadata. A checksum manifest and 4 MiB chunks support safe retries. Downloads verify every file. Changed local files are preserved: download a different revision into a new folder to resolve conflicts. This is explicit revision synchronization, not simultaneous editing or automatic deletion propagation. Very large transfers need adequate local disk space and cloud account storage. A revision supports up to 100,000 files; split larger projects into tasks.
 
 ## WebODM and OpenDroneMap WebUI
