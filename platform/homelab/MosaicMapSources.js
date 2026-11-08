@@ -131,7 +131,10 @@
                 if(!national(x,y,z))return globalImage(x,y,z,request);
                 const result=ign.requestImage(x,y,z,request);
                 if(!result)return undefined;
-                return Promise.resolve(result).catch(error=>{
+                return Promise.resolve(result).then(image=>{
+                    fallback.delete(z+'/'+x+'/'+y);
+                    return image;
+                }).catch(error=>{
                     if(request && request.cancelled)throw error;
                     fallback.add(z+'/'+x+'/'+y);
                     // Use an unthrottled fallback; returning undefined inside a
