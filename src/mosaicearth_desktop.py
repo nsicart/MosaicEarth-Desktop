@@ -9,6 +9,7 @@ import re
 import secrets
 import shlex
 import shutil
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -32,6 +33,17 @@ ODX_IMAGE = "mosaicearth-desktop/nodeodx:0.1.0"
 MAX_UPLOAD = 3 * 1024**3
 IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 PROJECT_ID = re.compile(r"[0-9a-f]{32}")
+
+
+class WorkspaceHTTPServer(ThreadingHTTPServer):
+    # Windows SO_REUSEADDR permits several processes to accept on one port.
+    # One workspace must have exactly one host supervisor and capability.
+    allow_reuse_address = os.name != 'nt'
+
+    def server_bind(self):
+        if os.name == 'nt':
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 def docker_command():
@@ -661,9 +673,9 @@ def main():
     from mosaicearth_launcher import PlatformLauncher
     url = f'http://127.0.0.1:{options.port}'
     try:
-        host = ThreadingHTTPServer(("127.0.0.1", options.port), Handler)
+        host = WorkspaceHTTPServer(("127.0.0.1", options.port), Handler)
     except OSError as exc:
-        if exc.errno not in (errno.EADDRINUSE, 10048):
+        if exc.errno not in (errno.EADDRINUSE, 10048, 10013):
             raise
         # Opening the shortcut twice must reopen the existing workspace, not
         # start another worker or silently fail in pythonw.exe.
