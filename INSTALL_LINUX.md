@@ -1,6 +1,6 @@
 # Install on Linux
 
-Download the official `mosaicearth-desktop_0.3.0_amd64.deb` from [Desktop](https://app.mosaicearth.app/en/Desktop) and verify its SHA-256. Install with `sudo apt install ./mosaicearth-desktop_0.3.0_amd64.deb`, then launch **MosaicEarth Desktop** from the applications menu or run `mosaicearth-desktop`.
+Download the official `mosaicearth-desktop_0.3.0_amd64.deb` from [Desktop](https://app.mosaicearth.app/en/Desktop) and verify its [OpenPGP signature and SHA-256](SIGNING.md). Install with `sudo apt install ./mosaicearth-desktop_0.3.0_amd64.deb`, then launch **MosaicEarth Desktop** from the applications menu or run `mosaicearth-desktop`.
 
 The official package requires a purchasing/Studio account activation for local processing. On first launch, activate your device in the browser with Google, GitHub, Microsoft or your MosaicEarth email, then choose **Install / Resume local engines**. The account menu distinguishes device activation from the optional cloud connection. Two active computers are supported, with a 30-day offline grant. Engine download is about 1.3 GB; allow at least 20 GB of disk space plus datasets. Docker must be installed and accessible to your user. An existing passwordless sudo Docker configuration can be used with `ME_DOCKER='sudo -n docker' mosaicearth-desktop`.
 
