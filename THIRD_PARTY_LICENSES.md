@@ -3,6 +3,11 @@
 | Component | License and corresponding source |
 | --- | --- |
 | CesiumJS 1.144.0 | Apache-2.0. The package includes its upstream LICENSE and ThirdParty notices. [Cesium source and build instructions](https://github.com/CesiumGS/cesium/tree/1.144). |
+| Shared MosaicEarth interface | The application's Python/JavaScript is under this repository's AGPL license. The vendored baseline and checksums are recorded in `platform/source-manifest.json`; local adaptations are tracked in Git. |
+| Font Awesome Free 5.14.0 | Icons CC BY 4.0, fonts SIL OFL 1.1, code MIT. Exact upstream notice is included in `resources/notices/FontAwesome-LICENSE.txt`. |
+| Raleway | SIL Open Font License 1.1. Notice included in `resources/notices/Raleway-OFL.txt`; the bundled font bytes are pinned in the static manifest. |
+| Potree and bundled libraries | Their upstream license files remain beside the bundled files under `Potree/`. Potree's BSD license and bundled MIT/BSD/Apache notices are preserved. |
+| Bootstrap, jQuery and UI plugins | Upstream copyright/license headers remain in the pinned payload. The old INSPINIA theme payloads are excluded. |
 | NodeODX and ODX | AGPL-3.0. [NodeODX v2.4.0, revision 0229646](https://github.com/WebODM/NodeODX/tree/02296467c0ca2142c2c7771876788bacbed102f6) and [ODX v3.8.5, revision d1e15c7](https://github.com/WebODM/ODX/tree/d1e15c7a1daf1be77713cc68cd063a05d79edbb5). The distribution digest and the Fast cutline overlay are in the engine Dockerfile. |
 | OpenSplat | AGPL-3.0. The engine is built at [revision e33f9dd](https://github.com/WebODM/OpenSplat/tree/e33f9dde8ef9c9d59852ffe4d12e0adddcf1fc1b). |
 | PyTorch libtorch 2.3.1 CPU | BSD-3-Clause plus component notices. [PyTorch source](https://github.com/pytorch/pytorch/tree/v2.3.1). |

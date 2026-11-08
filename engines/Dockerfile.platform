@@ -1,0 +1,21 @@
+# The local-engine image is built from engines/Dockerfile.local and verified by
+# scripts/build-platform.sh before this build; no production configuration is copied.
+FROM mosaicearth-desktop/local-engine:0.1.0
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs ffmpeg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY platform/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY platform/homelab /app/platform/homelab
+COPY src /app/src
+COPY resources/license-public.json /app/resources/license-public.json
+COPY resources/platform-ui.js /app/resources/platform-ui.js
+COPY resources/notices /app/resources/notices
+COPY build/platform-web /app/web
+COPY LICENSE NOTICE THIRD_PARTY_LICENSES.md /app/
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    MOSAICEARTH_PLATFORM_CONTAINER=1 MOSAICEARTH_WEB_ROOT=/app/web \
+    MOSAICEARTH_OPENSPLAT_CPU=1 MOSAICEARTH_OPENSPLAT_BIN=/opt/opensplat/bin/opensplat \
+    MOSAICEARTH_ENABLE_ONDEMAND_3DGS_RUNPOD=0 \
+    PATH=/opt/opensplat/bin:$PATH
+WORKDIR /app
+ENTRYPOINT ["python", "/app/src/mosaicearth_platform.py", "--container", "--data", "/workspace"]

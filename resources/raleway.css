@@ -1,0 +1,21 @@
+@font-face {
+  font-family: 'Raleway';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url(/vendor/raleway/b49a0cb1fa998783.woff2) format('truetype');
+}
+@font-face {
+  font-family: 'Raleway';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/vendor/raleway/943300b002516fea.woff2) format('truetype');
+}
+@font-face {
+  font-family: 'Raleway';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/vendor/raleway/85ad6f6d9c2737c9.woff2) format('truetype');
+}

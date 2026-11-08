@@ -1,0 +1,17 @@
+**
+!platform/
+!platform/homelab/
+!platform/homelab/*.py
+!platform/homelab/*.js
+!platform/requirements.txt
+!src/
+!src/*.py
+!resources/
+!resources/license-public.json
+!resources/platform-ui.js
+!build/
+!build/platform-web/
+!build/platform-web/**
+!LICENSE
+!NOTICE
+!THIRD_PARTY_LICENSES.md

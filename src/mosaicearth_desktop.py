@@ -1,5 +1,6 @@
 """MosaicEarth Desktop's local workspace and launcher."""
 import argparse
+import errno
 import http.client
 import json
 import mimetypes
@@ -265,6 +266,7 @@ class Workspace:
             grant = json.loads((self.root / "account-grant.json").read_text())
             client = Client(canceled=canceled, progress=progress)
             client.token = client.request("POST", "/api/v2/desktop/provision-session", {"grant": grant})["token"]
+            authorized_at = time.monotonic()
             archive = self.root / expected["filename"]
             offset = archive.stat().st_size if archive.exists() else 0
             if offset > expected["bytes"]:
@@ -272,6 +274,11 @@ class Workspace:
                 offset = 0
             with archive.open("ab") as stream:
                 while offset < expected["bytes"]:
+                    # A slow first install can outlast a provisioning session.
+                    # Renew using the signed device grant, never a saved password.
+                    if time.monotonic() - authorized_at >= 1800:
+                        client.token = client.request('POST', '/api/v2/desktop/provision-session', {'grant': grant})['token']
+                        authorized_at = time.monotonic()
                     end = min(offset + CHUNK, expected["bytes"]) - 1
                     block = client.download_range('/api/v2/desktop/engine-bundle', offset, end, expected['bytes'])
                     stream.write(block)
@@ -410,6 +417,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         self.send_header("Cache-Control", "no-store")
+        if self.headers.get('Origin') == self.server.platform.url:
+            self.send_header('Access-Control-Allow-Origin', self.server.platform.url)
+            self.send_header('Vary', 'Origin')
         self.end_headers()
         self.wfile.write(body)
 
@@ -419,15 +429,29 @@ class Handler(BaseHTTPRequestHandler):
     def authorize(self):
         if self.headers.get("Host") != self.server.host:
             raise ValueError("Invalid host")
-        if self.command != "GET" and (self.headers.get("Origin") != "http://" + self.server.host
+        if self.command != "GET" and (self.headers.get("Origin") not in {'http://' + self.server.host, self.server.platform.url}
                                      or self.headers.get("X-Mosaic-Workspace") != self.server.token):
             raise ValueError("Invalid workspace request")
         return self.server.workspace
+
+    def do_OPTIONS(self):
+        if self.headers.get('Host') != self.server.host or self.headers.get('Origin') != self.server.platform.url:
+            self.send_error(403)
+            return
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', self.server.platform.url)
+        self.send_header('Access-Control-Allow-Methods', 'POST')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Mosaic-Workspace')
+        self.send_header('Content-Length', '0')
+        self.end_headers()
 
     def do_GET(self):
         try:
             workspace = self.authorize()
             path = urlsplit(self.path).path
+            if path == '/api/platform':
+                self.json(self.server.platform.snapshot())
+                return
             if path == "/api/projects":
                 with workspace.db() as db:
                     self.json([dict(row) for row in db.execute("SELECT * FROM project ORDER BY rowid DESC")])
@@ -468,7 +492,13 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Unknown file")
                 file = workspace.root / pid / result / name
             elif path == "/":
-                page = (RESOURCES / "index.html").read_text(encoding="utf-8").replace("__WORKSPACE_TOKEN__", self.server.token)
+                if self.server.platform.snapshot()['status'] == 'ready':
+                    self.send_response(303)
+                    self.send_header('Location', self.server.platform.url + '/en/Map')
+                    self.send_header('Content-Length', '0')
+                    self.end_headers()
+                    return
+                page = (RESOURCES / "setup.html").read_text(encoding="utf-8").replace("__WORKSPACE_TOKEN__", self.server.token)
                 self.send_bytes(page.encode(), "text/html; charset=utf-8")
                 return
             else:
@@ -500,6 +530,18 @@ class Handler(BaseHTTPRequestHandler):
         try:
             workspace = self.authorize()
             size = int(self.headers.get("Content-Length") or 0)
+            if self.path == '/api/platform/start':
+                self.json(self.server.platform.start())
+                return
+            if self.path == '/api/platform/open-folder':
+                folder = workspace.root / 'platform' / 'blobs'
+                folder.mkdir(parents=True, exist_ok=True)
+                if os.name == 'nt':
+                    os.startfile(str(folder))
+                else:
+                    subprocess.Popen(['xdg-open', str(folder)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.json({'ok': True})
+                return
             if self.path == "/api/projects" and 0 < size <= 8192:
                 self.json({"id": workspace.create(json.loads(self.rfile.read(size))["name"])}, 201)
                 return
@@ -583,6 +625,19 @@ class Handler(BaseHTTPRequestHandler):
             self.json({"error": str(exc)}, 400)
 
 
+def open_workspace_window(url, data):
+    if os.name == 'nt':
+        for variable in ('ProgramFiles(x86)', 'ProgramFiles', 'LOCALAPPDATA'):
+            base = os.environ.get(variable)
+            edge = Path(base) / 'Microsoft/Edge/Application/msedge.exe' if base else None
+            if edge and edge.is_file():
+                subprocess.Popen([str(edge), '--app=' + url, '--no-first-run',
+                                  '--user-data-dir=' + str(Path(data).resolve() / 'browser')],
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return
+    webbrowser.open(url)
+
+
 def main():
     args = argparse.ArgumentParser()
     base = Path(os.getenv("LOCALAPPDATA", str(Path.home())) if os.name == "nt"
@@ -593,14 +648,41 @@ def main():
     args.add_argument("--gaussian-steps", type=int, default=2000, choices=range(1, 12001), metavar="1..12000")
     args.add_argument("--gaussian-device", choices=("cpu", "cuda"), default="cpu")
     options = args.parse_args()
-    with ThreadingHTTPServer(("127.0.0.1", options.port), Handler) as server:
+    from mosaicearth_launcher import PlatformLauncher
+    url = f'http://127.0.0.1:{options.port}'
+    try:
+        host = ThreadingHTTPServer(("127.0.0.1", options.port), Handler)
+    except OSError as exc:
+        if exc.errno not in (errno.EADDRINUSE, 10048):
+            raise
+        # Opening the shortcut twice must reopen the existing workspace, not
+        # start another worker or silently fail in pythonw.exe.
+        import urllib.request
+        with urllib.request.urlopen(url + '/api/platform', timeout=4) as response:
+            state = json.load(response)
+        if state.get('url') != f'http://127.0.0.1:{options.port + 3}':
+            raise ValueError('This local port belongs to another application.') from exc
+        if not options.no_browser:
+            open_workspace_window(url, options.data)
+        return
+    with host as server:
         server.workspace = Workspace(options.data, options.gaussian_steps, options.gaussian_device)
         server.token = secrets.token_urlsafe(32)
         server.host = f"127.0.0.1:{server.server_port}"
+        # Keep the local control capability across launcher restarts so a running
+        # platform can still open its own folder. It grants no cloud access.
+        capability = server.workspace.root / 'launcher-capability'
+        if capability.exists():
+            server.token = capability.read_text().strip()
+        else:
+            capability.write_text(server.token)
+            capability.chmod(0o600)
+        server.platform = PlatformLauncher(server.workspace, RESOURCES, options.port + 3, options.port, server.token)
+        server.platform.start()
         url = "http://" + server.host
         print(url, flush=True)
         if not options.no_browser:
-            webbrowser.open(url)
+            open_workspace_window(url, options.data)
         server.serve_forever()
 
 
