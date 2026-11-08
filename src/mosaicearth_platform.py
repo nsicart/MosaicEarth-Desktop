@@ -27,6 +27,8 @@ def create_app(data, port):
         'MOSAICEARTH_PUBLIC_URL': f'http://127.0.0.1:{port}',
         'PUBLIC_SITE_URL': f'http://127.0.0.1:{port}',
         'MOSAICEARTH_STORAGE_MODE': 'local_only',
+        'MOSAICEARTH_GAUSSIAN_ENGINE': 'opensplat',
+        'MOSAICEARTH_ENABLE_ONDEMAND_3DGS_RUNPOD': '0',
         'MOSAICEARTH_ZERO_LOCAL_DISK': '0',
         'PROJ_NETWORK': 'OFF',
     })

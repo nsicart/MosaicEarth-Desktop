@@ -72,6 +72,38 @@ class PlatformTest(unittest.TestCase):
         self.assertTrue(origin['local_only'])
         self.assertEqual(origin['shareOrigin'], 'http://127.0.0.1:19757')
 
+    def test_local_gaussian_photos_queue_without_cloud_billing(self):
+        import hashlib
+        import io
+        import uuid
+        from PIL import Image
+        self.context.local_user()
+        pid = self.store.create_project(1, 'Local Gaussian fixture', kind='gaussian', creation_date='2016-06-23')
+        buffer = io.BytesIO()
+        Image.new('RGB', (64, 48), '#223344').save(buffer, format='JPEG')
+        photo = buffer.getvalue()
+        files = [{'name': f'view-{index}.jpg', 'size': len(photo)} for index in range(4)]
+        route = f'/api/v2/tasks/{pid}/asset-uploads/{uuid.uuid4()}'
+        queue = self.store.get_job_queue()
+        with patch('shutil.which', return_value='/installed-engine'), \
+             patch.object(queue, 'ensure_workers_started'), \
+             patch.object(self.store, 'authorize_and_charge_task_upfront', side_effect=AssertionError('Local processing must not call billing')):
+            quote = self.client.get(f'/api/v2/tasks/{pid}/asset-uploads/quote').json()
+            self.assertTrue(quote['local'])
+            self.assertTrue(quote['engine_available'])
+            self.assertEqual(quote['price_eur'], 0)
+            response = self.client.put(route, json={'origin': 'gaussian', 'files': files, 'details': {'quality_preset': 'FAST'}})
+            self.assertEqual(response.status_code, 200, response.text)
+            for index in range(4):
+                response = self.client.put(f'{route}/files/{index}?offset=0', content=photo,
+                    headers={'X-Content-SHA256': hashlib.sha256(photo).hexdigest()})
+                self.assertEqual(response.status_code, 200, response.text)
+            response = self.client.post(route + '/finish')
+            self.assertEqual(response.status_code, 202, response.text)
+            self.assertEqual(response.json()['status'], 'QUEUED')
+            self.assertFalse(response.json().get('checkout_url'))
+        self.assertFalse(self.store.get_project(pid).get('PAYMENT_STATUS'))
+
 
 if __name__ == '__main__':
     unittest.main()

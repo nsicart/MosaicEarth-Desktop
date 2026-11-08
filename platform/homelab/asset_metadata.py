@@ -37,3 +37,9 @@ def apply_inspected_identity(asset, prep):
         if prep.get(key) is not None:
             asset[field] = float(prep[key])
     asset["HAS_EMBEDDED_GEOREF"] = bool(inspection.get("has_embedded_georef"))
+
+
+def format_coordinates(latitude, longitude):
+    """WGS84 display with hemispheres matching the actual coordinate signs."""
+    lat, lon = float(latitude), float(longitude)
+    return f"{abs(lat):.4f}°{'N' if lat >= 0 else 'S'}, {abs(lon):.4f}°{'E' if lon >= 0 else 'W'}"

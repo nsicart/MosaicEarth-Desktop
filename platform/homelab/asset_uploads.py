@@ -104,6 +104,10 @@ class AssetUpload:
         tmp.replace(self.metadata)
 
     def check_storage_quota(self, size):
+        if os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1":
+            if size > shutil.disk_usage(self.store.data_root).free:
+                raise UploadError("There is not enough free space on the local drive for this upload.", 413)
+            return
         usage = self.store.get_user_storage_summary(self.user_id)
         if usage["private_used_bytes"] + size > int(usage["quota_gb"] * 1024**3):
             raise UploadError("This upload exceeds your private storage quota.", 413)
@@ -228,11 +232,15 @@ class AssetUpload:
                         if any(j.get("PROJECT_ID") == self.project_id and j.get("JOB_TYPE") == "gaussian_splat"
                                and j.get("STATUS") in ("QUEUED", "RUNNING") for j in queue._jobs_table()):
                             raise UploadError("This task already has an active reconstruction.", 409)
-                        if not os.environ.get("MOSAICEARTH_GAUSSIAN_ENGINE") == "runpod-opensplat":
+                        local_training = os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1"
+                        if local_training:
+                            if not (shutil.which("colmap") and shutil.which(os.environ.get("MOSAICEARTH_OPENSPLAT_BIN", "opensplat"))):
+                                raise UploadError("Local COLMAP and OpenSplat need installation before processing.", 503)
+                        elif os.environ.get("MOSAICEARTH_GAUSSIAN_ENGINE") != "runpod-opensplat":
                             raise UploadError("Cloud Gaussian training is unavailable on this server.", 503)
                         if data["status"] == "AWAITING_PAYMENT" and not paid_for_upload:
                             return self.public_status(data)
-                        auth = {"ok": True} if paid_for_upload else self.store.authorize_and_charge_task_upfront(
+                        auth = {"ok": True} if (local_training or paid_for_upload) else self.store.authorize_and_charge_task_upfront(
                             self.user_id, self.project_id, num_images=len(files), task_kind="gaussian",
                             total_megabytes=sum(status["offsets"]) / (1024**2), target_mode="cloud",
                         )

@@ -221,8 +221,9 @@ class Workspace:
     def cloud_signout(self):
         client = self.cloud_client()
         with self.transfer_lock:
-            for state in self.transfers.values():
-                state["pause"] = True
+            for key, state in self.transfers.items():
+                if key != 'engine-installation' and not key.startswith('migration:'):
+                    state["pause"] = True
         try:
             client.signout()
         finally:

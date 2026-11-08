@@ -2906,8 +2906,8 @@ class BackgroundJobQueueManager:
             and os.environ.get("MOSAICEARTH_GAUSSIAN_ENGINE") == "runpod-opensplat"
             and Path(source_filename).suffix.lower() not in (".ply", ".splat", ".spz", ".ksplat")
         )
-        eff_lat = float(payload.get("lat") or 41.8205)
-        eff_lon = float(payload.get("lon") or 1.8676)
+        eff_lat = float(payload.get("lat") or 0.0)
+        eff_lon = float(payload.get("lon") or 0.0)
         eff_alt = float(payload.get("alt") or 0.0)
         extra_media_rel_paths: List[Tuple[str, str]] = payload.get("extra_media_rel_paths") or []
 

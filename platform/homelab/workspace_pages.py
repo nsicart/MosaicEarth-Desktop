@@ -1,3 +1,4 @@
+from .asset_metadata import format_coordinates
 import html
 import json
 import os
@@ -1085,7 +1086,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             meta_chips.append(f'<span class="myearth-meta-chip"><i class="fas fa-folder"></i> {a_cat_name}</span>')
         if a_tags:
             meta_chips.append(f'<span class="myearth-meta-chip"><i class="fas fa-tags"></i> {a_tags}</span>')
-        meta_chips.append(f'<span class="myearth-meta-chip">{alat:.4f}&deg;N, {alon:.4f}&deg;E</span>')
+        meta_chips.append(f'<span class="myearth-meta-chip">{format_coordinates(alat, alon)}</span>')
 
         adjust_btn_html = (
             f'<a href="{edit_3d_url}" class="myearth-action-btn" title="Adjust 3-Axis Placement (Click on Map + X, Y, Z)"><i class="fas fa-crosshairs"></i> Adjust Placement</a>'
@@ -6450,15 +6451,15 @@ def _render_unified_task_upload_page(
     root_pid, _ = store.get_subprojects_family(project_id)
     root_proj = store.get_project(root_pid) or proj
     root_pname = html.escape(str(root_proj.get("NAME") or f"Project #{root_pid}"))
-    survey_pid = int(proj.get("SURVEY_PROJECT_ID") or proj.get("PARENT_PROJECT_ID") or root_pid)
+    survey_pid = int(proj.get("SURVEY_ID") or proj.get("SURVEY_PROJECT_ID") or proj.get("PARENT_PROJECT_ID") or root_pid)
     survey_proj = store.get_project(survey_pid) or root_proj
     survey_pname = html.escape(str(survey_proj.get("NAME") or f"Survey #{survey_pid}"))
     pname = html.escape(str(proj.get("NAME") or f"Task #{project_id}"))
-    pdesc = html.escape(str(proj.get("DESCRIPTION") or ""))
-    pdate = html.escape(str(proj.get("CAPTURE_DATE") or proj.get("CREATE_DATE") or "")[:10])
-    pmethod = html.escape(str(proj.get("METHODOLOGY") or ("3D Gaussian Splatting" if task_kind == "gaussian" else "Direct File Import")))
-    plat = html.escape(str(proj.get("LATITUD") or "41.9794"))
-    plon = html.escape(str(proj.get("LONGITUD") or "2.8214"))
+    pdesc = html.escape(str(proj.get("TASK_DESCRIPTION") or proj.get("DESCRIPTION") or ""))
+    pdate = html.escape(str(proj.get("TASK_CREATION_DATE") or proj.get("CAPTURE_DATE") or "")[:10])
+    pmethod = html.escape(str(proj.get("CAPTURE_METHOD") or proj.get("METHODOLOGY") or ("3D Gaussian Splatting" if task_kind == "gaussian" else "Direct File Import")))
+    plat = html.escape(str(proj.get("LATITUD") if proj.get("LATITUD") is not None else ""))
+    plon = html.escape(str(proj.get("LONGITUD") if proj.get("LONGITUD") is not None else ""))
 
     is_gaussian = task_kind == "gaussian"
     task_badge_label = "Gaussian Splatting Task" if is_gaussian else "Direct File Import Task"
@@ -6581,6 +6582,8 @@ def _render_unified_task_upload_page(
                 {g_badge}
             </div>
         </div>"""
+    if is_gaussian and os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1":
+        upfront_task_quote_banner = '<section style="margin-bottom:18px;padding:16px;border:1px solid #607b39;border-radius:10px;background:#132017"><strong>Local COLMAP + OpenSplat · 0.00 €</strong><p>Photos and videos are reconstructed on this computer using its CPU. Local processing uses no cloud credits or storage quota. Finished Gaussian files can also be imported directly.</p></section>'
     format_pills_html = (
         """
         <span class="workflow-pill">Gaussian Splatting Task</span>
@@ -7117,7 +7120,7 @@ def render_internal_viewer_page(
                 if (lonEl) lonEl.value = pickedLon.toFixed(6);
                 window.applyLivePlacement3D();
                 if (typeof toastr !== 'undefined') {{
-                    toastr.info('Moved asset to ' + pickedLat.toFixed(5) + '°N, ' + pickedLon.toFixed(5) + '°E. Adjust Position & Rotation and click Save.');
+                    toastr.info('Moved asset to ' + Math.abs(pickedLat).toFixed(5) + (pickedLat >= 0 ? '°N, ' : '°S, ') + Math.abs(pickedLon).toFixed(5) + (pickedLon >= 0 ? '°E' : '°W') + '. Adjust Position & Rotation and click Save.');
                 }}
             }}
         }}, Cesium.ScreenSpaceEventType.LEFT_CLICK);

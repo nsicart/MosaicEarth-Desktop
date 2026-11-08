@@ -94,7 +94,8 @@
                 if (input.files[0] !== files[0]) return;
                 selection.textContent += " · COLMAP + OpenSplat · " + (form.elements.quality_preset?.value || "STANDARD") + " · PLY, SPZ and 3D Tiles · " + quote.label;
                 quoteReady = quote.engine_available;
-                if (!quote.engine_available) message("Cloud training is currently unavailable.");
+                if (!quote.engine_available) message(quote.local ? "Local COLMAP and OpenSplat are unavailable. Check the Desktop engine installation." : "Cloud training is currently unavailable.");
+                else if (quote.local) message("Processing runs on this computer. No cloud credits are consumed.");
                 else if (!quote.covered_by_plan) message("Upload the source, then confirm the quoted price in secure Checkout. Processing starts only after payment is verified.");
             } catch (error) {
                 message(error.message);

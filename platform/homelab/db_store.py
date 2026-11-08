@@ -2124,8 +2124,8 @@ class MosaicEarthDataStore:
             inherited_desc = str(description if description is not None else (proj_row.get("TASK_DESCRIPTION") or proj_row.get("DESCRIPTION") or "")).strip()
             inherited_method = str(capture_method or proj_row.get("CAPTURE_METHOD") or ("3D Gaussian Splatting" if is_gs else "Direct File Import")).strip()
             inherited_date = str(capture_date or proj_row.get("TASK_CREATION_DATE") or now_iso[:10]).strip()[:10]
-            eff_lat = float(lat) if lat is not None else (_try_float(proj_row.get("LATITUD")) or 41.8205)
-            eff_lon = float(lon) if lon is not None else (_try_float(proj_row.get("LONGITUD")) or 1.8676)
+            eff_lat = float(lat) if lat is not None else (_try_float(proj_row.get("LATITUD")) or 0.0)
+            eff_lon = float(lon) if lon is not None else (_try_float(proj_row.get("LONGITUD")) or 0.0)
             eff_alt = float(altitude) if altitude is not None else 0.0
             assets = self.tables.setdefault("dbo.MOSAICEARTH_EXTERNAL_ASSETS", [])
             previous_derivative = next((a for a in assets if derivative_key and a.get("DERIVATIVE_KEY") == derivative_key

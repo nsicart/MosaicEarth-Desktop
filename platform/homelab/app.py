@@ -3791,6 +3791,11 @@ def asset_upload_quote(request: Request, project_id: int):
     project = store.get_project(project_id)
     if not project or int(project.get("CREATE_ID") or 0) != int(user["ID"]):
         raise HTTPException(status_code=404, detail="Task not found.")
+    if os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1":
+        import shutil
+        available = bool(shutil.which("colmap") and shutil.which(os.environ.get("MOSAICEARTH_OPENSPLAT_BIN", "opensplat")))
+        return {"price_eur": 0, "covered_by_plan": False, "local": True,
+                "label": "Local processing · 0.00 € · no cloud credits", "engine_available": available}
     quote = store.calculate_task_processing_quote(int(user["ID"]), task_kind="gaussian")
     return {"price_eur": quote["total_price_eur"], "covered_by_plan": quote["covered_by_plan"],
             "label": quote["summary_label"], "engine_available": os.environ.get("MOSAICEARTH_GAUSSIAN_ENGINE") == "runpod-opensplat"}
@@ -3807,7 +3812,11 @@ def start_asset_upload(request: Request, project_id: int, upload_id: str, payloa
             raise UploadError("This upload does not match the task type.", 409)
         files = normalize_files(payload.get("files"), origin)
         if origin == "gaussian" and Path(files[0]["name"]).suffix.lower() not in GAUSSIAN_MODELS:
-            if os.environ.get("MOSAICEARTH_GAUSSIAN_ENGINE") != "runpod-opensplat":
+            if os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1":
+                import shutil
+                if not (shutil.which("colmap") and shutil.which(os.environ.get("MOSAICEARTH_OPENSPLAT_BIN", "opensplat"))):
+                    raise UploadError("Local COLMAP and OpenSplat need installation before processing.", 503)
+            elif os.environ.get("MOSAICEARTH_GAUSSIAN_ENGINE") != "runpod-opensplat":
                 raise UploadError("Cloud Gaussian training is unavailable on this server.", 503)
         details = payload.get("details") or {}
         if not isinstance(details, dict):

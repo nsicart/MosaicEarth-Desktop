@@ -1,3 +1,4 @@
+from .asset_metadata import format_coordinates
 import html
 import json
 import math
@@ -1625,7 +1626,7 @@ def render_directory_page(lang: str = "en") -> str:
         sb.append(f'    <h3><a href="/{norm_lang}/locations/{reg["slug"]}">{html.escape(reg["es_name"] if is_es else reg["name"])}</a></h3>')
         sb.append(f'    <p>{html.escape(reg["es_description"] if is_es else reg["description"])}</p>')
         sb.append(
-            f'    <div class="dir-spokes"><a href="/{norm_lang}/locations/{reg["slug"]}">WGS84: {reg["center_lat"]:.4f}°N, {reg["center_lon"]:.4f}°E ({rcnt} assets) &rarr;</a></div>'
+            f'    <div class="dir-spokes"><a href="/{norm_lang}/locations/{reg["slug"]}">WGS84: {format_coordinates(reg["center_lat"], reg["center_lon"])} ({rcnt} assets) &rarr;</a></div>'
         )
         sb.append("  </article>")
     sb.append("</div>")
@@ -1653,7 +1654,7 @@ def render_directory_page(lang: str = "en") -> str:
     )
     for item in all_assets:
         sb.append(
-            f'    <tr><td><a href="{html.escape(item["CanonicalPath"], quote=True)}"><strong>{html.escape(item["Name"])}</strong></a></td><td>{html.escape(item["FamilyDisplay"])}</td><td>{html.escape(item["CategoryName"] or "Geospatial")}</td><td>{item["Latitude"]:.4f}°N, {item["Longitude"]:.4f}°E</td><td>{html.escape(item["DownloadFormat"])}</td></tr>'
+            f'    <tr><td><a href="{html.escape(item["CanonicalPath"], quote=True)}"><strong>{html.escape(item["Name"])}</strong></a></td><td>{html.escape(item["FamilyDisplay"])}</td><td>{html.escape(item["CategoryName"] or "Geospatial")}</td><td>{format_coordinates(item["Latitude"], item["Longitude"])}</td><td>{html.escape(item["DownloadFormat"])}</td></tr>'
         )
     sb.append("  </tbody></table>")
 
@@ -3128,7 +3129,7 @@ def render_world_simulator_page(
 
     seo_head = build_head_metadata_html(
         title=f"Fly Over {asset_title} · 4DTwinMaps AirEngine Flight Simulator · MosaicEarth",
-        description=f"Choose your aircraft and fly directly over {asset_title} ({lat:.4f}°N, {lon:.4f}°E) using the authentic 4DTwinMaps AirEngine flight physics and 3D aircraft fleet.",
+        description=f"Choose your aircraft and fly directly over {asset_title} ({format_coordinates(lat, lon)}) using the authentic 4DTwinMaps AirEngine flight physics and 3D aircraft fleet.",
         canonical_path=f"/{norm_lang}/fly",
         robots="noindex, follow",
     )
@@ -3226,7 +3227,7 @@ def render_world_simulator_page(
                 <span class="sim-badge"><i class="fas fa-fighter-jet me-1"></i> 4DTwinMaps AirEngine</span>
                 <div>
                     <strong style="font-size:14px;color:#fff;">{html.escape(asset_title)}</strong>
-                    <span style="font-size:12px;color:#9ca3af;margin-left:6px;">WGS84 {lat:.4f}°N, {lon:.4f}°E</span>
+                    <span style="font-size:12px;color:#9ca3af;margin-left:6px;">WGS84 {format_coordinates(lat, lon)}</span>
                 </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -3255,7 +3256,7 @@ def render_world_simulator_page(
                         <span class="sim-badge">MosaicEarth &times; 4DTwinMaps AirEngine</span>
                         <h1 style="font-size:22px;font-weight:800;margin:8px 0 4px;color:#fff;">Select Your Exploration Mode</h1>
                         <p style="font-size:13px;color:#9ca3af;margin:0;">
-                            Flying over <strong style="color:#fff;">{html.escape(asset_title)}</strong> ({lat:.4f}°N, {lon:.4f}°E) in 1st-Person HUD or 3rd-Person Chase Camera.
+                            Flying over <strong style="color:#fff;">{html.escape(asset_title)}</strong> ({format_coordinates(lat, lon)}) in 1st-Person HUD or 3rd-Person Chase Camera.
                         </p>
                     </div>
                     <a id="lnkHangar4DTwinMaps" href="{html.escape(global_4dtm_url, quote=True)}" target="_blank" rel="noopener" class="btn-4dtm-global">
