@@ -52,5 +52,14 @@ class BrowserAuthTest(unittest.TestCase):
         self.client.request.return_value=self.start;self.auth.start('cloud');self.auth.cancel()
         self.assertIsNone(self.auth.pending);self.assertIsNone(self.workspace.cloud_session)
 
+    def test_expired_or_offline_request_can_be_restarted(self):
+        self.auth.start('cloud');self.auth.pending['expires_at']=0
+        self.auth.cancel();self.client.request.return_value=self.start
+        self.auth.start('cloud')
+        self.client.request.side_effect=SyncError('Expired or unavailable')
+        self.auth.cancel();self.assertIsNone(self.auth.pending)
+        self.client.request.side_effect=None;self.client.request.return_value=self.start
+        self.assertEqual(self.auth.start('cloud')['user_code'],'AAAA-AAAA')
+
 
 if __name__=='__main__':unittest.main()

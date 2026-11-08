@@ -66,6 +66,11 @@ class BrowserSignIn:
     def cancel(self):
         with self.lock:
             state, self.pending = self.pending, None
-            if state:
-                Client().request('POST', BASE+'/cancel', {k:state[k] for k in ('request_id','device_code')})
+            if state and state['expires_at'] > time.time():
+                try:
+                    Client().request('POST', BASE+'/cancel', {k:state[k] for k in ('request_id','device_code')})
+                except SyncError:
+                    # Forgetting the device secret also prevents redemption;
+                    # abandoned server requests expire without issuing a session.
+                    pass
         return {'ok':True}

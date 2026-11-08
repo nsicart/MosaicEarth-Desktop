@@ -39,6 +39,7 @@ window.MosaicEarthBrowserSignIn = function (options) {
       const state=await options.start();active=true;
       if(closed){await options.cancel();return;}
       expires=state.expires_at;code.textContent=state.user_code;code.hidden=false;
+      button.textContent='Waiting for browser…';
       link.href=state.verification_uri;link.hidden=false;
       status.textContent='Waiting for confirmation in your browser. Your account will appear here when it succeeds.';
       try{await options.open(state.verification_uri);}catch(error){status.textContent='Open the sign-in page below, then return here after confirming the account.';}
