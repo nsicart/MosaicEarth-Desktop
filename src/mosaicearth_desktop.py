@@ -115,10 +115,28 @@ class Workspace:
     def cloud_signin(self, email, password):
         client = Client()
         user = client.signin(email, password)
+        return self.adopt_cloud_session(client.token, user)
+
+    def adopt_cloud_session(self, token, user):
         uid = int(user["id"])
         with self.cloud_lock:
-            self.cloud_session = {"token": client.token, "cloud_uid": uid, "user": user["email"]}
+            old = self.cloud_session
+            self.cloud_session = {"token": token, "cloud_uid": uid, "user": user["email"]}
+        if old and old['token'] != token:
+            try:
+                Client(old['token']).signout()
+            except SyncError:
+                pass
         return {"user": user["email"]}
+
+    def browser_auth(self):
+        from mosaicearth_browser_auth import BrowserSignIn
+        # Workspace construction is single-threaded; create on first use under
+        # the existing account lock so concurrent clicks share one request.
+        with self.cloud_lock:
+            if not hasattr(self, '_browser_auth'):
+                self._browser_auth = BrowserSignIn(self, json.loads((RESOURCES / 'license-public.json').read_text()))
+            return self._browser_auth
 
     def sync_project(self, project_id):
         project = self.project(project_id)
@@ -471,6 +489,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/platform':
                 self.json(self.server.platform.snapshot())
                 return
+            if path == '/api/browser-signin':
+                self.json(workspace.browser_auth().poll())
+                return
             if path == "/api/projects":
                 with workspace.db() as db:
                     self.json([dict(row) for row in db.execute("SELECT * FROM project ORDER BY rowid DESC")])
@@ -549,6 +570,24 @@ class Handler(BaseHTTPRequestHandler):
         try:
             workspace = self.authorize()
             size = int(self.headers.get("Content-Length") or 0)
+            if self.path in {'/api/browser-signin/start', '/api/browser-signin/cancel', '/api/browser-signin/open'} and 0 < size <= 8192:
+                data = json.loads(self.rfile.read(size))
+                if self.path.endswith('/start'):
+                    self.json(workspace.browser_auth().start('activate'))
+                elif self.path.endswith('/cancel'):
+                    self.json(workspace.browser_auth().cancel())
+                else:
+                    url = str(data.get('url') or '')
+                    parsed = urlsplit(url)
+                    if (parsed.scheme != 'https' or parsed.netloc != 'app.mosaicearth.app'
+                            or parsed.path != '/api/v2/desktop/browser-signin/authorize'
+                            or not re.fullmatch(r'request_id=[0-9a-f]{32}', parsed.query) or parsed.fragment):
+                        raise ValueError('Invalid browser sign-in address')
+                    import webbrowser
+                    if not webbrowser.open(url):
+                        raise ValueError('Open the sign-in link in your browser to continue.')
+                    self.json({'ok':True})
+                return
             if self.path == '/api/platform/start':
                 self.json(self.server.platform.start())
                 return

@@ -68,7 +68,7 @@ def render_home_master(
     cloud_acc = get_store().get_desktop_cloud_account() if is_desktop_local else {}
     raw_email = str((cloud_acc.get("email") if cloud_acc.get("logged_in") else "") or (user.get("EMAIL") if user else "") or (user.get("USERNAME") if user else "") or "")
     if is_desktop_local and raw_email == "local@mosaicearth.desktop":
-        user_label = "Local workspace · Cloud account"
+        user_label = "Local · Cloud not connected"
     else:
         user_label = html.escape(raw_email) if user else ""
     has_unread = get_store().has_unread_notifications(int(user["ID"])) if user else False
@@ -1149,7 +1149,7 @@ def render_home_master(
                                 '''}
                                 <li class="nav-item dropdown">
                                     <a class="nav-link dropdown-toggle dropdown-menu-dark" href="#" style="display: inline-flex; align-items: center; gap: 6px;" id="navbarDropdownMenuLink" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <label id="usernameEmail" style="cursor:pointer;margin:0;">{user_label if user else "Guest (Public View)"}</label>
+                                        <label id="usernameEmail" style="cursor:pointer;margin:0;">{user_label if user else ("Desktop activation required" if is_desktop_local else "Guest (Public View)")}</label>
                                         <img src="/Resources/UserMenu.svg" alt="" style="width:16px;height:16px;" />
                                     </a>
                                     <ul class="dropdown-menu dropdown-menu-end text-start" aria-labelledby="navbarDropdownMenuLink">

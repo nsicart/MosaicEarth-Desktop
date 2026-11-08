@@ -33,6 +33,11 @@ def desktop_ui_script():
     return FileResponse(Path(__file__).resolve().parents[1] / 'resources/platform-ui.js', media_type='text/javascript')
 
 
+@router.get('/desktop-browser-signin.js')
+def desktop_browser_script():
+    return FileResponse(Path(__file__).resolve().parents[1] / 'resources/browser-signin.js', media_type='text/javascript')
+
+
 @router.get('/api/desktop/share-origin')
 def share_origin(request: Request):
     return {'ok': True, 'shareOrigin': str(request.base_url).rstrip('/'), 'local_only': True}
@@ -56,6 +61,34 @@ def version():
     return {'ok': True, 'version': '0.3.0', 'engine': 'NodeODX / ODX + COLMAP / OpenSplat',
             'desktop_local': True, 'automatic_update': False,
             'download_url': 'https://app.mosaicearth.app/en/Desktop'}
+
+
+@router.get('/api/desktop/account-status')
+def account_status():
+    workspace()
+    return {'license': context.license_account(), 'cloud': context.cloud_account()}
+
+
+@router.post('/api/desktop/browser-signin/start')
+def browser_signin_start():
+    return browser_action(lambda: workspace().browser_auth().start('cloud'))
+
+
+@router.get('/api/desktop/browser-signin')
+def browser_signin_poll():
+    return browser_action(lambda: workspace().browser_auth().poll())
+
+
+@router.post('/api/desktop/browser-signin/cancel')
+def browser_signin_cancel():
+    return browser_action(lambda: workspace().browser_auth().cancel())
+
+
+def browser_action(operation):
+    try:
+        return operation()
+    except (SyncError, OSError) as exc:
+        return JSONResponse({'ok': False, 'message': str(exc) if isinstance(exc, SyncError) else 'Could not save this account. Check your local data folder and retry.'}, status_code=400)
 
 
 @router.post('/api/desktop/shutdown')

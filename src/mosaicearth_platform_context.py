@@ -101,6 +101,20 @@ def cloud_account():
                 'cloud_uid': session.get('cloud_uid'), 'cloud_url': 'https://app.mosaicearth.app'}
 
 
+def license_account():
+    resources = Path(__file__).resolve().parents[1] / 'resources'
+    commercial = (resources / 'edition-commercial').is_file() or os.environ.get('MOSAICEARTH_OFFICIAL_INSTALLATION') == '1'
+    if not commercial:
+        return {'edition':'source', 'activated':False}
+    try:
+        grant = verify_grant(json.loads((_data / 'account-grant.json').read_text()),
+                             json.loads((resources / 'license-public.json').read_text()),
+                             device=os.environ.get('MOSAICEARTH_HOST_DEVICE') or None)
+        return {'edition':'official', 'activated':True, 'email':grant['email'], 'expires_at':grant['expires_at']}
+    except (OSError, ValueError, KeyError):
+        return {'edition':'official', 'activated':False}
+
+
 def push_workspace(kind, entity_id):
     client = workspace.cloud_client()
     if kind == 'project':

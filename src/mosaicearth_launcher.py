@@ -6,6 +6,7 @@ its signed device grant. Each data directory owns its own labeled containers.
 import hashlib
 import json
 import os
+import platform
 import secrets
 import sqlite3
 import subprocess
@@ -164,6 +165,7 @@ class PlatformLauncher:
             args = ['--cap-drop=ALL', '--security-opt=no-new-privileges',
                     '-p', f'127.0.0.1:{self.port}:{self.port}',
                     '-e', 'MOSAICEARTH_LOCAL_NODEODX=http://' + self.node + ':3000',
+                    '-e', 'MOSAICEARTH_HOST_NAME=' + platform.node(),
                     '-e', 'TMPDIR=/workspace/tmp', *self.workspace.mount(root, '/workspace')]
             from mosaicearth_migration import prepare_legacy
             legacy_blobs = prepare_legacy(root)

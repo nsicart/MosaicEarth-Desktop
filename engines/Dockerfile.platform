@@ -9,6 +9,7 @@ COPY platform/homelab /app/platform/homelab
 COPY src /app/src
 COPY resources/license-public.json /app/resources/license-public.json
 COPY resources/platform-ui.js /app/resources/platform-ui.js
+COPY resources/browser-signin.js /app/resources/browser-signin.js
 COPY resources/notices /app/resources/notices
 COPY build/platform-web /app/web
 COPY LICENSE NOTICE THIRD_PARTY_LICENSES.md /app/

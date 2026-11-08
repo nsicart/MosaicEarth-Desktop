@@ -55,17 +55,22 @@ def activate(email, password, root, public_key):
     try:
         client.signin(email, password)
         data = client.request("POST", "/api/v2/desktop/activate", {"device": device_identity(), "name": platform.node()})
-        verify_grant(data["grant"], public_key)
-        root = Path(root)
-        root.mkdir(parents=True, exist_ok=True)
-        temporary = root / "account-grant.tmp"
-        with os.fdopen(os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as stream:
-            json.dump(data["grant"], stream)
-        temporary.replace(root / "account-grant.json")
-        return {"ok": True, "email": email}
+        account = save_grant(data["grant"], root, public_key)
+        return {"ok": True, "email": account['email']}
     finally:
         if client.token:
             client.signout()
+
+
+def save_grant(grant, root, public_key):
+    account = verify_grant(grant, public_key, device=os.environ.get('MOSAICEARTH_HOST_DEVICE') or None)
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    temporary = root / 'account-grant.tmp'
+    with os.fdopen(os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w') as stream:
+        json.dump(grant, stream)
+    temporary.replace(root / 'account-grant.json')
+    return account
 
 
 if __name__ == "__main__":

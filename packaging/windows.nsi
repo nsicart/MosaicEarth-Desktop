@@ -55,7 +55,7 @@ Function .onInit
     Abort
   ${EndIf}
   IfSilent 0 +3
-    MessageBox MB_ICONSTOP "Use the graphical wizard to activate your purchasing account." /SD IDOK
+    MessageBox MB_ICONSTOP "Use the graphical wizard and activate your account on first launch." /SD IDOK
     Abort
   InitPluginsDir
   SetOutPath "$PLUGINSDIR\python"
@@ -79,54 +79,27 @@ Function PrepareUpdate
 FunctionEnd
 
 Function AccountPage
-  !insertmacro MUI_HEADER_TEXT "Activate your purchasing account" "This installation is associated with your account and this computer."
+  !insertmacro MUI_HEADER_TEXT "Connect your account in the browser" "Google, GitHub, Microsoft or your MosaicEarth email."
   nsDialogs::Create 1018
   Pop $AccountDialog
   ${If} $AccountDialog == error
     Abort
   ${EndIf}
-  ${NSD_CreateLabel} 0 0 100% 28u "Sign in with the account that purchased Desktop (29 EUR) or has Studio. The installer does not store your password."
+  ${NSD_CreateLabel} 0 0 100% 46u "After installation, MosaicEarth opens account activation in your browser. Use the account with your Desktop purchase or Studio plan. You can also use your MosaicEarth email and password."
   Pop $0
-  ${NSD_CreateLabel} 0 40u 100% 12u "Email"
+  ${NSD_CreateLabel} 0 58u 100% 46u "The local workspace and processing engines remain locked until this computer is activated. An existing valid activation is preserved when updating."
   Pop $0
-  ${NSD_CreateText} 0 54u 100% 13u "$EmailValue"
-  Pop $EmailField
-  ${NSD_CreateLabel} 0 76u 100% 12u "Password"
-  Pop $0
-  ${NSD_CreatePassword} 0 90u 100% 13u ""
-  Pop $PasswordField
-  ${NSD_CreateLabel} 0 116u 100% 30u "Internet is required for activation and the initial engine download. Account activation does not change the rights granted by the open-source licenses."
+  ${NSD_CreateLabel} 0 116u 100% 36u "Cloud synchronization is optional and has its own visible account connection. The source edition works locally without an account."
   Pop $0
   nsDialogs::Show
 FunctionEnd
 
 Function AccountLeave
-  ${NSD_GetText} $EmailField $EmailValue
-  ${NSD_GetText} $PasswordField $PasswordValue
-  ${If} $EmailValue == ""
-  ${OrIf} $PasswordValue == ""
-    MessageBox MB_ICONEXCLAMATION "Enter your MosaicEarth email and password."
-    Abort
-  ${EndIf}
-  FileOpen $CredentialsFile "$PLUGINSDIR\activation-input.txt" w
-  FileWriteUTF16LE $CredentialsFile "$EmailValue$\r$\n$PasswordValue$\r$\n"
-  FileClose $CredentialsFile
-  StrCpy $PasswordValue ""
-  nsExec::ExecToStack '"$PLUGINSDIR\python\python.exe" "$PLUGINSDIR\src\mosaicearth_license.py" --activate-file "$PLUGINSDIR\activation-input.txt" --data "$LOCALAPPDATA\mosaicearth-desktop"'
-  Pop $ActivationResult
-  Pop $ActivationOutput
-  Delete "$PLUGINSDIR\activation-input.txt"
-  ${If} $ActivationResult != "0"
-    MessageBox MB_ICONSTOP "$ActivationOutput"
-    Abort
-  ${EndIf}
-  StrCpy $Activated "yes"
+  ; Activation occurs in the accessible first-run browser flow. Both the host
+  ; and full local runtime verify the signed device grant before permitting use.
 FunctionEnd
 
 Section "MosaicEarth Desktop"
-  ${If} $Activated != "yes"
-    Abort "Account activation is required for this official installer."
-  ${EndIf}
   SetShellVarContext current
   SetOutPath "$INSTDIR"
   File "../LICENSE"

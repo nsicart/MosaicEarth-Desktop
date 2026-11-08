@@ -8,11 +8,13 @@ Complete workspace exchange includes the project hierarchy, original photos, res
 
 The Windows entry point keeps background Docker CLI checks windowless, preserving their logs and exit codes. The Windows wizard checks for active processing/transfers before closing its own previous idle launcher. A second shortcut invocation reopens the existing host. Docker readiness and stopped runtimes produce a retryable setup page. The host does not open a live Linux SQLite database across the Windows bind mount. Migration copies earlier Desktop data into a separate workspace and leaves the originals intact.
 
-The final source builds from an empty Git archive using an anonymously downloadable, checksum-pinned UI resource archive and pinned CesiumJS. Its 2,193 application files match the official platform image. All 35 Desktop regression tests pass. Local rendering also works with the backend isolated from the Internet, without a cloud account; public basemaps and cloud layers still require a browser Internet connection.
+The final source builds from an empty Git archive using an anonymously downloadable, checksum-pinned UI resource archive and pinned CesiumJS. Its 2,193 application files match the official platform image. The earlier 35-test Desktop regression suite passed; the browser-account candidate passes 40 tests. Local rendering also works with the backend isolated from the Internet, without a cloud account; public basemaps and cloud layers still require a browser Internet connection.
 
 Connector 0.2.1 packages have passed complete public-cloud roundtrips with WebODM 4.0, OpenDroneMap WebUI 3.2.5, and QGIS 3.44.15 LTR / 4.2.3. Native task or project reopening and all-file checksums are verified. QGIS authentication, cloud browsing and sign-out were checked in both supported Qt generations.
 
 The final Windows wizard, account activation, public engine download and automatic startup have passed on physical Windows. The final installed workspace also recovered 218 earlier data files (1.82 GB), with every SHA-256 checked against the preserved originals. This candidate is not yet promoted: the production UI workspace roundtrip is still being completed. CPU processing is the supported backend in the full interface. The older standalone CUDA build script is retained for experiments; it is not an advertised GPU mode of the 0.3 full interface. Packages remain unsigned and there is no macOS installer.
+
+Browser account update: activation and optional cloud sign-in support the web login providers through explicit browser confirmation. The menu shows both account identities and only offers Disconnect Cloud when a cloud session exists. This update still requires final native Windows and public browser verification before promotion.
 
 # 0.2.1 — validation candidate
 

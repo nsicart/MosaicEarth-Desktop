@@ -40,6 +40,9 @@
       if (href.includes('Profile')) link.textContent='Cloud account & storage ↗';
     }
     if (href === '/Logout.ashx') {
+      link.hidden=true;
+      link.style.display='none';
+      link.dataset.desktopCloudDisconnect='true';
       link.textContent='Disconnect Cloud';
       link.addEventListener('click',async event=>{
         event.preventDefault();
@@ -51,6 +54,68 @@
       });
     }
   }
+  let browserScript;
+  async function api(path, body) {
+    const response=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await response.json();
+    if(!response.ok || data.ok===false)throw Error(data.detail||data.message||'The account request could not complete. Retry.');
+    return data;
+  }
+  window.openDesktopCloudSignIn=async()=>{
+    try{
+      if(!browserScript)browserScript=new Promise((resolve,reject)=>{
+        const script=document.createElement('script');script.src='/desktop-browser-signin.js';
+        script.onload=resolve;script.onerror=()=>{browserScript=null;reject(Error('Could not load sign-in. Reopen Desktop and retry.'));};document.head.append(script);
+      });
+      await browserScript;
+      window.MosaicEarthBrowserSignIn({activation:false,
+        start:()=>api('/api/desktop/browser-signin/start',{}),poll:()=>api('/api/desktop/browser-signin'),cancel:()=>api('/api/desktop/browser-signin/cancel',{}),
+        open:async url=>{
+          const control=await api('/api/desktop/host-controls');
+          if(!control.url||!control.token)throw Error('Use the sign-in link.');
+          const response=await fetch(control.url+'/api/browser-signin/open',{method:'POST',headers:{'Content-Type':'application/json','X-Mosaic-Workspace':control.token},body:JSON.stringify({url})});
+          if(!response.ok)throw Error('Use the sign-in link.');
+        },complete:()=>location.reload()});
+    }catch(error){notify(error.message,true);}
+  };
+  const accountItem=document.createElement('li');
+  accountItem.style.cssText='padding:12px 16px;max-width:340px;white-space:normal;overflow-wrap:anywhere;border-bottom:1px solid #344536';
+  accountItem.setAttribute('aria-label','Desktop accounts');
+  const licenseState=document.createElement('div'),cloudState=document.createElement('div'),connectButton=document.createElement('button');
+  licenseState.textContent='Checking Desktop activation…';cloudState.textContent='Checking cloud connection…';
+  cloudState.style.cssText='margin:8px 0';connectButton.type='button';connectButton.className='dropdown-item';
+  connectButton.textContent='Connect cloud account';connectButton.style.cssText='min-height:44px;padding-left:0;color:#bde47f;white-space:normal';
+  connectButton.onclick=window.openDesktopCloudSignIn;connectButton.hidden=true;connectButton.style.display='none';
+  accountItem.append(licenseState,cloudState,connectButton);nav.prepend(accountItem);
+  api('/api/desktop/account-status').then(state=>{
+    licenseState.textContent=state.license.edition==='source'?'Source edition · no activation required':state.license.activated?'Desktop activated for '+state.license.email:'Desktop activation required';
+    cloudState.textContent=state.cloud.logged_in?'Cloud connected as '+state.cloud.email:'Cloud not connected · files remain local';
+    const label=document.getElementById('usernameEmail');
+    if(label){label.textContent=state.cloud.logged_in?state.cloud.email:'Local · Cloud not connected';label.title=licenseState.textContent+'\n'+cloudState.textContent;}
+    connectButton.hidden=state.cloud.logged_in;
+    connectButton.style.display=state.cloud.logged_in?'none':'block';
+    document.querySelectorAll('[data-desktop-cloud-disconnect]').forEach(link=>{link.hidden=!state.cloud.logged_in;link.style.display=state.cloud.logged_in?'block':'none';});
+  }).catch(error=>{licenseState.textContent='Account status unavailable';cloudState.textContent=error.message;});
+  const loginModal=document.getElementById('modalDesktopCloudLogin');
+  if(loginModal){
+    const body=loginModal.querySelector('.modal-body');
+    const social=document.createElement('button');social.type='button';social.className='btn btn-primary';
+    social.style.cssText='width:100%;min-height:44px;margin-bottom:16px;white-space:normal';
+    social.textContent='Continue in browser · Google, GitHub, Microsoft or email';
+    social.onclick=()=>{window.jQuery(loginModal).modal('hide');window.openDesktopCloudSignIn();};body.prepend(social);
+    for(const [inputId,labelText] of [['txtDesktopCloudEmail','MosaicEarth email'],['txtDesktopCloudPassword','MosaicEarth password']]){
+      const input=document.getElementById(inputId),label=input?.parentElement.querySelector('label');if(label){label.htmlFor=inputId;label.textContent=labelText;}
+    }
+  }
+  window.connectDesktopCloudAccount=async()=>{
+    const email=document.getElementById('txtDesktopCloudEmail'),password=document.getElementById('txtDesktopCloudPassword');
+    if(!email.value.trim()||!password.value)return notify('Enter your MosaicEarth email and password, or continue in the browser.',true);
+    try{await api('/api/desktop/cloud-login',{email:email.value.trim(),password:password.value});location.reload();}
+    catch(error){notify(error.message,true);}finally{password.value='';}
+  };
+  window.disconnectDesktopCloudAccount=async()=>{
+    try{await api('/api/desktop/cloud-logout',{});location.reload();}catch(error){notify(error.message,true);}
+  };
   // Opening a public browsing page is a public-data request, never cloud sync.
   if (/\/(Map|PublicMosaics)\/?$/i.test(location.pathname)) {
     fetch('/api/desktop/public-catalog-status').then(r => r.json()).then(state => {

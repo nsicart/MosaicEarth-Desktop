@@ -33,6 +33,7 @@ class PlatformTest(unittest.TestCase):
 
     def test_local_owner_remains_independent_of_cloud_login(self):
         self.assertEqual(self.context.local_user()['ID'], 1)
+
         self.context.workspace.cloud_session = {'cloud_uid': 999, 'user': 'fixture@example.invalid', 'token': 'fixture'}
         try:
             self.assertEqual(self.context.local_user()['ID'], 1)
@@ -41,6 +42,19 @@ class PlatformTest(unittest.TestCase):
         finally:
             self.context.workspace.cloud_session = None
         self.assertEqual(self.context.local_user()['ID'], 1)
+
+    def test_license_and_cloud_status_are_independent_and_do_not_expose_tokens(self):
+        self.context.workspace.cloud_session=None
+        state=self.client.get('/api/desktop/account-status').json()
+        self.assertEqual(state['license']['edition'],'source')
+        self.assertFalse(state['cloud']['logged_in'])
+        self.context.workspace.cloud_session={'cloud_uid':998,'user':'status@example.invalid','token':'secret-status-fixture'}
+        try:
+            state=self.client.get('/api/desktop/account-status').json()
+            self.assertEqual(state['cloud']['email'],'status@example.invalid')
+            self.assertNotIn('secret-status-fixture',str(state))
+        finally:
+            self.context.workspace.cloud_session=None
 
     def test_public_catalog_cannot_turn_public_projects_into_local_owned_projects(self):
         pid = self.store.create_project(1, 'Offline project', is_project_container=True)
