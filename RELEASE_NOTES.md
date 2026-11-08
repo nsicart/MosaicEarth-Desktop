@@ -1,3 +1,15 @@
+# 0.3.0 — full interface validation candidate
+
+Restores the web platform interface in a local Desktop window: public globe, Public Mosaics, MyEarth projects/surveys/tasks/layers, MyMosaics compositions and Fly View, with the MosaicEarth branding. NodeODX/ODX and COLMAP/OpenSplat run locally. The AGPL source edition needs no sign-in; the official Windows/Linux packages retain account and device activation.
+
+Windows 11 has completed fresh NodeODX Complete and OpenSplat Fast reconstructions through the full interface. The orthophoto, mesh, point cloud, elevation layer and Gaussian viewers have been inspected. Fly starts above the selected model, supports camera changes, reset and pause/resume. Processing metrics preserve their units and distinguish an unverified GPS accuracy from a measurement.
+
+Complete workspace exchange includes the project hierarchy, original photos, result masters, viewer files, external assets and MyMosaic layer references. Transfers create private immutable revisions, verify checksums and support pause/resume. Signing out does not change local ownership. Cloud sign-in remains in memory until sign-out or runtime restart; passwords are not saved.
+
+The Windows wizard checks for active processing/transfers before closing its own previous idle launcher. A second shortcut invocation reopens the existing host. Docker readiness and stopped runtimes produce a retryable setup page. The host does not open a live Linux SQLite database across the Windows bind mount. Migration copies earlier Desktop data into a separate workspace and leaves the originals intact.
+
+This candidate is not yet promoted: the final packaged setup and production UI synchronization checks are still being completed. CPU processing is the supported backend in the full interface. The older standalone CUDA build script is retained for experiments; it is not an advertised GPU mode of the 0.3 full interface. Packages remain unsigned and there is no macOS installer.
+
 # 0.2.1 — validation candidate
 
 Windows renders the UTF-8 interface correctly. The source edition hides commercial activation controls, result downloads have separate clickable targets, and missing Docker/engines produce an actionable focused alert without replacing an existing completed result.

@@ -668,7 +668,7 @@ def main():
     args.add_argument("--port", type=int, default=19754)
     args.add_argument("--no-browser", action="store_true")
     args.add_argument("--gaussian-steps", type=int, default=2000, choices=range(1, 12001), metavar="1..12000")
-    args.add_argument("--gaussian-device", choices=("cpu", "cuda"), default="cpu")
+    args.add_argument("--gaussian-device", choices=("cpu",), default="cpu", help="The complete interface currently uses CPU OpenSplat")
     options = args.parse_args()
     from mosaicearth_launcher import PlatformLauncher
     url = f'http://127.0.0.1:{options.port}'

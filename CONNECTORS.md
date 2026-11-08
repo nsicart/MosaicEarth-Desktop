@@ -22,7 +22,9 @@ Browse and download into a chosen directory. A QGIS snapshot opens its portable 
 
 ## Desktop
 
-Open MosaicEarth Cloud in the local workspace, sign in and choose **Synchronize all files to MyEarth**. **Browse cloud projects** downloads a revision or prepares a fresh export of native cloud files. A Desktop revision restores its project, processing mode, original inputs, result downloads and local preview. Other connector/cloud exports preserve all files; supported original images are also available for local processing. **All project files** exposes every retained attachment.
+Open **MyEarth** or **MyMosaics**, then choose **Sign In to Cloud Account**. Local projects and scenes appear in the local section; cloud entries appear separately. **Pass to Cloud** transfers the entire selected project or MyMosaic and its referenced local data. **Copy to Local PC** restores a complete cloud revision. Originals, masters, viewer files, scene references and the project/survey/task hierarchy are preserved. **Open Local Disk Folder** opens the local files.
+
+Cloud synchronization is optional and private. A transferred MyMosaic can be edited or viewed in the destination workspace after restoration. It is a copied revision, not a shared live editing session. Signing out leaves the local copies available. A runtime restart requires signing in again to browse or synchronize cloud data.
 
 No connector publishes data publicly, spends processing credits or starts a GPU pod during file synchronization. Existing cloud viewer conversion runs after validated uploads. Cloud-created projects export available originals, canonical masters, native result archives, supported metadata and prepared viewer files. External links that are not stored files are metadata, not a copy of the remote service.
 
