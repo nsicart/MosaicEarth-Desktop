@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "filename": "mosaicearth-engines-cpu-0.3.0.tar.gz",
-  "sha256": "0af92ac3e1d34d880eb5b735f0732b883460f2e8221a220447334711e7e77e51",
-  "bytes": 1394674235,
+  "sha256": "f18c62212b79b2abf9a06567520726c1e06d615a467426856a420616ccef84ea",
+  "bytes": 1394677758,
   "images": [
     "mosaicearth-desktop/nodeodx:0.1.0",
     "mosaicearth-desktop/local-engine:0.1.0",
@@ -12,6 +12,6 @@
   "image_ids": {
     "mosaicearth-desktop/nodeodx:0.1.0": "sha256:011041ddad31014573c0c38a38b66a66cf6e0639e39c2ec35f052b0483362fff",
     "mosaicearth-desktop/local-engine:0.1.0": "sha256:927104aa0c74ca01944fe6382771cf62e660e9a48be601874e5f1a2165a90505",
-    "mosaicearth-desktop/platform:0.3.0": "sha256:2a7829d78c0929e13df48cee1df259cfd88e58e78b3a4a6db09c2b2f36f73c2c"
+    "mosaicearth-desktop/platform:0.3.0": "sha256:1ba48d6f505b205c9862065f101c69248e4ce23930d6dd17ef9fb96e4bddb4e2"
   }
 }
