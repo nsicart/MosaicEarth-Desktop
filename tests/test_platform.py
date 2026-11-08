@@ -86,6 +86,17 @@ class PlatformTest(unittest.TestCase):
         self.assertTrue(origin['local_only'])
         self.assertEqual(origin['shareOrigin'], 'http://127.0.0.1:19757')
 
+    def test_browser_revalidates_scripts_after_an_engine_update(self):
+        import hashlib
+        script = self.client.get('/desktop-platform-ui.js')
+        revision = hashlib.sha256(script.content).hexdigest()[:16]
+        page = self.client.get('/en/Projects')
+        self.assertIn('/desktop-platform-ui.js?v=' + revision, page.text)
+        for path in ('/desktop-platform-ui.js', '/desktop-browser-signin.js'):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('must-revalidate', response.headers['cache-control'])
+
     def test_fly_loads_short_external_ids_and_protects_private_metadata(self):
         pid = self.store.create_project(1, 'Private Fly project', kind='external')
         aid = 999001
