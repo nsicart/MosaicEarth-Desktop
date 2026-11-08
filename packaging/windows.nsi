@@ -1,4 +1,11 @@
 Unicode true
+; Release operators can supply an executable signing wrapper. It receives one
+; file path, must sign and verify it, and return nonzero on any failure.
+; Sign the embedded uninstaller before compression, then the outer installer.
+!ifdef ME_SIGNING_COMMAND
+  !uninstfinalize '"${ME_SIGNING_COMMAND}" "%1"' = 0
+  !finalize '"${ME_SIGNING_COMMAND}" "%1"' = 0
+!endif
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "x64.nsh"
