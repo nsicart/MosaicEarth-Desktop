@@ -123,9 +123,9 @@ def render_login_page(
     <link href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,400,600,700,300&amp;subset=latin" rel="stylesheet" type="text/css" />
 
     <link href="/admin/assets/css/bootstrap.min.css" rel="stylesheet" />
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.css" rel="stylesheet" />
+    <link href="/vendor/fontawesome/css/all.css" rel="stylesheet" />
     <link href="/admin/assets/css/animate.css" rel="stylesheet" />
-    <link href="/admin/assets/css/style.css" rel="stylesheet" />
+    <link href="/assets/css/master.css" rel="stylesheet" />
     <link href="/Web/login.css?v=8" rel="stylesheet" />
     <link href="/admin/assets/css/AdminMaster.css" rel="stylesheet" />
     <link href="/admin/assets/css/plugins/select2/select2.min.css" rel="stylesheet" />
@@ -268,7 +268,7 @@ def render_login_page(
         <script src="/admin/assets/js/bootstrap.js"></script>
         <script src="/admin/assets/js/plugins/metisMenu/jquery.metisMenu.js"></script>
         <script src="/admin/assets/js/plugins/slimscroll/jquery.slimscroll.min.js"></script>
-        <script src="/admin/assets/js/inspinia.js"></script>
+        
         <script data-pace-options='{{"ajax": false}}' src="/admin/assets/js/plugins/pace/pace.min.js"></script>
         <script src="/admin/assets/js/plugins/toastr/toastr.min.js"></script>
         <script src="/admin/assets/js/plugins/select2/select2.full.min.js"></script>
@@ -344,9 +344,9 @@ def render_register_page(return_url: str = "/en/Projects") -> str:
     <link href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,400,600,700,300&amp;subset=latin" rel="stylesheet" type="text/css" />
 
     <link href="/admin/assets/css/bootstrap.min.css" rel="stylesheet" />
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.css" rel="stylesheet" />
+    <link href="/vendor/fontawesome/css/all.css" rel="stylesheet" />
     <link href="/admin/assets/css/animate.css" rel="stylesheet" />
-    <link href="/admin/assets/css/style.css" rel="stylesheet" />
+    <link href="/assets/css/master.css" rel="stylesheet" />
     <link href="/Web/login.css?v=8" rel="stylesheet" />
     <link href="/admin/assets/css/AdminMaster.css" rel="stylesheet" />
     <link href="/admin/assets/css/plugins/select2/select2.min.css" rel="stylesheet" />
@@ -459,7 +459,7 @@ def render_register_page(return_url: str = "/en/Projects") -> str:
         <script src="/admin/assets/js/bootstrap.js"></script>
         <script src="/admin/assets/js/plugins/metisMenu/jquery.metisMenu.js"></script>
         <script src="/admin/assets/js/plugins/slimscroll/jquery.slimscroll.min.js"></script>
-        <script src="/admin/assets/js/inspinia.js"></script>
+        
         <script data-pace-options='{{"ajax": false}}' src="/admin/assets/js/plugins/pace/pace.min.js"></script>
         <script src="/admin/assets/js/plugins/toastr/toastr.min.js"></script>
         <script src="/admin/assets/js/plugins/select2/select2.full.min.js"></script>
@@ -1061,7 +1061,9 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
         dl_url = html.escape(str(a.get("download_url") or "#"))
         fly_url = html.escape(str(a.get("fly_url") or f"/Fly.aspx?asset_id=processed-{aft}-{task_pid}&lat={alat}&lon={alon}"))
 
-        if vis_mode == "marketplace":
+        if os.environ.get('MOSAICEARTH_DESKTOP_SHARED_UI') == '1':
+            vis_badge = f'<span class="myearth-vis-chip myearth-vis-chip--private">LOCAL &middot; {size_mb:.1f} MB</span>'
+        elif vis_mode == "marketplace":
             vis_badge = f'<span class="myearth-vis-chip myearth-vis-chip--market">MARKETPLACE &middot; {price_eur} &euro; (0 GB QUOTA)</span>'
         elif vis_mode == "public_free":
             vis_badge = '<span class="myearth-vis-chip myearth-vis-chip--public">PUBLIC FREE &middot; 0 &euro; (0 GB QUOTA)</span>'
@@ -1132,7 +1134,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                     <i class="fas fa-share-alt"></i> Share
                 </button>
                 <button type="button" class="myearth-action-btn" onclick="toggleInlineBox('editAsset_{aid_str}')" title="Edit Asset &amp; Publish / Quota">
-                    <i class="fas fa-sliders-h"></i> Edit / Publish
+                    <i class="fas fa-sliders-h"></i> {'Edit' if os.environ.get('MOSAICEARTH_DESKTOP_SHARED_UI') == '1' else 'Edit / Publish'}
                 </button>
                 <button type="button" class="myearth-action-btn myearth-action-btn--danger" data-name="{aname}" onclick="openDeleteAssetModal({task_pid}, {aft}, {ext_aid}, this.getAttribute('data-name'))" title="Delete Asset">
                     <i class="fas fa-trash"></i>
@@ -1516,7 +1518,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                 <div>
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                         <a href="{qa_det_url}" style="color:#ffffff;font-family:OpenSansSemiBold,Arial,sans-serif;font-size:13.5px;text-decoration:none;">{qa_name}</a>
-                        <span class="myearth-vis-chip myearth-vis-chip--private">{qa_size_mb:.1f} MB OF 5 GB QUOTA</span>
+                        <span class="myearth-vis-chip myearth-vis-chip--private">{qa_size_mb:.1f} MB {'ON THIS COMPUTER' if os.environ.get('MOSAICEARTH_DESKTOP_SHARED_UI') == '1' else 'OF PRIVATE STORAGE'}</span>
                     </div>
                     <div style="font-size:11.5px;color:#8fa099;margin-top:2px;">
                         Location in MyEarth: <strong style="color:#dce6dc;">{qa_proj}</strong> &rarr; <strong style="color:#b5d979;">{qa_srv}</strong> &middot; {qa_type_lbl}
@@ -1578,19 +1580,19 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
         </div>"""
         myearth_share_btn = f'<a href="/{norm_lang}/CreditPacks" class="btn btn-primary" style="text-decoration:none;display:inline-block;">VIEW SUBSCRIPTION PLANS</a>'
     elif is_desktop_local:
-        myearth_share_title = "Share Local PC 3D Scene (Direct Workstation Link)"
+        myearth_share_title = "Local scene link"
         myearth_share_body = """
         <div style="background:#101713;border:1px solid #99CC00;border-radius:8px;padding:14px;margin-bottom:10px;">
-            <div style="font-size:12px;font-weight:700;color:#99CC00;margin-bottom:4px;"><i class="fas fa-network-wired me-1"></i> Direct Local PC Sharing (0.00 &euro; &middot; Port 8095)</div>
+            <div style="font-size:12px;font-weight:700;color:#99CC00;margin-bottom:4px;"><i class="fas fa-network-wired me-1"></i> Opens on this computer only</div>
             <p style="font-size:12.5px;color:#dce6dc;margin-bottom:8px;line-height:1.5;">
-                Share <strong id="lblShareKind" style="color:#99CC00;">Project / Survey</strong> directly from your PC! This link works as long as <strong>MosaicEarth Desktop remains open</strong> and your Windows Firewall / network router allows incoming connections on port <code>8095</code>.
+                This link opens the <strong id="lblShareKind" style="color:#99CC00;">Project / Survey</strong> in this local Desktop. It is not accessible from other computers.
             </p>
             <p style="font-size:11.5px;color:#9ca3af;margin-bottom:0;line-height:1.45;">
-                Want 24/7 Cloud hosting even when your PC is turned off? Click <strong>Pass to Cloud</strong> on the project (Cloud sharing follows Pro/Studio subscription rules).
+                To share online, use <strong>Pass to Cloud</strong>, wait for the complete copy to finish and open the cloud copy to choose its sharing settings.
             </p>
         </div>
         <input type="text" id="txtShareContainerUrl" class="form-control" style="color:#99CC00;border-color:#99CC00;font-size:12.5px;" readonly />"""
-        myearth_share_btn = '<button type="button" class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById(\'txtShareContainerUrl\').value);toastr.success(\'Local PC 3D Share Link copied!\');">COPY LOCAL SHARE LINK</button>'
+        myearth_share_btn = '<button type="button" class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById(\'txtShareContainerUrl\').value);toastr.success(\'Local link copied — opens on this computer only.\');">COPY LOCAL LINK</button>'
     else:
         myearth_share_title = "Share 3D Scene"
         myearth_share_body = """
@@ -1625,19 +1627,19 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
         <div style="background:linear-gradient(90deg, rgba(153,204,0,0.12) 0%, rgba(16,23,19,0.96) 100%);border:1px solid rgba(153,204,0,0.45);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px;">
             <div>
                 <div style="font-size:10.5px;font-weight:700;color:#99CC00;text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                    <span>MOSAICEARTH DESKTOP WORKSTATION &middot; LOCAL DISK + LOCAL OPENDRONEMAP (0.00 &euro;) + CLOUD SYNC</span>
-                    <span style="background:rgba(153,204,0,0.2);border:1px solid #99CC00;color:#fff;padding:1px 8px;border-radius:999px;font-size:10px;">v3.6.3</span>
+                    <span>MOSAICEARTH DESKTOP WORKSTATION &middot; LOCAL DISK + NODEODX / OPENSPLAT + CLOUD SYNC</span>
+                    <span style="background:rgba(153,204,0,0.2);border:1px solid #99CC00;color:#fff;padding:1px 8px;border-radius:999px;font-size:10px;">0.4.0</span>
                 </div>
                 <div style="font-size:13px;color:#fff;margin-top:4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <span>Local Photogrammetry Engine: <strong id="lblMyEarthNodeOdmStatus" style="color:#99CC00;">ONLINE &middot; OpenDroneMap v3.6.2 (Built-in Local Engine &middot; 0.00 &euro;)</strong></span>
+                    <span>Local Photogrammetry Engine: <strong id="lblMyEarthNodeOdmStatus" style="color:#99CC00;">Checking NodeODX…</strong></span>
                     <button type="button" class="myearth-action-btn" onclick="activateLocalNodeOdmInMyEarth()" style="padding:3px 10px;font-size:11px;">
                         <i class="fas fa-check-circle"></i> Verify Local Engine
                     </button>
-                    <button type="button" class="myearth-action-btn" onclick="fetch('/api/desktop/open-folder',{{method:'POST'}})" style="padding:3px 10px;font-size:11px;">
+                    <button type="button" class="myearth-action-btn" onclick="openDesktopLocalFolder()" style="padding:3px 10px;font-size:11px;">
                         <i class="fas fa-folder-open"></i> Open Local Disk Folder
                     </button>
-                    <button type="button" id="btnForceDesktopUpdate" class="myearth-action-btn myearth-action-btn--accent" onclick="forceUpdateDesktopApp()" style="padding:3px 10px;font-size:11px;" title="Check and install latest MosaicEarth Desktop update immediately">
-                        <i class="fas fa-sync-alt"></i> Check / Force Update (v3.6.3)
+                    <button type="button" id="btnForceDesktopUpdate" class="myearth-action-btn myearth-action-btn--accent" onclick="forceUpdateDesktopApp()" style="padding:3px 10px;font-size:11px;" title="Check the published version without replacing this installation">
+                        <i class="fas fa-sync-alt"></i> Check for updates
                     </button>
                 </div>
             </div>
@@ -1692,24 +1694,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             </div>
         </div>"""
 
-    body_content = f"""
-    <section id="projects" class="workspace-section">
-        <div class="container">
-            <div class="row" style="margin-bottom: 15px;">
-                <div class="col-12">
-                    <div class="box-4d">
-                        <div class="titulo-box">
-                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                                <div>MyEarth &middot; {html.escape(i18n['projects'])}, {html.escape(i18n['surveys'])}, Tasks &amp; {html.escape(i18n['assets'])}</div>
-                                <div class="d-flex flex-wrap gap-2">
-                                    <button type="button" class="myearth-action-btn myearth-action-btn--primary" style="padding:7px 16px;font-size:12px;" onclick="openNewProjectModal()">+ NEW {html.escape(i18n['project'].upper())}</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="content-box" style="padding: 20px 24px;">
-                            {desktop_hybrid_bar_html}
-                            <!-- Private Storage Quota Bar -->
+    storage_bar_html = f"""                            <!-- Private Storage Quota Bar -->
                             <div class="myearth-quota-bar">
                                 <div>
                                     <div style="font-size:10.5px;font-family:OpenSansBold,Arial,sans-serif;color:#99CC00;text-transform:uppercase;letter-spacing:0.08em;">
@@ -1744,6 +1729,30 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                                 </div>
                             </div>
 
+"""
+    if is_desktop_local:
+        from mosaicearth_platform_context import storage_status_html
+        storage_bar_html = storage_status_html()
+
+    body_content = f"""
+    <section id="projects" class="workspace-section">
+        <div class="container">
+            <div class="row" style="margin-bottom: 15px;">
+                <div class="col-12">
+                    <div class="box-4d">
+                        <div class="titulo-box">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div>MyEarth &middot; {html.escape(i18n['projects'])}, {html.escape(i18n['surveys'])}, Tasks &amp; {html.escape(i18n['assets'])}</div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button type="button" class="myearth-action-btn myearth-action-btn--primary" style="padding:7px 16px;font-size:12px;" onclick="openNewProjectModal()">+ NEW {html.escape(i18n['project'].upper())}</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="content-box" style="padding: 20px 24px;">
+                            {desktop_hybrid_bar_html}
+                            {storage_bar_html}
+
                             <!-- Toolbar: Search + Expand/Collapse + View Mode Switcher -->
                             <div class="myearth-toolbar">
                                 <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex:1;min-width:260px;">
@@ -1763,7 +1772,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                                         {MYEARTH_ICON_PROJECT} <span>Tree View ({len(projects_tree)})</span>
                                     </button>
                                     <button type="button" id="btnViewQuota" class="myearth-view-btn" onclick="setMyEarthView('quota')">
-                                        {MYEARTH_ICON_QUOTA} <span>Private Quota &middot; {storage['used_gb']:.2f} GB ({len(private_quota_assets)})</span>
+                                        {MYEARTH_ICON_QUOTA} <span>Local files &middot; {storage['used_gb']:.2f} GB ({len(private_quota_assets)})</span>
                                     </button>
                                     <button type="button" id="btnViewAcquired" class="myearth-view-btn" onclick="setMyEarthView('acquired')">
                                         {MYEARTH_ICON_ACQUIRED} <span>{html.escape(i18n['acquired_assets'])} ({len(acquired_assets)})</span>
@@ -2582,12 +2591,12 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
         }
         function activateLocalNodeOdmInMyEarth() {
             var el = document.getElementById('lblMyEarthNodeOdmStatus');
-            if (el) el.textContent = 'Starting Local OpenDroneMap (NodeODM)...';
+            if (el) el.textContent = 'Starting local NodeODX…';
             fetch('/api/desktop/start-nodeodm', { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) {
                 if (d && d.online) {
-                    toastr.success(d.message || 'Local OpenDroneMap (NodeODM) is ONLINE!');
+                    toastr.success(d.message || 'Local NodeODX is ready.');
                 } else {
-                    toastr.warning((d && d.message) || 'Could not start Local NodeODM.');
+                    toastr.warning((d && d.message) || 'Could not start local NodeODX.');
                 }
                 checkMyEarthNodeOdmStatus();
             });
@@ -2597,28 +2606,21 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             if (!el) return;
             fetch('/api/desktop/nodeodm-status').then(function(r) { return r.json(); }).then(function(d) {
                 if (d && d.online) {
-                    el.textContent = 'ONLINE · OpenDroneMap v' + (d.engineVersion || d.version || '3.6.2') + ' (Built-in Local Engine · 0.00 €)';
+                    el.textContent = 'ONLINE · ODX ' + (d.engineVersion || '') + ' · Local processing';
                     el.style.color = '#99CC00';
                 } else {
-                    el.textContent = 'STANDBY · Click Verify Local Engine';
+                    el.textContent = d.message || 'Not running · Verify Local Engine';
                     el.style.color = '#fcd34d';
                 }
             }).catch(function() {});
         }
         function forceUpdateDesktopApp() {
             var btn = document.getElementById('btnForceDesktopUpdate');
-            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Updating...'; }
-            toastr.info('Checking & downloading latest MosaicEarth Desktop update from Cloud...');
-            fetch('/api/desktop/force-update', { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) {
-                if (d && d.ok) {
-                    toastr.success(d.message || 'MosaicEarth Desktop updated! Reloading...');
-                    setTimeout(function() { window.location.reload(); }, 1800);
-                } else {
-                    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Check / Force Update (v3.6.3)'; }
-                    toastr.error((d && d.message) || 'Could not update right now.');
-                }
-            }).catch(function() {
-                setTimeout(function() { window.location.reload(); }, 2000);
+            if (btn) btn.disabled = true;
+            fetch('/api/desktop/force-update', {method:'POST'}).then(function(r) { return r.json(); }).then(function(d) {
+                if (d.ok) toastr.info(d.message); else toastr.error(d.message || 'Could not check for updates.');
+            }).catch(function() { toastr.error('Could not check for updates.'); }).finally(function() {
+                if (btn) btn.disabled = false;
             });
         }
         (function initMyEarthLiveProcessingMonitor() {
@@ -2716,7 +2718,6 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             }).catch(function() {});
         }
         checkMyEarthNodeOdmStatus();
-        loadDesktopCloudProjects();
         (function initMyEarthTreeState() {
             var mapObj = _getOpenProjectsMap();
             var params = new URLSearchParams(window.location.search || '');
@@ -3020,7 +3021,12 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                            f'<p>Your source files are preserved. {html.escape(payment_message)} Select PROCESS to retry.</p></div>')
     initial_progress = max(0, min(100, int(proj.get("PROCESSING_PROGRESS") or 0)))
 
-    if has_any_published:
+    if os.environ.get('MOSAICEARTH_DESKTOP_SHARED_UI') == '1':
+        ret_eyebrow = "LOCAL STORAGE"
+        ret_title = "Originals and results are stored on this computer"
+        ret_exp = "Cloud synchronization creates a separate private copy. Publish and share that cloud copy when you want others to access it online."
+        upgrade_btn_style = "display:none;"
+    elif has_any_published:
         ret_eyebrow = "GLOBAL MAP & STORAGE QUOTA"
         ret_title = "Published Assets consume 0 GB of your Private Storage Quota · Permanent Hosting"
         ret_exp = "Assets published on the Global Map (Free 0 € or Marketplace €) do not count against your 5 GB Free Private Quota, act as your global 3D portfolio, and earn 80% on Marketplace sales."
@@ -3092,8 +3098,8 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
     )
 
     head_extra = """
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Cesium.js"></script>
+    <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />
+    <script src="/vendor/cesium/Cesium.js"></script>
     <script src="/js/front/MosaicCesiumRuntime.js?v=__MOSAIC_MAP_RUNTIME_VERSION__"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261016-r45"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261016-r45" />
@@ -3489,7 +3495,7 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                         <button type="button" id="btnSelectLocalEngine" onclick="selectTaskEngineMode('local')" style="{'background:rgba(153,204,0,0.16);border:1.5px solid #99CC00;color:#fff;' if is_desktop_local_mode else 'background:#111713;border:1.5px solid #35443b;color:#d1d5db;'}border-radius:8px;padding:10px;text-align:left;cursor:pointer;">
                             <div style="font-size:10px;color:#99CC00;font-weight:700;text-transform:uppercase;">Option 2 &middot; Your PC</div>
                             <div style="font-size:12.5px;font-weight:700;margin-top:2px;">Local PC (Desktop)</div>
-                            <div style="font-size:11px;color:#99CC00;margin-top:2px;">0.00 &euro; &middot; Built-in Local ODM</div>
+                            <div style="font-size:11px;color:#99CC00;margin-top:2px;">0.00 &euro; &middot; Local NodeODX / ODX</div>
                         </button>
                     </div>
                     <div class="mb-3">
@@ -3532,7 +3538,7 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                                 <span id="localEngineStatusBadge" style="font-size:10.5px;padding:2px 8px;border-radius:99px;background:rgba(153,204,0,0.22);color:#99CC00;">ONLINE &middot; Built-in Local ODM Engine (0.00 &euro;)</span>
                             </div>
                             <p style="font-size:12px;color:#dce6dc;margin:0 0 8px;line-height:1.5;">
-                                Processes your drone images at <strong>0.00 &euro;</strong> using your computer's CPU/GPU via MosaicEarth Desktop's built-in <strong>OpenDroneMap (NodeODM)</strong> engine — completely integrated inside the application without external windows.
+                                Processes your drone images at <strong>0.00 &euro;</strong> using your computer's CPU or compatible GPU via MosaicEarth Desktop's built-in <strong>NodeODX / ODX</strong> engine — completely integrated inside the application without external windows.
                             </p>
                             <div id="localEngineHowTo" style="font-size:11.5px;color:#b8c6be;background:#0b100d;border:1px solid #28362e;border-radius:6px;padding:10px;line-height:1.5;">
                                 <div style="font-size:11px;color:#99CC00;font-weight:700;">
@@ -3567,7 +3573,7 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                                 if (info && info.online) {{
                                     window.__meLocalEngineReady = true;
                                     if (badge) {{
-                                        badge.textContent = 'ONLINE · OpenDroneMap (NodeODM v' + (info.engineVersion || info.version || '3.6.2') + ' · 0.00 €)';
+                                        badge.textContent = 'ONLINE · NodeODX / ODX ' + (info.engineVersion || info.version || 'unknown') + ' · 0.00 €)';
                                         badge.style.background = 'rgba(153,204,0,0.22)';
                                         badge.style.color = '#99CC00';
                                     }}
@@ -3585,12 +3591,12 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                         }}
                         function startLocalNodeOdmFromModal() {{
                             var badge = document.getElementById('localEngineStatusBadge');
-                            if (badge) badge.textContent = 'Starting Local OpenDroneMap (NodeODM)...';
+                            if (badge) badge.textContent = 'Starting local NodeODX…';
                             fetch('/api/desktop/start-nodeodm', {{ method: 'POST' }}).then(function(r) {{ return r.json(); }}).then(function(d) {{
                                 if (d && d.online) {{
                                     toastr.success(d.message || 'Local NodeODM is ONLINE!');
                                 }} else {{
-                                    toastr.warning((d && d.message) || 'Could not start Local NodeODM.');
+                                    toastr.warning((d && d.message) || 'Could not start local NodeODX.');
                                 }}
                                 probeLocalNodeOdmEngine();
                             }});
@@ -3607,7 +3613,7 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                                 bCloud.style.background = '#111713'; bCloud.style.borderColor = '#35443b'; bCloud.style.color = '#d1d5db';
                                 pCloud.style.display = 'none'; pLocal.style.display = 'block';
                                 probeLocalNodeOdmEngine();
-                                if (btn) btn.textContent = 'START LOCAL NODEODM PROCESSING (0.00 €)';
+                                if (btn) btn.textContent = 'START LOCAL NODEODX PROCESSING (0.00 €)';
                             }} else {{
                                 bCloud.style.background = 'rgba(153,204,0,0.16)'; bCloud.style.borderColor = '#99CC00'; bCloud.style.color = '#fff';
                                 bLocal.style.background = '#111713'; bLocal.style.borderColor = '#35443b'; bLocal.style.color = '#d1d5db';
@@ -3672,7 +3678,7 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">CANCEL</button>
                     <button id="processTask" type="button" onclick="submitTaskToSelectedEngine()" class="btn btn-primary" style="font-size: 12px!important; font-weight:700; padding: 10px 24px;">
-                        {'START LOCAL NODEODM PROCESSING (0.00 €)' if os.environ.get('MOSAICEARTH_DESKTOP_LOCAL') == '1' else f'AUTHORIZE ({upfront_eur_val:.2f} &euro;) &amp; START CLOUD PROCESSING'}
+                        {'START LOCAL NODEODX PROCESSING (0.00 €)' if os.environ.get('MOSAICEARTH_DESKTOP_LOCAL') == '1' else f'AUTHORIZE ({upfront_eur_val:.2f} &euro;) &amp; START CLOUD PROCESSING'}
                     </button>
                 </div>
             </div>
@@ -4525,8 +4531,8 @@ def render_mymaps_page(user: Dict[str, Any], lang: str = "en") -> str:
                     <a href="/Client/MyMapDetail.aspx?id={mid}" class="mymosaic-btn" title="Edit layers and title of this MyMosaic">
                         <i class="fas fa-pen" style="font-size:11px;"></i> Edit Mosaic
                     </a>
-                    <button type="button" class="mymosaic-btn" data-name="{html.escape(mname_raw, quote=True)}" onclick="copyMyMosaicShareLink({mid}, this.dataset.name)" title="Copy shareable link to this MyMosaic">
-                        <i class="fas fa-share-alt" style="font-size:11px;"></i> Share
+                    <button type="button" class="mymosaic-btn" data-name="{html.escape(mname_raw, quote=True)}" onclick="copyMyMosaicShareLink({mid}, this.dataset.name)" title="Copy a link that opens this MyMosaic on this computer only">
+                        <i class="fas fa-link" style="font-size:11px;"></i> Local link
                     </button>
                     <button type="button" class="mymosaic-btn mymosaic-btn--danger" title="Delete this MyMosaic" onclick="changeDeleteBtn({mid})" data-bs-toggle="modal" data-bs-target="#staticBackdrop1">
                         <i class="fas fa-trash" style="font-size:11px;"></i>
@@ -4561,7 +4567,7 @@ def render_mymaps_page(user: Dict[str, Any], lang: str = "en") -> str:
                         <div class="content-box" style="padding: 20px 24px;">
                             <div style="background:rgba(153,204,0,0.06);border:1px solid rgba(153,204,0,0.24);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;">
                                 <div style="font-size:12.5px;color:#d3ded7;">
-                                    <strong style="color:#99CC00;">Your curated geographic mosaics &amp; 3-level visibility.</strong> Combine selected Layers &amp; Assets from your <strong>MyEarth</strong> workspace or the Global Map into multi-layer 3D scenes. Choose <strong><i class="fas fa-lock me-1" style="color:#99CC00;"></i>Private</strong> (only you), <strong><i class="fas fa-link me-1" style="color:#99CC00;"></i>Unlisted</strong> (secret client link, hidden from directory), or <strong><i class="fas fa-globe me-1" style="color:#99CC00;"></i>Public</strong> (listed in Public Mosaics). Inside any shared Mosaic, your <strong>Private assets remain strictly View-Only in 3D (non-downloadable)</strong>, Free Public assets (0 &euro;) can be downloaded for free, and Marketplace assets (&gt; 0 &euro;) require purchasing a license (&euro;) to download.
+                                    <strong style="color:#99CC00;">Your local geographic mosaics.</strong> Combine layers from MyEarth and the public map into 3D scenes. Local layers and compositions stay on this computer. Synchronize a complete private copy to your cloud account to share or publish it online. Public layers require an Internet connection.
                                 </div>
                                 <span id="mosaicListCount" style="font-size:12px;font-family:OpenSansBold,Arial,sans-serif;color:#99CC00;">{len(mymaps)} MyMosaics</span>
                             </div>
@@ -4683,7 +4689,7 @@ def render_mymaps_page(user: Dict[str, Any], lang: str = "en") -> str:
                 fetch('/api/desktop/share-origin').then(function(r){{ return r.json(); }}).then(function(d){{
                     var baseOrig = (d && d.shareOrigin) ? d.shareOrigin : window.location.origin;
                     var shareUrl = baseOrig + '/MyMap.aspx?id=' + mid;
-                    window.prompt('Local PC Share Link (works while MosaicEarth Desktop is open and firewall allows TCP 8095):', shareUrl);
+                    window.prompt('Local link — opens on this computer only. Synchronize to Cloud to share with other people:', shareUrl);
                 }}).catch(function(){{
                     var shareUrl = window.location.origin + '/MyMap.aspx?id=' + mid;
                     window.prompt('Local PC Share Link:', shareUrl);
@@ -4761,7 +4767,7 @@ def render_mymaps_page(user: Dict[str, Any], lang: str = "en") -> str:
             window.prompt('Cloud MyMosaic Share Link:', url);
         }}
         if (IS_DESKTOP_LOCAL_MYMAPS && CLOUD_ACC_LOGGED_MYMAPS) {{
-            setTimeout(loadCloudMyMosaicsList, 250);
+            // The shared Desktop sync controller loads this list safely.
         }}
         function updateMyMosaicVisibility(mid, visibility) {{
             if (!IS_MYMOSAIC_SUBSCRIBER && visibility !== 'private') {{
@@ -4953,7 +4959,7 @@ def render_mymap_detail_page(user: Dict[str, Any], map_id: int = 0, lang: str = 
                         <div class="titulo-box">
                             <div class="row">
                                 <div class="col-7">
-                                    MosaicAssets <br/> <span class="mosaic-assets-help">Use your public, private or Premium MosaicAssets. Private assets remain non-acquirable to other people.</span>
+                                    MosaicAssets <br/> <span class="mosaic-assets-help">Combine your local layers with public MosaicAssets. Local layers stay on this computer; public layers need an Internet connection.</span>
                                     <span id="mosaicSelectionCount" class="mosaic-selection-summary" aria-live="polite">0 MosaicAssets selected</span>
                                 </div>
                                 <div class="col-md-4">
@@ -5116,13 +5122,14 @@ def render_mymap_viewer_page(user: Optional[Dict[str, Any]], id_or_slug: str, la
     if map_vis not in ("private", "unlisted", "public"):
         map_vis = "public"
 
+    seo_head = build_head_metadata_html(
+        title=f"{mname} · MyMosaic · MosaicEarth",
+        description=f"Combined 3D and Orthophoto scene for {mname} on MosaicEarth.",
+        canonical_path=f"/MyMap.aspx?id={map_id}",
+        robots="noindex, nofollow",
+    )
+
     if map_vis == "private" and not is_owner:
-        seo_head = build_head_metadata_html(
-            title="Private MyMosaic · MosaicEarth",
-            description="Sign in with the owner's account to view this private MyMosaic.",
-            canonical_path=f"/MyMap.aspx?id={map_id}",
-            robots="noindex, nofollow",
-        )
         restricted_body = f"""
         <section style="padding: 80px 16px; min-height: calc(100vh - 140px); display: flex; align-items: center; justify-content: center;">
             <div style="max-width: 520px; width: 100%; background: #141c17; border: 1px solid #3c4b40; border-radius: 10px; padding: 32px; text-align: center;">
@@ -5131,7 +5138,7 @@ def render_mymap_viewer_page(user: Optional[Dict[str, Any]], id_or_slug: str, la
                 </div>
                 <h1 style="font-size: 20px; color: #fff; font-family: OpenSansBold, Arial, sans-serif; margin-bottom: 8px;">Private MyMosaic</h1>
                 <p style="font-size: 13.5px; color: #b8c6be; line-height: 1.6; margin-bottom: 20px;">
-                    This MyMosaic is set to <strong>Private (Owner Only)</strong>. Sign in with the owner's account to view its name, layers and contents.
+                    This MyMosaic (<strong>{html.escape(mname)}</strong>) is set to <strong>Private (Owner Only)</strong>. Only the creator can view it, or the creator can switch its visibility to <strong>Unlisted (Secret Link)</strong> or <strong>Public</strong>.
                 </p>
                 <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
                     <a href="/Default.aspx?ReturnUrl=%2FMyMap.aspx%3Fid%3D{map_id}" class="btn btn-primary" style="background:#99CC00;color:#0b110d;border:none;font-weight:700;padding:8px 18px;">Sign In as Owner</a>
@@ -5141,18 +5148,11 @@ def render_mymap_viewer_page(user: Optional[Dict[str, Any]], id_or_slug: str, la
         </section>"""
         return render_home_master("", seo_head, restricted_body, "", user=user, lang=norm_lang)
 
-    seo_head = build_head_metadata_html(
-        title=f"{mname} · MyMosaic · MosaicEarth",
-        description=f"Combined 3D and Orthophoto scene for {mname} on MosaicEarth.",
-        canonical_path=f"/MyMap.aspx?id={map_id}",
-        robots="noindex, nofollow",
-    )
-
     cesium_key = store.get_cesium_browser_token()
 
     head_extra = """
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Cesium.js"></script>
+    <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />
+    <script src="/vendor/cesium/Cesium.js"></script>
     <script src="/js/front/MosaicCesiumRuntime.js?v=__MOSAIC_MAP_RUNTIME_VERSION__"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261016-r45"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261016-r45" />
@@ -5353,6 +5353,10 @@ def render_mymap_viewer_page(user: Optional[Dict[str, Any]], id_or_slug: str, la
             </div>
         </div>"""
         share_modal_btn_html = '<button id="changePasswordButton" type="button" onclick="copyLink()" class="btn btn-primary" style="font-size: 12px!important; padding: 10px 28px;">COPY LINK</button>'
+
+    if os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1" and is_owner:
+        share_modal_body_html = """<p>This link opens the MyMosaic on this computer only. To share it online, synchronize it from MyMosaics and configure sharing on the completed cloud copy.</p><input class="form-control" id="inputShare" aria-label="Local MyMosaic link" readonly /><span id="copyMessage" style="display:none">Copied!</span>"""
+        share_modal_btn_html = '<button type="button" onclick="copyLink()" class="btn btn-primary">COPY LOCAL LINK</button>'
 
     body_content = f"""
     <div id="toolbar">
@@ -6579,7 +6583,7 @@ def _render_unified_task_upload_page(
             </div>
         </div>"""
     if is_gaussian and os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1":
-        upfront_task_quote_banner = '<section style="margin-bottom:18px;padding:16px;border:1px solid #607b39;border-radius:10px;background:#132017"><strong>Local COLMAP + OpenSplat · 0.00 €</strong><p>Photos and videos are reconstructed on this computer using its CPU. Local processing uses no cloud credits or storage quota. Finished Gaussian files can also be imported directly.</p></section>'
+        upfront_task_quote_banner = '<section style="margin-bottom:18px;padding:16px;border:1px solid #607b39;border-radius:10px;background:#132017"><strong>Local COLMAP + OpenSplat · 0.00 €</strong><p>Photos and videos are reconstructed on this computer. Automatic mode uses a compatible GPU when available and falls back to CPU. See Processing settings in the account menu for the active engines. Local processing uses no cloud credits or storage quota. Finished Gaussian files can also be imported directly.</p></section>'
     format_pills_html = (
         """
         <span class="workflow-pill">Gaussian Splatting Task</span>
@@ -6809,8 +6813,8 @@ def render_internal_viewer_page(
     )
 
     head_extra = """
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Cesium.js"></script>
+    <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />
+    <script src="/vendor/cesium/Cesium.js"></script>
     <script src="/js/front/MosaicCesiumRuntime.js?v=__MOSAIC_MAP_RUNTIME_VERSION__"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261104"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261104" />
