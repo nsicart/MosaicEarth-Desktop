@@ -1605,6 +1605,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
     desktop_hybrid_bar_html = ""
     desktop_cloud_projects_section_html = ""
     if is_desktop_local:
+        from mosaicearth_platform_api import version as desktop_release
         cloud_acc = store.get_desktop_cloud_account()
         cloud_origin_url = os.environ.get("MOSAICEARTH_CLOUD_ORIGIN", "https://app.mosaicearth.app").rstrip("/")
         if cloud_acc and cloud_acc.get("email"):
@@ -1628,7 +1629,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             <div>
                 <div style="font-size:10.5px;font-weight:700;color:#99CC00;text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <span>MOSAICEARTH DESKTOP WORKSTATION &middot; LOCAL DISK + NODEODX / OPENSPLAT + CLOUD SYNC</span>
-                    <span style="background:rgba(153,204,0,0.2);border:1px solid #99CC00;color:#fff;padding:1px 8px;border-radius:999px;font-size:10px;">0.4.0</span>
+                    <span style="background:rgba(153,204,0,0.2);border:1px solid #99CC00;color:#fff;padding:1px 8px;border-radius:999px;font-size:10px;">{html.escape(desktop_release()['version'])}</span>
                 </div>
                 <div style="font-size:13px;color:#fff;margin-top:4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                     <span>Local Photogrammetry Engine: <strong id="lblMyEarthNodeOdmStatus" style="color:#99CC00;">Checking NodeODX…</strong></span>
