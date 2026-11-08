@@ -3203,7 +3203,7 @@ def render_world_simulator_page(
             background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18);
             color: #fff; border-radius: 6px; padding: 6px 11px; font-size: 12px; font-weight: 600; cursor: pointer;
         }
-        .sim-pad-btn:hover, .sim-pad-btn.active { background: #99CC00; color: #070b09; border-color: #99CC00; }
+        .sim-pad-btn:hover, .sim-pad-btn.active { background: #99CC00; color: #070b09 !important; border-color: #99CC00; }
         .btn-4dtm-global {
             background: linear-gradient(135deg, rgba(153,204,0,0.22), rgba(56,189,248,0.18));
             border: 1px solid #99CC00; color: #f4f7f2; font-weight: 700; font-size: 12px;
@@ -3440,6 +3440,9 @@ def render_world_simulator_page(
 
             function applyDiscoveredGroundElevation(elevMeters) {{
                 if (typeof elevMeters !== 'number' || !isFinite(elevMeters) || elevMeters < -400 || elevMeters > 8900) return;
+                // An asset can sit above the coarse global terrain surface.
+                // Keep its spawn camera above its actual georeferenced bounds.
+                if (tilesUrl || glbUrl || orthoUrl) elevMeters = Math.max(initialGroundAsl, elevMeters);
                 var prevBase = baseGroundAltitude;
                 baseGroundAltitude = elevMeters;
                 if (beaconEntity) {{
@@ -3460,9 +3463,19 @@ def render_world_simulator_page(
             }}
 
             // Load the target MosaicAsset onto the 3D globe
+            function reportAssetLoadError() {{
+                if (document.getElementById('flyAssetLoadError')) return;
+                var warning = document.createElement('div');
+                warning.id = 'flyAssetLoadError';
+                warning.setAttribute('role', 'alert');
+                warning.style.cssText = 'position:absolute;top:112px;left:20px;right:20px;z-index:30;background:#482516;color:#fff;padding:14px;border-radius:8px';
+                warning.textContent = 'The selected model could not load. Reopen Fly View or use Back to Asset to check its files.';
+                document.getElementById('simCesiumContainer').appendChild(warning);
+            }}
             if (tilesUrl) {{
                 var sse = assetFtype === 1 ? 8 : 16;
                 MosaicCesiumRuntime.loadTileset(viewer, tilesUrl, {{maximumScreenSpaceError: sse, enableCollision: false}}).then(function(tile) {{
+                    if (tile.tileFailed) tile.tileFailed.addEventListener(reportAssetLoadError);
                     MosaicCesiumRuntime.applyProcessedTilesetHeight(tile, targetHeightOffset);
                     if (tile.pointCloudShading) {{
                         tile.pointCloudShading.attenuation = true;
@@ -3470,7 +3483,7 @@ def render_world_simulator_page(
                         tile.pointCloudShading.geometricErrorScale = 2.2;
                         tile.pointCloudShading.baseResolution = 0.22;
                     }}
-                }}).catch(function() {{}});
+                }}).catch(reportAssetLoadError);
             }} else if (orthoUrl) {{
                 if (orthoUrl.indexOf('{{z}}') >= 0) {{
                     viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({{url: orthoUrl, maximumLevel: 20}}));
@@ -3642,7 +3655,10 @@ def render_world_simulator_page(
                 var terrainHeight = null;
                 try {{
                     Cesium.Cartographic.fromDegrees(lonDeg, latDeg, 0, scratchCarto);
-                    if (viewer.scene && viewer.scene.globe) {{
+                    // The ellipsoid's zero is a fallback surface, not measured
+                    // terrain. Keep the asset elevation when terrain is absent.
+                    if (viewer.scene && viewer.scene.globe && viewer.terrainProvider &&
+                        !(viewer.terrainProvider instanceof Cesium.EllipsoidTerrainProvider)) {{
                         var gh = viewer.scene.globe.getHeight(scratchCarto);
                         if (typeof gh === 'number' && isFinite(gh) && gh > -400 && gh < 8900) {{
                             terrainHeight = gh;
@@ -3671,7 +3687,7 @@ def render_world_simulator_page(
                         applyDiscoveredGroundElevation(gTarget);
                     }}
                 }}
-                if (!terrainProbedDetailed && viewer.terrainProvider && typeof Cesium.sampleTerrainMostDetailed === 'function') {{
+                if (!terrainProbedDetailed && viewer.terrainProvider && viewer.terrainProvider.availability && typeof Cesium.sampleTerrainMostDetailed === 'function') {{
                     terrainProbedDetailed = true;
                     var pts = [
                         Cesium.Cartographic.fromDegrees(targetLon, targetLat)
@@ -3787,7 +3803,8 @@ def render_world_simulator_page(
 
                 rigState.initialized = false;
                 rigState.orbitHeading = 0;
-                rigState.orbitPitch = 0;
+                rigState.orbitPitch = -Math.atan2(currentDef.spawnAlt,
+                    currentDef.spawnDistDeg * Math.PI / 180 * EARTH_RADIUS_METERS) * 180 / Math.PI - pose.pitch + 3;
                 rigState.zoom = 1.0;
                 trailPositions = [];
 
@@ -4225,6 +4242,7 @@ def render_world_simulator_page(
                 simControl.flying = true;
                 simControl.paused = false;
                 document.getElementById('btnHudPause').classList.remove('active');
+                document.getElementById('btnHudPause').textContent = 'Pause';
                 document.getElementById('hudStatusText').textContent = 'IN FLIGHT';
             }});
 
@@ -4248,6 +4266,7 @@ def render_world_simulator_page(
             document.getElementById('btnHudPause').addEventListener('click', function() {{
                 simControl.paused = !simControl.paused;
                 this.classList.toggle('active', simControl.paused);
+                this.textContent = simControl.paused ? 'Resume' : 'Pause';
                 document.getElementById('hudStatusText').textContent = simControl.paused ? 'PAUSED' : 'IN FLIGHT';
             }});
 
