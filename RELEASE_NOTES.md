@@ -12,7 +12,7 @@ The final source builds from an empty Git archive using an anonymously downloada
 
 Connector 0.2.1 packages have passed complete public-cloud roundtrips with WebODM 4.0, OpenDroneMap WebUI 3.2.5, and QGIS 3.44.15 LTR / 4.2.3. Native task or project reopening and all-file checksums are verified. QGIS authentication, cloud browsing and sign-out were checked in both supported Qt generations.
 
-This candidate is not yet promoted: the final packaged setup and production UI synchronization checks are still being completed. CPU processing is the supported backend in the full interface. The older standalone CUDA build script is retained for experiments; it is not an advertised GPU mode of the 0.3 full interface. Packages remain unsigned and there is no macOS installer.
+The final Windows wizard, account activation, public engine download and automatic startup have passed on physical Windows. The final installed workspace also recovered 218 earlier data files (1.82 GB), with every SHA-256 checked against the preserved originals. This candidate is not yet promoted: the production UI workspace roundtrip is still being completed. CPU processing is the supported backend in the full interface. The older standalone CUDA build script is retained for experiments; it is not an advertised GPU mode of the 0.3 full interface. Packages remain unsigned and there is no macOS installer.
 
 # 0.2.1 — validation candidate
 

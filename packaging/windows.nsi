@@ -156,6 +156,22 @@ Section "MosaicEarth Desktop"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "UninstallString" '"$INSTDIR\Uninstall.exe"'
 SectionEnd
 
+Function un.onInit
+  ; A loaded pythonw runtime prevents Windows from removing its DLLs. Check and
+  ; close only this installation's idle launcher, using the same ownership and
+  ; active-transfer checks as an upgrade. Project data and Docker jobs remain.
+  IfFileExists "$INSTDIR\python\python.exe" 0 uninstallCheckDone
+  IfFileExists "$INSTDIR\src\mosaicearth_update.py" 0 uninstallCheckDone
+  nsExec::ExecToStack '"$INSTDIR\python\python.exe" "$INSTDIR\src\mosaicearth_update.py" "$INSTDIR"'
+  Pop $0
+  Pop $1
+  ${If} $0 != "0"
+    MessageBox MB_ICONEXCLAMATION "$1"
+    Abort
+  ${EndIf}
+  uninstallCheckDone:
+FunctionEnd
+
 Section "Uninstall"
   SetShellVarContext current
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop"

@@ -4,7 +4,7 @@
 
 MosaicEarth Desktop runs the MosaicEarth platform locally, with the same branding and interface: public globe, Public Mosaics, MyEarth projects/surveys/tasks, MyMosaics scene composer and Fly View. MyEarth and MyMosaics show local storage and cloud storage separately. Public browsing uses the cloud catalog; local processing, editing and viewing use your computer.
 
-Version 0.3 restores the complete interface from the earlier experimental Desktop. The simplified 0.2 processing workspace is superseded. The 0.3 packages are undergoing their final production roundtrip and installation checks before promotion; the public download remains 0.2 until those checks finish.
+Version 0.3 restores the complete interface from the earlier experimental Desktop. The simplified 0.2 processing workspace is superseded. The 0.3 packages have passed their final Windows/Linux installation checks and are completing the production workspace roundtrip before promotion; the public download remains 0.2 until those checks finish.
 
 A local workspace for photogrammetry, Gaussian splatting and georeferenced imagery, with an offline CesiumJS viewer. NodeODX runs ODX photogrammetry; COLMAP and OpenSplat reconstruct and train Gaussian models. Projects, originals and results remain on your computer until you explicitly synchronize them.
 
