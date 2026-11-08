@@ -140,6 +140,19 @@ class PlatformTest(unittest.TestCase):
             self.assertFalse(response.json().get('checkout_url'))
         self.assertFalse(self.store.get_project(pid).get('PAYMENT_STATUS'))
 
+    def test_processed_detail_shows_current_metrics_with_units(self):
+        pid = self.store.create_project(1, 'Completed metrics fixture')
+        project = next(p for p in self.store.tables['dbo.WEB_PROJECTS'] if p['ID'] == pid)
+        project['CANONICAL_RESULT_CONTRACT'] = {'area_ha': 1.021423627,
+            'gsd_str': '1.60 cm/px', 'gps_str': 'Not independently verified'}
+        self.store.persist_table('dbo.WEB_PROJECTS')
+        response = self.client.get('/Client/ProductDetail.aspx', params={'project_id': pid, 'type': 3})
+        self.assertEqual(response.status_code, 200, response.text[:300])
+        self.assertIn('1.02 ha', response.text)
+        self.assertIn('1.60 cm/px', response.text)
+        self.assertIn('Not independently verified</dd>', response.text)
+        self.assertIn('<span>Created</span>', response.text)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -3,6 +3,7 @@ import html
 import json
 import math
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode
@@ -1829,23 +1830,34 @@ def render_product_detail_page(
     coverage_display = "Not provided"
     gps_display = "Not provided"
     gsd_display = "Not provided"
-    if pvals:
-        area_f = _try_float(pvals.get("AREA") or pvals.get("Area"))
-        if area_f is not None and area_f > 0:
-            if area_f < 0.01:
-                coverage_display = "Less than 0.01 m²"
-            elif area_f < 10000:
-                coverage_display = f"{area_f:.2f}".rstrip("0").rstrip(".") + " m²"
-            else:
-                coverage_display = f"{(area_f / 10000.0):.2f}".rstrip("0").rstrip(".") + " ha"
-        gps_raw = str(pvals.get("GPS_AVERAGE") or pvals.get("GPSAverage") or "").strip()
-        if gps_raw and gps_raw != "-":
-            gps_f = _try_float(gps_raw)
-            gps_display = f"{gps_f:.2f}".rstrip("0").rstrip(".") + " m" if gps_f is not None else f"{gps_raw} m"
-        gsd_raw = str(pvals.get("GSD_AVERAGE") or pvals.get("GSDAverage") or "").strip()
-        if gsd_raw and gsd_raw != "-":
-            gsd_f = _try_float(gsd_raw)
-            gsd_display = f"{gsd_f:.2f}".rstrip("0").rstrip(".") + " cm/px" if gsd_f is not None else f"{gsd_raw} cm/px"
+    pvals = pvals or {}
+    contract = (proj_row or {}).get("CANONICAL_RESULT_CONTRACT") or {}
+    # Current ingestion preserves units in AREA/GSD; older tables used numeric
+    # square metres and centimetres. Never parse a hectare value as square metres.
+    area_f = None
+    area_ha = _try_float(contract.get("area_ha"))
+    if area_ha is not None:
+        area_f = area_ha * 10000.0
+    else:
+        area_raw = str(pvals.get("AREA") or pvals.get("Area") or "").strip()
+        match = re.fullmatch(r"([0-9]+(?:[.,][0-9]+)?)\s*(ha|m²|m2)?", area_raw, re.IGNORECASE)
+        if match:
+            area_f = float(match.group(1).replace(",", ".")) * (10000 if (match.group(2) or "").lower() == "ha" else 1)
+    if area_f is not None and area_f > 0:
+        if area_f < 0.01:
+            coverage_display = "Less than 0.01 m²"
+        elif area_f < 10000:
+            coverage_display = f"{area_f:.2f}".rstrip("0").rstrip(".") + " m²"
+        else:
+            coverage_display = f"{(area_f / 10000.0):.2f}".rstrip("0").rstrip(".") + " ha"
+    gps_raw = str(pvals.get("GPS_AVERAGE") or pvals.get("GPSAverage") or pvals.get("AVERAGE_GPS") or contract.get("gps_str") or "").strip()
+    if gps_raw and gps_raw != "-":
+        gps_f = _try_float(gps_raw)
+        gps_display = f"{gps_f:.2f}".rstrip("0").rstrip(".") + " m" if gps_f is not None else gps_raw
+    gsd_raw = str(pvals.get("GSD_AVERAGE") or pvals.get("GSDAverage") or pvals.get("GSD") or contract.get("gsd_str") or "").strip()
+    if gsd_raw and gsd_raw != "-":
+        gsd_f = _try_float(gsd_raw)
+        gsd_display = f"{gsd_f:.2f}".rstrip("0").rstrip(".") + " cm/px" if gsd_f is not None else gsd_raw
 
     asset_key = f"processed-{ftype}-{pid}"
     capture_display = "Unknown"
@@ -2034,7 +2046,7 @@ def render_product_detail_page(
         </script>"""
     else:
         sse = "8" if ftype == 1 else "18"
-        pc_extra = "if(tile.pointCloudShading){tile.pointCloudShading.attenuation=true;tile.pointCloudShading.maximumAttenuation=10.0;tile.pointCloudShading.geometricErrorScale=2.2;tile.pointCloudShading.baseResolution=0.22;}"
+        pc_extra = "if(tile.pointCloudShading){tile.pointCloudShading.attenuation=true;tile.pointCloudShading.maximumAttenuation=3.0;tile.pointCloudShading.geometricErrorScale=2.2;tile.pointCloudShading.baseResolution=0.22;}"
         viewer_block = f"""
         <div id="cesiumContainer" class="processed-asset-viewer"></div>
         <div class="processed-map-switch mosaic-map-style-switch"><button type="button" class="active" data-layer="satellite">Satellite</button><button type="button" data-layer="topographic">Topographic</button></div>
@@ -2113,7 +2125,7 @@ def render_product_detail_page(
                                         </a>
                                     </div>
                                     <div class="asset-summary-lines">
-                                        <p><span>Published</span><b>{html.escape(pub_date_display)}</b></p>
+                                        <p><span>{"Published" if pub_row else "Created"}</span><b>{html.escape(pub_date_display)}</b></p>
                                         <p><span>Visibility &amp; Storage</span><b>{'Permanent Public & Marketplace Hosting' if is_published else 'Private Asset (Visible only to Creator & in Creator MyMosaics as View-Only)'}</b></p>
                                         <p><span>Creator</span><b>{html.escape(creator_display)}</b></p>
                                     </div>
@@ -3479,7 +3491,7 @@ def render_world_simulator_page(
                     MosaicCesiumRuntime.applyProcessedTilesetHeight(tile, targetHeightOffset);
                     if (tile.pointCloudShading) {{
                         tile.pointCloudShading.attenuation = true;
-                        tile.pointCloudShading.maximumAttenuation = 10.0;
+                        tile.pointCloudShading.maximumAttenuation = 3.0;
                         tile.pointCloudShading.geometricErrorScale = 2.2;
                         tile.pointCloudShading.baseResolution = 0.22;
                     }}

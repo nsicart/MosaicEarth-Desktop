@@ -12,7 +12,6 @@ import subprocess
 import threading
 import time
 import urllib.request
-from contextlib import closing
 from pathlib import Path
 
 from mosaicearth_license import device_identity, verify_grant
@@ -83,28 +82,9 @@ class PlatformLauncher:
             with urllib.request.urlopen(self.url + '/api/desktop/runtime-idle', timeout=3) as response:
                 return json.load(response).get('idle') is True
         except (OSError, ValueError):
-            pass
-        database = self.workspace.root / 'platform/db/mosaicearth_state.sqlite3'
-        if not database.exists():
-            return True
-        try:
-            with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=5)) as db:
-                rows = db.execute('SELECT table_name, rows_json FROM table_overrides').fetchall()
-            for table, serialized in rows:
-                if table == 'dbo.WEB_PROJECTS':
-                    if any(not row.get('DESKTOP_PUBLIC_CATALOG') and int(row.get('STATE_ID') or 0) in (1, 2)
-                           for row in json.loads(serialized)):
-                        return False
-                if table == 'dbo.MOSAICEARTH_BACKGROUND_JOBS':
-                    if any(str(row.get('STATUS') or '').upper() in {'QUEUED', 'RUNNING', 'RETRY'}
-                           for row in json.loads(serialized)):
-                        return False
-            # Synchronization runs inside the platform process and is not a
-            # photogrammetry job. Preserve it even when every model is finished.
-            with urllib.request.urlopen(self.url + '/api/desktop/transfers', timeout=3) as response:
-                transfers = json.load(response).get('transfers', {})
-            return not any(item.get('status') == 'running' for item in transfers.values())
-        except (OSError, ValueError, sqlite3.Error):
+            # Never open the live Linux SQLite file through a Windows bind
+            # mount. Their WAL/shm locking implementations are incompatible.
+            # An unreachable runtime cannot authorize an automatic upgrade.
             return False
 
     def _stop_outdated_platform(self):

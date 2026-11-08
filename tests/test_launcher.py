@@ -42,16 +42,10 @@ class LauncherTest(unittest.TestCase):
                 with sqlite3.connect(self.database) as db:
                     db.execute('DELETE FROM table_overrides')
 
-    def test_transfer_blocks_update_even_when_models_have_finished(self):
-        self.row('dbo.WEB_PROJECTS', [{'STATE_ID': 4}])
-        response = io.BytesIO(json.dumps({'transfers': {'a': {'status': 'running'}}}).encode())
-        with patch('urllib.request.urlopen', side_effect=[OSError('older runtime'), response]):
+    def test_unreachable_runtime_never_opens_live_database_on_the_host(self):
+        with patch('urllib.request.urlopen', side_effect=OSError('offline')), patch('sqlite3.connect') as connection:
             self.assertFalse(self.launcher._workspace_idle())
-
-    def test_idle_update_ignores_public_catalog_jobs(self):
-        self.row('dbo.WEB_PROJECTS', [{'STATE_ID': 2, 'DESKTOP_PUBLIC_CATALOG': True}, {'STATE_ID': 4}])
-        with patch('urllib.request.urlopen', side_effect=[OSError('older runtime'), io.BytesIO(b'{"transfers":{}}')]):
-            self.assertTrue(self.launcher._workspace_idle())
+            connection.assert_not_called()
 
     def test_unreachable_runtime_is_not_assumed_idle(self):
         with patch('urllib.request.urlopen', side_effect=OSError('offline')):
