@@ -11,9 +11,9 @@ class WindowsUpdateTest(unittest.TestCase):
 
     def processes(self):
         return [dict(ProcessId=42, ExecutablePath=self.root + r'\python\pythonw.exe',
-                     CommandLine='"' + self.root + r'\src\mosaicearth_desktop.py" --port 19888'),
+                     Ports=[19888]),
                 dict(ProcessId=99, ExecutablePath=r'C:\Python312\pythonw.exe',
-                     CommandLine='unrelated.py')]
+                     Ports=[19754])]
 
     def test_idle_owned_launcher_only(self):
         stopped = []
@@ -41,3 +41,12 @@ class WindowsUpdateTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             prepare_update(self.root, self.processes(), failed, stopped.append)
         self.assertEqual(stopped, [])
+
+    def test_unidentified_owned_process_preserved(self):
+        for ports in [[], [19754, 19755]]:
+            processes = self.processes()
+            processes[0]['Ports'] = ports
+            stopped = []
+            with self.assertRaises(ValueError):
+                prepare_update(self.root, processes, lambda *args: {}, stopped.append)
+            self.assertEqual(stopped, [])
