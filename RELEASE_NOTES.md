@@ -12,6 +12,8 @@ Windows 11 validation uses an RTX 3070 Laptop 8 GB. The shared interface complet
 
 Large NodeODX result imports now extract archives and generate map/terrain derivatives without holding the shared database lock, keeping progress reads and navigation available. Concurrent cancellation, deletion or replacement cannot republish a stale result. Three regression tests cover both long-running import stages and changes to the task during finalization.
 
+Both NodeODX engine variants fix a cross-filesystem directory move race in the pinned `mv` dependency. On Docker Desktop's Windows bind mounts it could turn the uploaded images directory into a regular file and fail with `ENOTDIR`. Directory moves now check the source type before opening any file streams. A repeatable integration check moves 30 nested directories containing 540 files between the container and host filesystem, verifies every byte, and checks single-file and missing-source behavior.
+
 Windows engine delivery validation used the authenticated public download, pause/resume, a checksum-verified bulk copy over the authorized local network, and the final public HTTPS range. This is not a claim that the entire 10.5 GB was downloaded over the Internet. The application verified complete archive hashes and every pinned Docker image ID. The Windows Authenticode certificate purchase remains postponed; detached OpenPGP verification is separate from operating-system publisher trust. See [SIGNING.md](SIGNING.md).
 
 # 0.3.0 — the full web interface on your computer
