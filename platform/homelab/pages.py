@@ -11,6 +11,13 @@ from urllib.parse import urlencode
 
 from .blob_store import get_blob_store
 
+# Version the map bundle by content: public CDN browser TTLs can override
+# revalidation headers, so an update must also change its URL.
+MAP_RUNTIME_VERSION = hashlib.sha256(b"\0".join(
+    Path(__file__).with_name(name).read_bytes()
+    for name in ("MosaicMapSources.js", "MosaicCesiumRuntime.js")
+)).hexdigest()[:16]
+
 from .db_store import (
     DEFAULT_CATEGORIES,
     ICON_3D,
@@ -54,12 +61,6 @@ CURRENT_LICENSE_TEXT = """MOSAICEARTH STANDARD GEOSPATIAL LICENSE (v1.0)
 
 SHORT_LICENSE_SUMMARY = "Perpetual worldwide license for GIS, CAD, 3D visualization & engineering projects. Raw resale prohibited."
 
-# A new engine can reuse the same local port and browser profile. Version the
-# script by its bytes so a cached previous Desktop cannot hide account changes.
-DESKTOP_UI_REVISION = hashlib.sha256(
-    (Path(__file__).resolve().parents[2] / "resources/platform-ui.js").read_bytes()
-).hexdigest()[:16]
-
 
 def render_home_master(
     head_extra: str,
@@ -70,12 +71,13 @@ def render_home_master(
     lang: str = "en",
     wrap_form: bool = True,
 ) -> str:
+    head_extra = head_extra.replace("__MOSAIC_MAP_RUNTIME_VERSION__", MAP_RUNTIME_VERSION)
     norm_lang = normalize_lang(lang)
     is_desktop_local = os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1"
     cloud_acc = get_store().get_desktop_cloud_account() if is_desktop_local else {}
     raw_email = str((cloud_acc.get("email") if cloud_acc.get("logged_in") else "") or (user.get("EMAIL") if user else "") or (user.get("USERNAME") if user else "") or "")
     if is_desktop_local and raw_email == "local@mosaicearth.desktop":
-        user_label = "Local · Cloud not connected"
+        user_label = "Local PC · Sign In"
     else:
         user_label = html.escape(raw_email) if user else ""
     has_unread = get_store().has_unread_notifications(int(user["ID"])) if user else False
@@ -93,8 +95,9 @@ def render_home_master(
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 {seo_head_html}
     <link href="/Resources/mosaicearth-site-favicon.png" rel="icon" type="image/png" />
-    <link href="/vendor/raleway/fonts.css" rel="stylesheet" />
-    <link href="/vendor/fontawesome/css/all.css" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.css" rel="stylesheet" />
     <link rel="shortcut icon" href="/Resources/mosaicearth-site-favicon.png" />
     <link href="/assets/css/bootstrap.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="/assets/css/master.css?v=4" />
@@ -1168,11 +1171,11 @@ def render_home_master(
                                 '''}
                                 <li class="nav-item dropdown">
                                     <a class="nav-link dropdown-toggle dropdown-menu-dark" href="#" style="display: inline-flex; align-items: center; gap: 6px;" id="navbarDropdownMenuLink" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <label id="usernameEmail" style="cursor:pointer;margin:0;">{user_label if user else ("Desktop activation required" if is_desktop_local else "Guest (Public View)")}</label>
+                                        <label id="usernameEmail" style="cursor:pointer;margin:0;">{user_label if user else "Guest (Public View)"}</label>
                                         <img src="/Resources/UserMenu.svg" alt="" style="width:16px;height:16px;" />
                                     </a>
                                     <ul class="dropdown-menu dropdown-menu-end text-start" aria-labelledby="navbarDropdownMenuLink">
-                                        {f'<li><a class="dropdown-item" href="/en/Projects#desktopCloudProjectsHost" style="color:#38bdf8;font-weight:700;"><i class="fas fa-cloud me-1"></i> Cloud Account &amp; Synchronization</a></li><li><hr class="dropdown-divider" style="border-color:rgba(255,255,255,0.12);" /></li>' if is_desktop_local else ''}
+                                        {f'<li><a class="dropdown-item" href="/Default.aspx?switch_account=1" style="color:#38bdf8;font-weight:700;"><i class="fas fa-cloud me-1"></i> Sign In / Switch Cloud Account</a></li><li><hr class="dropdown-divider" style="border-color:rgba(255,255,255,0.12);" /></li>' if is_desktop_local else ''}
                                         {f'<li><a class="dropdown-item" href="/{norm_lang}/Projects" style="color:#99CC00;font-weight:700;">MyEarth (Projects &amp; Surveys)</a></li><li><a class="dropdown-item" href="/{norm_lang}/MyMaps" style="color:#99CC00;font-weight:700;">MyMosaics (3D Scenes)</a></li><li><a class="dropdown-item" href="/{norm_lang}/Profile">Account, Storage Quota &amp; NodeODM</a></li><li><a class="dropdown-item" href="/{norm_lang}/CreditPacks">Storage Plans &amp; Cloud Processing (€)</a></li>' if user else f'<li><a class="dropdown-item" href="/Default.aspx?ReturnUrl=%2F{norm_lang}%2FProjects" style="color:#99CC00;font-weight:700;">Sign In to MyEarth / MyMosaics</a></li>'}
                                         <li><a class="dropdown-item" href="/{norm_lang}/Desktop">MosaicEarth Desktop &amp; Connectors</a></li>
                                         <li><a class="dropdown-item" href="/{norm_lang}/Faqs">Help &amp; FAQs</a></li>
@@ -1225,7 +1228,6 @@ def render_home_master(
             var __funciones_url = "/funciones.aspx/";
         </script>
 {scripts_extra}
-    <script src="/desktop-platform-ui.js?v={DESKTOP_UI_REVISION}"></script>
     </{layout_tag}>
 </body>
 </html>"""
@@ -1393,9 +1395,9 @@ def render_map2_page(
     ext_options = "".join(f'<option value="{ext}">.{ext}</option>' for ext in KNOWN_SOURCE_EXTENSIONS)
 
     head_extra = """
-    <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />
-    <script src="/vendor/cesium/Cesium.js"></script>
-    <script src="/js/front/MosaicCesiumRuntime.js?v=20261108-openmaps1"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Cesium.js"></script>
+    <script src="/js/front/MosaicCesiumRuntime.js?v=__MOSAIC_MAP_RUNTIME_VERSION__"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261016-r45"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261016-r45" />
     <link rel="stylesheet" href="/assets/css/external-asset-import.css?v=7" />
@@ -2030,11 +2032,11 @@ def render_product_detail_page(
             gap: 4px !important;
         }
     </style>
-    <script src="/vendor/cesium/Cesium.js"></script>
-    <script src="/js/front/MosaicCesiumRuntime.js?v=20261108-openmaps1"></script>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Cesium.js"></script>
+    <script src="/js/front/MosaicCesiumRuntime.js?v=__MOSAIC_MAP_RUNTIME_VERSION__"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261016-r45"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261016-r45" />
-    <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />"""
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />"""
 
     if ftype == 2:
         viewer_block = f"""
@@ -2384,11 +2386,11 @@ def render_external_asset_detail_page(
             gap: 4px !important;
         }
     </style>
-    <script src="/vendor/cesium/Cesium.js"></script>
-    <script src="/js/front/MosaicCesiumRuntime.js?v=20261108-openmaps1"></script>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Cesium.js"></script>
+    <script src="/js/front/MosaicCesiumRuntime.js?v=__MOSAIC_MAP_RUNTIME_VERSION__"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261103"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261103" />
-    <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />"""
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />"""
 
     from .asset_metadata import derivative_version
     derivative_v = derivative_version(ext)
@@ -3168,9 +3170,9 @@ def render_world_simulator_page(
     global_4dtm_url = f"https://4dtwinmaps.com/fly?lat={lat:.6f}&lon={lon:.6f}&heading=0&model=standard-aircraft"
 
     head_extra = """
-    <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />
-    <script src="/vendor/cesium/Cesium.js"></script>
-    <script src="/js/front/MosaicCesiumRuntime.js?v=20261108-openmaps1"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Cesium.js"></script>
+    <script src="/js/front/MosaicCesiumRuntime.js?v=__MOSAIC_MAP_RUNTIME_VERSION__"></script>
     <style>
         .sim-shell { position: relative; width: 100%; height: calc(100vh - 64px); min-height: 640px; background: #050806; overflow: hidden; font-family: 'Inter', system-ui, -apple-system, sans-serif; user-select: none; }
         #simCesiumContainer { width: 100%; height: 100%; }
@@ -4590,24 +4592,33 @@ def render_desktop_connectors_page(user: Optional[Dict[str, Any]] = None, lang: 
         account = '<p>The official installer costs €29 once, or is included with an active Studio plan.</p><button type="button" id="desktop-purchase">Buy official installer · €29</button><a class="me-dl" href="/en/Account">View Studio plan</a>'
     else:
         account = '<p>The official installer costs €29 once, or is included with an active Studio plan.</p><a class="me-dl" href="/Login.aspx?ReturnUrl=%2Fen%2FDesktop">Sign in to buy or download</a>'
+    full_interface = release.get("interface") == "full-platform"
+    desktop_intro = ("The MosaicEarth interface on your computer: Public Map, Public Mosaics, MyEarth, MyMosaics and Fly View. Process locally with NodeODX and OpenSplat, and choose when to synchronize complete projects and scenes with your cloud account."
+                     if full_interface else "Process on your computer with NodeODX and OpenSplat. Synchronize photographs, completed models and project data with MyEarth when you choose.")
+    release_note = ("" if full_interface else '<p class="me-muted">The update with the complete web interface is in final validation. The downloads below are the current published release.</p>')
+    processing_requirements = '<p>Local processing requires Docker with Linux containers. The application checks the installation and downloads verified NodeODX and OpenSplat CPU engines (about 1.3 GB). Allow at least 20 GB of free disk space. CPU processing is supported in this release. macOS installers are not available.</p>'
+    if "nvidia-cuda" in (release.get("accelerators") or []):
+        processing_requirements = ('<p>Automatic mode detects a compatible NVIDIA GPU inside Docker and uses CPU when GPU processing is unavailable. You can also select CPU only. GPU acceleration applies to OpenSplat training and supported NodeODX stages; some processing stages still use CPU.</p>'
+            '<p>Local processing requires Docker with Linux containers. For GPU acceleration, Windows needs Docker Desktop with WSL 2 and a compatible NVIDIA driver; Linux needs the NVIDIA driver and NVIDIA Container Toolkit. CPU engines download about 1.4 GB; the optional GPU bundle is about 9.1 GB. Allow an additional 50 GB free for GPU installation, plus space for your projects. Downloads resume and are verified before installation.</p>'
+            '<p><a href="https://github.com/nsicart/MosaicEarth-Desktop/blob/v0.4.0/GPU.md">GPU compatibility and setup instructions</a>. Local processing does not use paid cloud GPUs. macOS installers are not available.</p>')
     plugins = ''.join(f'<article class="me-card"><h2>{label}</h2><p>{description}</p>{download(target, "Download plugin ZIP")}<a href="https://github.com/nsicart/MosaicEarth-Desktop/blob/main/CONNECTORS.md">Installation instructions</a></article>'
         for target, label, description in (
             ("webodm", "WebODM", "Synchronize completed tasks, original photographs, products and processing metadata from WebODM. Restore cloud files into a new local task."),
             ("webui", "OpenDroneMap WebUI", "A separate package for OpenDroneMap’s WebUI plugin system. Transfer completed tasks and restore cloud projects with verified downloads."),
             ("qgis", "QGIS", "Synchronize project settings, data layers, styles and coordinate systems. Reopen downloaded QGIS projects or add compatible cloud products as layers.")))
     body = f'''<main class="me-distribution"><p class="me-eyebrow">MOSAICEARTH · DESKTOP & CONNECTORS</p><h1>Your projects, locally and in the cloud</h1>
-<p class="me-intro">Process on your computer with NodeODX and OpenSplat. Synchronize photographs, completed models and project data with MyEarth when you choose.</p>
+<p class="me-intro">{desktop_intro}</p>{release_note}
 <p>Release {version} · canonical cloud service: <a href="https://app.mosaicearth.app">app.mosaicearth.app</a></p>
 <div class="me-grid"><article class="me-card me-featured"><h2>Official Desktop installer</h2>{account}
 <p>Windows uses a graphical installation wizard. Linux uses its package manager. The official distribution is associated with your account and up to two computers. Activation grants last 30 days for offline use; renew with the same eligible account.</p>
-<p>Local processing requires Docker with Linux containers. The application checks the installation and downloads verified NodeODX and OpenSplat CPU engines (about 1.3 GB). Allow at least 20 GB of free disk space. NVIDIA CUDA setup is documented separately. macOS installers are not available.</p>
+{processing_requirements}
 <p>Processing and synchronized files remain private until you explicitly publish them. Installed data is preserved when uninstalling the application.</p></article>
 <article class="me-card"><h2>Open-source Desktop</h2><p>Build and run the local edition without signing in. Cloud synchronization requires a MosaicEarth account because it accesses your private cloud storage.</p>
 <a class="me-dl" href="https://github.com/nsicart/MosaicEarth-Desktop">Source code and build instructions</a>{download("desktop-source", "Corresponding release source")}
 <p>AGPL-3.0-or-later. The account controls the commercial distribution and services; it does not remove the redistribution rights granted by open-source licenses.</p>
 <a href="/open-source">Engine source code and third-party notices</a></article></div>
 <h2 class="me-section">Open-source connectors</h2><div class="me-grid me-three">{plugins}</div>
-<article class="me-card"><h2>What synchronization transfers</h2><p>Original photographs and other source files, completed products, supporting files and project metadata. Transfers resume from verified chunks and check complete files with SHA-256. Downloading creates a new local copy; it does not overwrite an existing project.</p>
+<article class="me-card"><h2>What synchronization transfers</h2><p>Original photographs and other source files, completed models and rasters, textures, supporting files, the project/survey/task hierarchy and MyMosaic layer references. Transfers resume from verified chunks and check complete files with SHA-256. Downloading creates a new local copy; it does not overwrite an existing project.</p>
 <p>The cloud preserves revisions and prepares supported products for its viewers. File transfer and viewer preparation have separate statuses. A format unsupported by a host application remains available as its original file. Storage is subject to your account’s quota; synchronization does not automatically purchase cloud processing.</p></article>
 <p id="desktop-message" role="status" aria-live="polite"></p></main>'''
     css = '''<style>.me-distribution{max-width:1200px;margin:auto;padding:40px 24px;color:#e9f1eb}.me-distribution h1{font-size:clamp(28px,4vw,46px);line-height:1.15}.me-intro{font-size:18px;max-width:850px}.me-eyebrow,.me-muted{color:#b6cbbb}.me-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:28px 0}.me-three{grid-template-columns:repeat(3,minmax(0,1fr))}.me-card{padding:24px;border:1px solid #416047;border-radius:12px;background:#17251c;min-width:0}.me-featured{border-color:#9bc56d}.me-card h2{font-size:23px;margin-top:0}.me-card p{line-height:1.65}.me-distribution a{color:#b6e893}.me-dl,.me-distribution button{display:block;padding:12px 16px;margin:12px 0;border:1px solid #72915c;border-radius:7px;background:#284625;color:#eff8e9!important;font-weight:600;text-decoration:none}.me-distribution button{cursor:pointer;width:100%;text-align:left}.me-distribution button:disabled{opacity:.55;cursor:wait}.me-distribution :focus-visible{outline:3px solid #c4f381;outline-offset:3px}.me-checksum code{display:block;overflow-wrap:anywhere;color:#d7e5d3}.me-section{margin-top:40px}#desktop-message{padding:12px;background:#203224;border-radius:6px}#desktop-message:empty{display:none}@media(max-width:800px){.me-grid,.me-three{grid-template-columns:1fr}.me-distribution{padding:24px 16px}}</style>'''
