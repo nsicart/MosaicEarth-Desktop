@@ -1,5 +1,6 @@
 from .asset_metadata import format_coordinates
 import html
+import hashlib
 import json
 import math
 import os
@@ -52,6 +53,12 @@ CURRENT_LICENSE_TEXT = """MOSAICEARTH STANDARD GEOSPATIAL LICENSE (v1.0)
 4. Attribution: Attribution to Creator and MosaicEarth (https://mosaicearth.app) is appreciated where technically feasible."""
 
 SHORT_LICENSE_SUMMARY = "Perpetual worldwide license for GIS, CAD, 3D visualization & engineering projects. Raw resale prohibited."
+
+# A new engine can reuse the same local port and browser profile. Version the
+# script by its bytes so a cached previous Desktop cannot hide account changes.
+DESKTOP_UI_REVISION = hashlib.sha256(
+    (Path(__file__).resolve().parents[2] / "resources/platform-ui.js").read_bytes()
+).hexdigest()[:16]
 
 
 def render_home_master(
@@ -1206,7 +1213,7 @@ def render_home_master(
             var __funciones_url = "/funciones.aspx/";
         </script>
 {scripts_extra}
-    <script src="/desktop-platform-ui.js"></script>
+    <script src="/desktop-platform-ui.js?v={DESKTOP_UI_REVISION}"></script>
     </{layout_tag}>
 </body>
 </html>"""

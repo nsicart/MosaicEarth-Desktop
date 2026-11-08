@@ -30,12 +30,14 @@ def cloud_account_page(request: Request):
 
 @router.get('/desktop-platform-ui.js')
 def desktop_ui_script():
-    return FileResponse(Path(__file__).resolve().parents[1] / 'resources/platform-ui.js', media_type='text/javascript')
+    return FileResponse(Path(__file__).resolve().parents[1] / 'resources/platform-ui.js', media_type='text/javascript',
+                        headers={'Cache-Control': 'no-cache, must-revalidate'})
 
 
 @router.get('/desktop-browser-signin.js')
 def desktop_browser_script():
-    return FileResponse(Path(__file__).resolve().parents[1] / 'resources/browser-signin.js', media_type='text/javascript')
+    return FileResponse(Path(__file__).resolve().parents[1] / 'resources/browser-signin.js', media_type='text/javascript',
+                        headers={'Cache-Control': 'no-cache, must-revalidate'})
 
 
 @router.get('/api/desktop/share-origin')
