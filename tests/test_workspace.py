@@ -10,6 +10,24 @@ from mosaicearth_sync import build_manifest, checksum, Client, SyncError, extrac
 
 
 class WorkspaceTest(unittest.TestCase):
+    def test_unexpected_transfer_error_does_not_leave_permanent_running_state(self):
+        import threading
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Workspace(Path(temp))
+            threads = []
+            thread_class = threading.Thread
+            def thread(*args, **kwargs):
+                instance = thread_class(*args, **kwargs)
+                threads.append(instance)
+                return instance
+            def fails(progress, canceled):
+                raise RuntimeError('unexpected fixture failure')
+            with patch('mosaicearth_desktop.threading.Thread', side_effect=thread), patch('logging.Logger.exception'):
+                workspace.start_transfer('fixture', fails)
+                threads[0].join(3)
+            self.assertFalse(threads[0].is_alive())
+            self.assertEqual(workspace.transfers['fixture']['status'], 'failed')
+
     def test_range_download_recovers_without_accepting_partial_bytes(self):
         client = Client()
         response = MagicMock()

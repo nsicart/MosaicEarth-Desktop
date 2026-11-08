@@ -137,6 +137,11 @@ class Workspace:
             except (ValueError, OSError, zipfile.BadZipFile) as exc:
                 with self.transfer_lock:
                     state.update(status="paused" if state["pause"] else "failed", message=str(exc))
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception('Workspace transfer failed')
+                with self.transfer_lock:
+                    state.update(status="failed", message="The operation could not finish. Your source files are preserved; reopen the workspace and retry.")
         threading.Thread(target=run, daemon=True).start()
         return {"transfer_id": key}
 
