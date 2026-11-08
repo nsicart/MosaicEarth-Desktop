@@ -1,13 +1,13 @@
 // Shared-interface Desktop behavior; public browsing never requires an account.
 (() => {
-  const nav = document.querySelector('#menu-nav .navbar-nav');
+  const nav = document.querySelector('#menu-nav .dropdown-menu');
   if (!nav) return;
   const item = document.createElement('li');
-  item.className = 'nav-item';
+  item.className = 'me-public-refresh';
   const refresh = document.createElement('button');
   refresh.type = 'button';
-  refresh.className = 'btn btn-outline-secondary btn-sm';
-  refresh.style.cssText = 'color:#e8f1e8;border-color:#8aa75f;min-height:44px';
+  refresh.className = 'dropdown-item';
+  refresh.style.cssText = 'min-height:44px';
   refresh.textContent = 'Refresh public map';
   refresh.title = 'Refresh public assets and mosaics from MosaicEarth. Your local files are not uploaded.';
   item.append(refresh);
@@ -60,7 +60,7 @@
 
   const panel = document.createElement('section');
   panel.setAttribute('aria-label', 'Workspace synchronization');
-  panel.style.cssText = 'position:fixed;right:18px;bottom:32px;width:min(420px,calc(100vw - 36px));max-height:45vh;overflow:auto;z-index:10060;background:#111a14;border:1px solid #667c35;border-radius:12px;padding:14px;color:#ecf2e8;box-shadow:0 8px 30px #0008;display:none';
+  panel.style.cssText = 'position:fixed;right:18px;bottom:32px;width:min(420px,calc(100vw - 36px));max-height:45vh;overflow:auto;z-index:10040;background:#111a14;border:1px solid #667c35;border-radius:12px;padding:14px;color:#ecf2e8;box-shadow:0 8px 30px #0008;display:none';
   document.body.append(panel);
   let timer;
   const seen = new Map();

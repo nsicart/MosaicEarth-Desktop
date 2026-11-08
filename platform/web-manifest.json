@@ -10466,5 +10466,10 @@
       "sha256": "943300b002516feaf028c27aceaa2f473f2e1c0229ed913652a406d43277d9ba",
       "bytes": 138808
     }
-  ]
+  ],
+  "archive": {
+    "url": "https://app.mosaicearth.app/open-source/files/mosaicearth-desktop-ui-0.3.0.tar.gz",
+    "bytes": 28745349,
+    "sha256": "725ed9089ed64cfb5488bbba76484e998c0e72559e1b0ad822637a36570a27fb"
+  }
 }
