@@ -64,6 +64,10 @@ class LauncherTest(unittest.TestCase):
                 self.assertEqual(self.launcher._workspace_idle(), idle)
                 connection.assert_not_called()
 
+    def test_stopped_runtime_is_not_reported_ready(self):
+        self.launcher.state['status'] = 'ready'
+        self.assertEqual(self.launcher.snapshot()['status'], 'failed')
+
     def test_foreign_container_is_never_stopped_or_removed(self):
         existing = SimpleNamespace(returncode=0, stdout=json.dumps([{
             'Config': {'Labels': {'mosaicearth.workspace': 'someone-else'}},

@@ -33,6 +33,7 @@ class PlatformLauncher:
         self.host_port, self.host_token = host_port, host_token
         self.state = {'status': 'waiting', 'message': 'Preparing your local workspace', 'url': self.url}
         self.lock = threading.Lock()
+        self.last_health_check = 0.0
 
     def command(self, *args, timeout=60, check=True):
         result = subprocess.run([*self.workspace.docker, *args], stdin=subprocess.DEVNULL,
@@ -72,6 +73,7 @@ class PlatformLauncher:
                 return
         self.command('run', '-d', '--pull=never', '--name', name, '--label', self.label,
                      '--label', 'mosaicearth.configuration=' + configuration,
+                     '--restart', 'unless-stopped',
                      '--network', self.network, *arguments, image, *command, timeout=90)
 
     def _workspace_idle(self):
@@ -111,7 +113,14 @@ class PlatformLauncher:
             if commercial:
                 verify_grant(json.loads((root / 'account-grant.json').read_text()),
                              json.loads((self.resources / 'license-public.json').read_text()))
-            info = self.command('info', '--format', '{{.OSType}}', timeout=45, check=False)
+            try:
+                info = self.command('info', '--format', '{{.OSType}}', timeout=45, check=False)
+            except FileNotFoundError:
+                raise ValueError('Install Docker Desktop, then open MosaicEarth again. Installation help links to the official installer.') from None
+            if info.returncode and os.name == 'nt':
+                self.state.update(message='Starting Docker Desktop. Your local files are preserved.')
+                self.command('desktop', 'start', timeout=60, check=False)
+                info = self.command('info', '--format', '{{.OSType}}', timeout=45, check=False)
             if info.returncode or info.stdout.strip() != b'linux':
                 raise ValueError('Start Docker Desktop with Linux containers, then click Retry.')
             expected = json.loads((self.resources / 'engine-payload.json').read_text())
@@ -173,5 +182,13 @@ class PlatformLauncher:
             self.state.update(status='failed', message=str(exc))
 
     def snapshot(self):
+        if self.state['status'] == 'ready' and time.monotonic() - self.last_health_check >= 5:
+            self.last_health_check = time.monotonic()
+            try:
+                with urllib.request.urlopen(self.url + '/api/desktop/version', timeout=3) as response:
+                    if not json.load(response).get('desktop_local'):
+                        raise ValueError('Local runtime unavailable')
+            except (OSError, ValueError):
+                self.state.update(status='failed', message='The local engines are not responding. Click Retry to restart Docker and reopen your saved workspace.')
         with self.lock:
             return dict(self.state)
