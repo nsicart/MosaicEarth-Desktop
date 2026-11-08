@@ -6,7 +6,7 @@ The official package requires a purchasing/Studio account activation for local p
 
 The source edition is independent of cloud accounts: run `./scripts/fetch-cesium.sh`, `./scripts/provision-engines.sh` and `python3 src/mosaicearth_desktop.py`. Build a community Debian package with `ME_DESKTOP_EDITION=community ./scripts/build-linux.sh`. Source redistribution remains governed by the AGPL.
 
-Create a project, import overlapping photos and choose NodeODX photogrammetry or Gaussian training. NodeODX **Complete** produces orthophoto, terrain, point cloud and textured mesh; **Fast** is intended for orthophoto and terrain. Import a georeferenced GeoTIFF for a local map preview. Gaussian models use their local reconstruction frame unless separately georeferenced. See result downloads and all project files for original outputs.
+Create a project, import overlapping photos and choose NodeODX photogrammetry or Gaussian training. NodeODX **Complete** produces orthophoto, terrain, point cloud and textured mesh; **Fast** produces an orthophoto and map tiles. Import a georeferenced GeoTIFF for a local map preview. Gaussian models use their local reconstruction frame unless separately georeferenced. See result downloads and all project files for original outputs.
 
 The full interface automatically uses compatible NVIDIA GPU engines when available and otherwise uses CPU. Linux GPU support requires the NVIDIA driver and NVIDIA Container Toolkit configured for Docker. [GPU setup, compatibility and fallback](GPU.md). No cloud GPU is provisioned.
 

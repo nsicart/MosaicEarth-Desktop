@@ -16,4 +16,4 @@ If a GPU container fails to start, the launcher attempts its CPU engine without 
 
 The menu reports the configured engine devices. A per-task fallback is recorded in that task's output metadata and logs. Closing the UI does not stop reconstruction. Updates and device changes preserve photos, results, cloud associations and account activation.
 
-Validation of this candidate release is still in progress. Hardware-specific results will be recorded in the release notes after complete reconstruction and installer tests on both operating systems.
+Validation hardware includes a GTX 1060 6 GB on Linux and an RTX 3070 Laptop 8 GB on Windows 11. Both have completed the full 18-photo COLMAP/OpenSplat pipeline with CPU and CUDA through the shared interface. See [release notes](RELEASE_NOTES.md) for the complete test scope and limits. Results on other hardware depend on its architecture, driver, memory and Docker configuration.

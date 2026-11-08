@@ -1,3 +1,19 @@
+# 0.4.0 — automatic local GPU processing
+
+The full Desktop interface now detects compatible NVIDIA CUDA hardware on Windows and Linux. Detection runs a real CUDA computation inside Docker. Automatic mode selects GPU independently for NodeODX and OpenSplat; CPU only remains selectable. Unsupported GPUs, unavailable Docker GPU access or missing optional GPU engines leave CPU processing available. COLMAP remains on CPU; GPU acceleration does not apply to every processing stage. See [GPU.md](GPU.md) for supported architectures, driver requirements and installation space.
+
+Official packages install verified CPU engines first, then the optional 9.1 GB GPU bundle. Both downloads resume, verify their complete SHA-256 and require the pinned Docker image IDs. Source builds retain accountless local processing and integrated GPU provisioning. Processing device changes are blocked while reconstruction or synchronization is active. Existing photos, results and activation are preserved.
+
+If a GPU container cannot start, the launcher starts the CPU engine. A recognized OpenSplat CUDA execution or memory error retries training once on CPU using the same reconstructed cameras; the failed GPU log and fallback reason are retained. Cancellation, invalid inputs and unrelated errors are not silently retried. The engine version check allows for cold starts on slower disks.
+
+The release validation includes 61 passing Desktop regression tests and four public engine distribution tests, including hardware selection, CPU fallback, download variants, byte ranges and activation restrictions. Linux validation uses a GTX 1060 6 GB with NVIDIA driver 580.178.04. Complete NodeODX photogrammetry and full 18-photo COLMAP/OpenSplat Fast reconstruction have finished in the shared interface, with viewers inspected. OpenSplat ran 2,000 iterations on both CPU and CUDA. Separate fault injection verified GPU-container startup recovery and a real 100-iteration CPU training after a controlled CUDA failure. These are recovery tests, not a claim that physical GPU faults were induced.
+
+Windows 11 validation uses an RTX 3070 Laptop 8 GB. The shared interface completed the same 18-photo Fast reconstruction with both CPU and CUDA (2,000 iterations), and Complete NodeODX with orthophoto, DSM, DTM, point cloud and textured mesh. Gaussian and photogrammetry viewers render in the interface, including the native Windows browser. PLY/SPZ downloads and quality reports were checked against their generated files.
+
+Large NodeODX result imports now extract archives and generate map/terrain derivatives without holding the shared database lock, keeping progress reads and navigation available. Concurrent cancellation, deletion or replacement cannot republish a stale result. Three regression tests cover both long-running import stages and changes to the task during finalization.
+
+Windows engine delivery validation used the authenticated public download, pause/resume, a checksum-verified bulk copy over the authorized local network, and the final public HTTPS range. This is not a claim that the entire 10.5 GB was downloaded over the Internet. The application verified complete archive hashes and every pinned Docker image ID. The Windows Authenticode certificate purchase remains postponed; detached OpenPGP verification is separate from operating-system publisher trust. See [SIGNING.md](SIGNING.md).
+
 # 0.3.0 — the full web interface on your computer
 
 Restores the web platform interface in a local Desktop window: public globe, Public Mosaics, MyEarth projects/surveys/tasks/layers, MyMosaics compositions and Fly View, with the MosaicEarth branding. NodeODX/ODX and COLMAP/OpenSplat run locally. The AGPL source edition needs no sign-in; the official Windows/Linux packages retain account and device activation.

@@ -2113,6 +2113,8 @@ class MosaicEarthDataStore:
             proj_row = {}
             for p in self.tables.get("dbo.WEB_PROJECTS", []):
                 if int(p.get("ID") or 0) == int(project_id):
+                    if source_origin == "processed" and (not p.get("ACTIVO", True) or p.get("TASK_DELETED") or int(p.get("STATE_ID") or 0) == 3):
+                        raise ValueError("The processing task was canceled or deleted; no asset was restored")
                     p["TASK_DELETED"] = False
                     if source_origin != "processed" and (not pending or int(p.get("STATE_ID") or 0) != 4):
                         p["STATE_ID"] = 1 if pending else 4
@@ -2120,6 +2122,9 @@ class MosaicEarthDataStore:
                         p["UPFRONT_REFUND_CHECKED"] = 0
                     proj_row = p
                     break
+            if source_origin == "processed" and not proj_row:
+                raise ValueError("The processing task no longer exists")
+            processing_attempt = str(proj_row.get("NODEODM_UUID") or "")
             self.persist_table("dbo.WEB_PROJECTS")
             inherited_desc = str(description if description is not None else (proj_row.get("TASK_DESCRIPTION") or proj_row.get("DESCRIPTION") or "")).strip()
             inherited_method = str(capture_method or proj_row.get("CAPTURE_METHOD") or ("3D Gaussian Splatting" if is_gs else "Direct File Import")).strip()
@@ -2308,6 +2313,23 @@ class MosaicEarthDataStore:
             print(f"[MosaicEarth GIS/Splat Engine] Derivative warning for asset #{next_aid}: {prep_exc}", flush=True)
 
         with self.lock:
+            if source_origin == "processed":
+                current = next((p for p in self.tables.get("dbo.WEB_PROJECTS", [])
+                                if int(p.get("ID") or 0) == int(project_id)), None)
+                if (not current or not current.get("ACTIVO", True) or current.get("TASK_DELETED")
+                        or int(current.get("STATE_ID") or 0) == 3
+                        or str(current.get("NODEODM_UUID") or "") != processing_attempt):
+                    for asset in self.tables.get("dbo.MOSAICEARTH_EXTERNAL_ASSETS", []):
+                        if int(asset.get("ID") or 0) == next_aid:
+                            asset.update(STATUS="deleted", VISIBILITY="private", CANONICAL_STATUS="FAILED",
+                                         STATUS_DETAIL="The task changed during result preparation")
+                    for job in self.tables.get("dbo.MOSAICEARTH_EXTERNAL_ASSET_JOBS", []):
+                        if int(job.get("ID") or 0) == next_jid:
+                            job.update(STATUS="FAILED", LAST_ERROR="The processing task changed",
+                                       FINISHED_AT_UTC=_fmt_iso_utc(datetime.datetime.now(datetime.timezone.utc)))
+                    self.persist_table("dbo.MOSAICEARTH_EXTERNAL_ASSETS")
+                    self.persist_table("dbo.MOSAICEARTH_EXTERNAL_ASSET_JOBS")
+                    raise ValueError("The processing task changed; its result was not restored")
             for a in self.tables.get("dbo.MOSAICEARTH_EXTERNAL_ASSETS", []):
                 if int(a.get("ID") or 0) == next_aid:
                     a["PREVIEW_RELATIVE_PATH"] = preview_rel
@@ -5072,9 +5094,9 @@ class MosaicEarthDataStore:
             proj = None
             for p in self.tables.get("dbo.WEB_PROJECTS", []):
                 if int(p.get("ID") or 0) == int(project_id):
-                    proj = p
+                    proj = copy.deepcopy(p)
                     break
-            if not proj:
+            if not proj or not proj.get("ACTIVO", True) or proj.get("TASK_DELETED"):
                 return False
 
             pid = int(proj["ID"])
@@ -5083,6 +5105,9 @@ class MosaicEarthDataStore:
             folder = str(proj.get("FOLDER") or _slugify(f"{pid}-{pname}"))
             proj["FOLDER"] = folder
             proj["SEO_URL_FRIENDLY"] = str(proj.get("SEO_URL_FRIENDLY") or folder)
+            p["FOLDER"] = folder
+            p["SEO_URL_FRIENDLY"] = proj["SEO_URL_FRIENDLY"]
+            self.persist_table("dbo.WEB_PROJECTS")
 
             files = self.get_project_files(pid)
             lats = [_try_float(f.get("LATITUD")) for f in files if _try_float(f.get("LATITUD")) and abs(float(_try_float(f.get("LATITUD")) or 0) - 41.8205) > 1e-4]
@@ -5090,139 +5115,157 @@ class MosaicEarthDataStore:
             avg_lat = round(sum(lats) / len(lats), 6) if lats else (_try_float(proj.get("LATITUD")) or 41.8205)
             avg_lon = round(sum(lons) / len(lons), 6) if lons else (_try_float(proj.get("LONGITUD")) or 1.8676)
 
-            area_ha = 0.0
-            gsd_str = "Not measured"
-            gps_str = "Not independently verified"
+        # ZIP extraction, GDAL/3D Tiles and terrain import can take minutes.
+        # They must not hold the shared store lock: status reads, other projects
+        # and the HTTP event loop need to remain available throughout.
+        area_ha = 0.0
+        gsd_str = "Not measured"
+        gps_str = "Not independently verified"
 
-            blob_store = get_blob_store()
-            if nodeodm_all_zip and not nodeodm_all_zip_path:
-                all_zp = blob_store.resolve_path("imagenes", f"{folder}/procesado/all.zip")
-                if all_zp:
-                    all_zp.parent.mkdir(parents=True, exist_ok=True)
-                    all_zp.write_bytes(nodeodm_all_zip)
-                    nodeodm_all_zip_path = all_zp
+        blob_store = get_blob_store()
+        if nodeodm_all_zip and not nodeodm_all_zip_path:
+            all_zp = blob_store.resolve_path("imagenes", f"{folder}/procesado/all.zip")
+            if all_zp:
+                all_zp.parent.mkdir(parents=True, exist_ok=True)
+                all_zp.write_bytes(nodeodm_all_zip)
+                nodeodm_all_zip_path = all_zp
 
-            provenance = dict(proj.get("PHOTOGRAMMETRY_PROVENANCE") or {})
-            if provenance and archive_sha256:
-                provenance["archive_sha256"] = archive_sha256
-            canon: Optional[PhotogrammetryResult] = None
-            try:
-                adapter = ODMAdapter()
-                canon = adapter.ingest(
-                    store=self,
-                    project_id=pid,
-                    folder=folder,
-                    avg_lat=avg_lat,
-                    avg_lon=avg_lon,
-                    area_ha=area_ha,
-                    native_job_dir=native_job_dir,
-                    archive_zip_path=nodeodm_all_zip_path,
-                    engine_provenance=provenance,
-                )
-                avg_lat = canon.avg_lat
-                avg_lon = canon.avg_lon
-                area_ha = canon.area_ha
-                gsd_str = canon.gsd_str
-                gps_str = canon.gps_str
-                if provenance:
-                    proj["PHOTOGRAMMETRY_PROVENANCE"] = provenance
-                proj["CANONICAL_RESULT_CONTRACT"] = dataclasses.asdict(canon)
+        provenance = dict(proj.get("PHOTOGRAMMETRY_PROVENANCE") or {})
+        if provenance and archive_sha256:
+            provenance["archive_sha256"] = archive_sha256
+        canon: Optional[PhotogrammetryResult] = None
+        try:
+            adapter = ODMAdapter()
+            canon = adapter.ingest(
+                store=self,
+                project_id=pid,
+                folder=folder,
+                avg_lat=avg_lat,
+                avg_lon=avg_lon,
+                area_ha=area_ha,
+                native_job_dir=native_job_dir,
+                archive_zip_path=nodeodm_all_zip_path,
+                engine_provenance=provenance,
+            )
+            avg_lat = canon.avg_lat
+            avg_lon = canon.avg_lon
+            area_ha = canon.area_ha
+            gsd_str = canon.gsd_str
+            gps_str = canon.gps_str
+            if provenance:
+                proj["PHOTOGRAMMETRY_PROVENANCE"] = provenance
+            proj["CANONICAL_RESULT_CONTRACT"] = dataclasses.asdict(canon)
 
-                # Fallback 2: Ensure 3d_tiles/pointcloud/tileset.json exists (in case ODM v3.6.2 entwine convert crashed)
-                pc_tileset_p = blob_store.resolve_path("imagenes", f"{folder}/procesado/3d_tiles/pointcloud/tileset.json")
-                las_p = blob_store.resolve_path("imagenes", f"{folder}/procesado/odm_georeferencing/odm_georeferenced_model.las")
-                if pc_tileset_p and not pc_tileset_p.is_file() and las_p and las_p.is_file():
-                    import struct as _struct
-                    with open(las_p, "rb") as lf:
-                        hdr = lf.read(375)
-                        if len(hdr) >= 227 and hdr[:4] == b"LASF":
-                            off_pts = _struct.unpack_from("<I", hdr, 96)[0]
-                            rec_fmt = _struct.unpack_from("<B", hdr, 104)[0] & 0x3F
-                            rec_len = _struct.unpack_from("<H", hdr, 105)[0]
-                            sx, sy, sz, ox, oy, oz = _struct.unpack_from("<6d", hdr, 131)
-                            minx, maxx, miny, maxy, minz, maxz = _struct.unpack_from("<6d", hdr, 179)
-                            lf.seek(0, 2)
-                            fsize = lf.tell()
-                            total_pts = max(0, (fsize - off_pts) // max(1, rec_len))
-                            if total_pts > 0:
-                                step = max(1, total_pts // 250000)
-                                out_n = (total_pts + step - 1) // step
-                                cx = (minx + maxx) * 0.5
-                                cy = (miny + maxy) * 0.5
-                                cz = (minz + maxz) * 0.5
-                                rgb_off = 30 if rec_fmt in (7, 8, 10) else (28 if rec_fmt in (3, 5) else 20)
-                                pos_bytes = bytearray(out_n * 12)
-                                rgb_bytes = bytearray(out_n * 3)
-                                lf.seek(off_pts)
-                                raw_all = lf.read(total_pts * rec_len)
-                                out_idx = 0
-                                for pt_i in range(0, total_pts, step):
-                                    if out_idx >= out_n:
-                                        break
-                                    base_off = pt_i * rec_len
-                                    xi, yi, zi = _struct.unpack_from("<3i", raw_all, base_off)
-                                    px = float(xi * sx + ox - cx)
-                                    py = float(yi * sy + oy - cy)
-                                    pz = float(zi * sz + oz - cz)
-                                    _struct.pack_into("<3f", pos_bytes, out_idx * 12, px, py, pz)
-                                    if rgb_off + 6 <= rec_len:
-                                        r16, g16, b16 = _struct.unpack_from("<3H", raw_all, base_off + rgb_off)
-                                        if r16 > 255 or g16 > 255 or b16 > 255:
-                                            r16, g16, b16 = r16 >> 8, g16 >> 8, b16 >> 8
-                                        rgb_bytes[out_idx * 3] = min(255, r16)
-                                        rgb_bytes[out_idx * 3 + 1] = min(255, g16)
-                                        rgb_bytes[out_idx * 3 + 2] = min(255, b16)
-                                    else:
-                                        rgb_bytes[out_idx * 3 : out_idx * 3 + 3] = b"\xd0\xd0\xd0"
-                                    out_idx += 1
-                                ft_dict = {
-                                    "POINTS_length": out_idx,
-                                    "RTC_CENTER": [0.0, 0.0, 0.0],
-                                    "POSITION": {"byteOffset": 0},
-                                    "RGB": {"byteOffset": out_idx * 12},
-                                }
-                                ft_json = json.dumps(ft_dict, separators=(",", ":")).encode("utf-8")
-                                pad_len = (8 - ((28 + len(ft_json)) % 8)) % 8
-                                ft_json += b" " * pad_len
-                                ft_bin = bytes(pos_bytes[: out_idx * 12]) + bytes(rgb_bytes[: out_idx * 3])
-                                bin_pad = (8 - (len(ft_bin) % 8)) % 8
-                                ft_bin += b"\x00" * bin_pad
-                                total_byte_len = 28 + len(ft_json) + len(ft_bin)
-                                pnts_hdr = _struct.pack("<4sIIIIII", b"pnts", 1, total_byte_len, len(ft_json), len(ft_bin), 0, 0)
-                                pc_tileset_p.parent.mkdir(parents=True, exist_ok=True)
-                                (pc_tileset_p.parent / "points.pnts").write_bytes(pnts_hdr + ft_json + ft_bin)
-                                geoid_off_fb = float((getattr(canon, "vertical_geodesy", None) or {}).get("geoid_undulation_m") or 0.0)
-                                enu_mat = self._build_enu_to_ecef_matrix(float(avg_lat), float(avg_lon), float(cz + geoid_off_fb))
-                                hx = max(0.5, (maxx - minx) * 0.5)
-                                hy = max(0.5, (maxy - miny) * 0.5)
-                                hz = max(0.2, (maxz - minz) * 0.5)
-                                pc_ts_obj = {
-                                    "asset": {"version": "1.0"},
-                                    "geometricError": 64.0,
-                                    "root": {
-                                        "transform": enu_mat,
-                                        "boundingVolume": {"box": [0.0, 0.0, 0.0, hx, 0.0, 0.0, 0.0, hy, 0.0, 0.0, 0.0, hz]},
-                                        "geometricError": 0.0,
-                                        "refine": "ADD",
-                                        "content": {"uri": "points.pnts"},
-                                    },
-                                }
-                                pc_tileset_p.write_text(json.dumps(pc_ts_obj, indent=2), encoding="utf-8")
-            except Exception as ingestion_error:
-                raise RuntimeError(f"Canonical product ingestion failed: {str(ingestion_error)[:500]}") from ingestion_error
+            # Fallback 2: Ensure 3d_tiles/pointcloud/tileset.json exists (in case ODM v3.6.2 entwine convert crashed)
+            pc_tileset_p = blob_store.resolve_path("imagenes", f"{folder}/procesado/3d_tiles/pointcloud/tileset.json")
+            las_p = blob_store.resolve_path("imagenes", f"{folder}/procesado/odm_georeferencing/odm_georeferenced_model.las")
+            if pc_tileset_p and not pc_tileset_p.is_file() and las_p and las_p.is_file():
+                import struct as _struct
+                with open(las_p, "rb") as lf:
+                    hdr = lf.read(375)
+                    if len(hdr) >= 227 and hdr[:4] == b"LASF":
+                        off_pts = _struct.unpack_from("<I", hdr, 96)[0]
+                        rec_fmt = _struct.unpack_from("<B", hdr, 104)[0] & 0x3F
+                        rec_len = _struct.unpack_from("<H", hdr, 105)[0]
+                        sx, sy, sz, ox, oy, oz = _struct.unpack_from("<6d", hdr, 131)
+                        minx, maxx, miny, maxy, minz, maxz = _struct.unpack_from("<6d", hdr, 179)
+                        lf.seek(0, 2)
+                        fsize = lf.tell()
+                        total_pts = max(0, (fsize - off_pts) // max(1, rec_len))
+                        if total_pts > 0:
+                            step = max(1, total_pts // 250000)
+                            out_n = (total_pts + step - 1) // step
+                            cx = (minx + maxx) * 0.5
+                            cy = (miny + maxy) * 0.5
+                            cz = (minz + maxz) * 0.5
+                            rgb_off = 30 if rec_fmt in (7, 8, 10) else (28 if rec_fmt in (3, 5) else 20)
+                            pos_bytes = bytearray(out_n * 12)
+                            rgb_bytes = bytearray(out_n * 3)
+                            lf.seek(off_pts)
+                            raw_all = lf.read(total_pts * rec_len)
+                            out_idx = 0
+                            for pt_i in range(0, total_pts, step):
+                                if out_idx >= out_n:
+                                    break
+                                base_off = pt_i * rec_len
+                                xi, yi, zi = _struct.unpack_from("<3i", raw_all, base_off)
+                                px = float(xi * sx + ox - cx)
+                                py = float(yi * sy + oy - cy)
+                                pz = float(zi * sz + oz - cz)
+                                _struct.pack_into("<3f", pos_bytes, out_idx * 12, px, py, pz)
+                                if rgb_off + 6 <= rec_len:
+                                    r16, g16, b16 = _struct.unpack_from("<3H", raw_all, base_off + rgb_off)
+                                    if r16 > 255 or g16 > 255 or b16 > 255:
+                                        r16, g16, b16 = r16 >> 8, g16 >> 8, b16 >> 8
+                                    rgb_bytes[out_idx * 3] = min(255, r16)
+                                    rgb_bytes[out_idx * 3 + 1] = min(255, g16)
+                                    rgb_bytes[out_idx * 3 + 2] = min(255, b16)
+                                else:
+                                    rgb_bytes[out_idx * 3 : out_idx * 3 + 3] = b"\xd0\xd0\xd0"
+                                out_idx += 1
+                            ft_dict = {
+                                "POINTS_length": out_idx,
+                                "RTC_CENTER": [0.0, 0.0, 0.0],
+                                "POSITION": {"byteOffset": 0},
+                                "RGB": {"byteOffset": out_idx * 12},
+                            }
+                            ft_json = json.dumps(ft_dict, separators=(",", ":")).encode("utf-8")
+                            pad_len = (8 - ((28 + len(ft_json)) % 8)) % 8
+                            ft_json += b" " * pad_len
+                            ft_bin = bytes(pos_bytes[: out_idx * 12]) + bytes(rgb_bytes[: out_idx * 3])
+                            bin_pad = (8 - (len(ft_bin) % 8)) % 8
+                            ft_bin += b"\x00" * bin_pad
+                            total_byte_len = 28 + len(ft_json) + len(ft_bin)
+                            pnts_hdr = _struct.pack("<4sIIIIII", b"pnts", 1, total_byte_len, len(ft_json), len(ft_bin), 0, 0)
+                            pc_tileset_p.parent.mkdir(parents=True, exist_ok=True)
+                            (pc_tileset_p.parent / "points.pnts").write_bytes(pnts_hdr + ft_json + ft_bin)
+                            geoid_off_fb = float((getattr(canon, "vertical_geodesy", None) or {}).get("geoid_undulation_m") or 0.0)
+                            enu_mat = self._build_enu_to_ecef_matrix(float(avg_lat), float(avg_lon), float(cz + geoid_off_fb))
+                            hx = max(0.5, (maxx - minx) * 0.5)
+                            hy = max(0.5, (maxy - miny) * 0.5)
+                            hz = max(0.2, (maxz - minz) * 0.5)
+                            pc_ts_obj = {
+                                "asset": {"version": "1.0"},
+                                "geometricError": 64.0,
+                                "root": {
+                                    "transform": enu_mat,
+                                    "boundingVolume": {"box": [0.0, 0.0, 0.0, hx, 0.0, 0.0, 0.0, hy, 0.0, 0.0, 0.0, hz]},
+                                    "geometricError": 0.0,
+                                    "refine": "ADD",
+                                    "content": {"uri": "points.pnts"},
+                                },
+                            }
+                            pc_tileset_p.write_text(json.dumps(pc_ts_obj, indent=2), encoding="utf-8")
+        except Exception as ingestion_error:
+            raise RuntimeError(f"Canonical product ingestion failed: {str(ingestion_error)[:500]}") from ingestion_error
 
-            if archive_sha256 and (canon is None or canon.quality_status != "COMPLETED"):
-                missing = ", ".join(canon.missing_deliverables) if canon else "canonical reconstruction products"
-                raise RuntimeError("Canonical ingestion did not validate the required products: " + missing)
+        if archive_sha256 and (canon is None or canon.quality_status != "COMPLETED"):
+            missing = ", ".join(canon.missing_deliverables) if canon else "canonical reconstruction products"
+            raise RuntimeError("Canonical ingestion did not validate the required products: " + missing)
 
-            # Elevation viewers belong to the required result, too. Never publish
-            # completion while their synchronous import is still running or failed.
-            if canon is not None:
-                register_dsm_dtm_assets_from_result(self, proj, uid, canon)
+        # A task may be canceled or removed while result files are prepared.
+        # Do not publish a stale result or revive its deleted assets.
+        def current_task():
+            current = next((row for row in self.tables.get("dbo.WEB_PROJECTS", [])
+                            if int(row.get("ID") or 0) == pid), None)
+            if (not current or not current.get("ACTIVO", True) or current.get("TASK_DELETED")
+                    or current.get("NODEODM_UUID") != proj.get("NODEODM_UUID")
+                    or int(current.get("STATE_ID") or 0) != int(proj.get("STATE_ID") or 0)):
+                raise RuntimeError("Task changed during result preparation; its current state was preserved")
+            return current
 
+        with self.lock:
+            current_task()
+
+        # Elevation viewers belong to the required result, too. Never publish
+        # completion while their synchronous import is still running or failed.
+        if canon is not None:
+            register_dsm_dtm_assets_from_result(self, proj, uid, canon)
+
+        with self.lock:
             # Nested asset imports may refresh SQLite overlays. Update the current
             # row, not a detached project dict captured before those imports.
-            proj = next(row for row in self.tables["dbo.WEB_PROJECTS"] if int(row.get("ID") or 0) == pid)
+            proj = current_task()
             if canon is not None:
                 proj["CANONICAL_RESULT_CONTRACT"] = dataclasses.asdict(canon)
             if provenance:

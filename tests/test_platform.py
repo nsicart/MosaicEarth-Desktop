@@ -31,6 +31,130 @@ class PlatformTest(unittest.TestCase):
         cls.client.close()
         cls.directory.cleanup()
 
+    def test_photogrammetry_finalization_keeps_status_reads_responsive(self):
+        import concurrent.futures
+        import threading
+        from homelab.processing_architecture import PhotogrammetryResult
+
+        for slow_stage in ('products', 'elevation'):
+            with self.subTest(stage=slow_stage):
+                pid = self.store.create_project(1, 'Concurrent finalization ' + slow_stage)
+                with self.store.lock:
+                    row = next(p for p in self.store.tables['dbo.WEB_PROJECTS'] if p['ID'] == pid)
+                    row.update(STATE_ID=2, NODEODM_UUID='fixture-' + slow_stage)
+                    self.store.persist_table('dbo.WEB_PROJECTS')
+                entered, release = threading.Event(), threading.Event()
+                result = PhotogrammetryResult(project_id=pid, folder=str(pid))
+
+                def products(**kwargs):
+                    if slow_stage == 'products':
+                        entered.set()
+                        if not release.wait(10):
+                            raise TimeoutError('test release')
+                    return result
+
+                def elevation(*args):
+                    if slow_stage == 'elevation':
+                        entered.set()
+                        if not release.wait(10):
+                            raise TimeoutError('test release')
+                    return []
+
+                with patch('homelab.processing_architecture.ODMAdapter.ingest', side_effect=products), \
+                     patch('homelab.processing_architecture.register_dsm_dtm_assets_from_result', side_effect=elevation), \
+                     patch.object(self.store, '_build_quality_report_pdf', return_value=b'%PDF-fixture'), \
+                     concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                    finalizing = pool.submit(self.store.complete_photogrammetry_task, pid, 1)
+                    try:
+                        self.assertTrue(entered.wait(3))
+                        response = pool.submit(self.client.get, f'/api/v2/tasks/{pid}/live-log').result(timeout=2)
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(response.json()['state_id'], 2)
+                    finally:
+                        release.set()
+                    self.assertTrue(finalizing.result(timeout=5))
+                self.assertEqual(self.store.get_project(pid)['STATE_ID'], 4)
+
+    def test_finalization_does_not_publish_a_deleted_canceled_or_replaced_task(self):
+        import concurrent.futures
+        import threading
+        from homelab.processing_architecture import PhotogrammetryResult
+
+        for change in ({'ACTIVO': False}, {'STATE_ID': 3}, {'NODEODM_UUID': 'replacement'}):
+            with self.subTest(change=change):
+                pid = self.store.create_project(1, 'Changed finalization')
+                with self.store.lock:
+                    row = next(p for p in self.store.tables['dbo.WEB_PROJECTS'] if p['ID'] == pid)
+                    row.update(STATE_ID=2, NODEODM_UUID='original')
+                    self.store.persist_table('dbo.WEB_PROJECTS')
+                entered, release = threading.Event(), threading.Event()
+
+                def products(**kwargs):
+                    entered.set()
+                    if not release.wait(10):
+                        raise TimeoutError('test release')
+                    return PhotogrammetryResult(project_id=pid, folder=str(pid))
+
+                with patch('homelab.processing_architecture.ODMAdapter.ingest', side_effect=products), \
+                     patch('homelab.processing_architecture.register_dsm_dtm_assets_from_result') as register, \
+                     concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    finalizing = pool.submit(self.store.complete_photogrammetry_task, pid, 1)
+                    try:
+                        self.assertTrue(entered.wait(3))
+                        with self.store.lock:
+                            row = next(p for p in self.store.tables['dbo.WEB_PROJECTS'] if p['ID'] == pid)
+                            row.update(change)
+                            self.store.persist_table('dbo.WEB_PROJECTS')
+                    finally:
+                        release.set()
+                    with self.assertRaisesRegex(RuntimeError, 'Task changed'):
+                        finalizing.result(timeout=5)
+                    register.assert_not_called()
+                row = next(p for p in self.store.tables['dbo.WEB_PROJECTS'] if p['ID'] == pid)
+                for key, value in change.items():
+                    self.assertEqual(row[key], value)
+                self.assertNotEqual(row['STATE_ID'], 4)
+
+    def test_elevation_import_cannot_revive_a_task_changed_during_derivation(self):
+        import concurrent.futures
+        import threading
+
+        for change in ({'ACTIVO': False}, {'STATE_ID': 3}, {'NODEODM_UUID': 'replacement'}):
+            with self.subTest(change=change):
+                pid = self.store.create_project(1, 'Changed elevation import')
+                with self.store.lock:
+                    row = next(p for p in self.store.tables['dbo.WEB_PROJECTS'] if p['ID'] == pid)
+                    row.update(STATE_ID=2, NODEODM_UUID='original')
+                    self.store.persist_table('dbo.WEB_PROJECTS')
+                entered, release = threading.Event(), threading.Event()
+
+                def prepare(**kwargs):
+                    entered.set()
+                    if not release.wait(10):
+                        raise TimeoutError('test release')
+                    return {'source_sha256': 'a' * 64, 'canonical_status': 'READY', 'asset_class': 'RASTER_ELEVATION'}
+
+                with patch('homelab.gis_splat_engine.prepare_external_asset_derivatives', side_effect=prepare), \
+                     concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    importing = pool.submit(self.store.create_external_asset_import,
+                        project_id=pid, user_id=1, display_name='DSM', source_filename='dsm.tif',
+                        stored_rel_path=f'external/{pid}/source/dsm.tif', size_bytes=4,
+                        source_origin='processed', raw_bytes=b'test', run_sync=True)
+                    try:
+                        self.assertTrue(entered.wait(3))
+                        with self.store.lock:
+                            row = next(p for p in self.store.tables['dbo.WEB_PROJECTS'] if p['ID'] == pid)
+                            row.update(change)
+                            self.store.persist_table('dbo.WEB_PROJECTS')
+                    finally:
+                        release.set()
+                    with self.assertRaisesRegex(ValueError, 'task changed'):
+                        importing.result(timeout=5)
+                assets = [a for a in self.store.tables['dbo.MOSAICEARTH_EXTERNAL_ASSETS'] if a['PROJECT_ID'] == pid]
+                self.assertEqual(len(assets), 1)
+                self.assertEqual(assets[0]['STATUS'], 'deleted')
+                self.assertEqual(assets[0]['CANONICAL_STATUS'], 'FAILED')
+
     def test_local_owner_remains_independent_of_cloud_login(self):
         self.assertEqual(self.context.local_user()['ID'], 1)
 

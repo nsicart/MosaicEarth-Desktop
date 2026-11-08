@@ -30,7 +30,8 @@ if [ "${ME_DESKTOP_EDITION:-commercial}" = "commercial" ]; then
     printf '%s\n' 'Official account-associated installer' > "$p/opt/mosaicearth-desktop/resources/edition-commercial"
 fi
 cp LICENSE "$p/usr/share/doc/mosaicearth-desktop/copyright"
-cp README.md THIRD_PARTY_LICENSES.md NOTICE "$p/usr/share/doc/mosaicearth-desktop/"
+cp README.md THIRD_PARTY_LICENSES.md NOTICE GPU.md INSTALL_LINUX.md INSTALL_WINDOWS.md \
+    BUILD.md CONNECTORS.md SIGNING.md RELEASE_NOTES.md "$p/usr/share/doc/mosaicearth-desktop/"
 printf '%s\n' "$source_rev" > "$p/usr/share/doc/mosaicearth-desktop/SOURCE_REVISION"
 find "$p" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
 artifact="installers/mosaicearth-desktop_0.4.0_amd64.deb"
