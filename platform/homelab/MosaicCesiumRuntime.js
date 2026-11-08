@@ -232,13 +232,25 @@
                 // Measure their own credit strip so wrapping never covers buttons.
                 viewer.container.style.setProperty('--mosaic-credit-height', height);
                 var shell = viewer.container.closest('.mosaic-map-shell');
-                if (shell) shell.style.setProperty('--mosaic-credit-height', height);
+                if (shell) {
+                    shell.style.setProperty('--mosaic-credit-height', height);
+                    // The shell can include padding below the canvas on mobile.
+                    shell.style.setProperty('--mosaic-credit-inset', Math.max(0, Math.ceil(shell.getBoundingClientRect().bottom - rect.top)) + 'px');
+                    var controls = shell.querySelector('.mosaic-map-style-switch');
+                    if (controls) shell.style.setProperty('--mosaic-map-controls-height', Math.ceil(controls.getBoundingClientRect().height) + 'px');
+                }
                 global.document.documentElement.style.setProperty('--mosaic-credit-height', height);
                 global.document.documentElement.style.setProperty('--mosaic-credit-bottom', Math.max(0, Math.ceil(global.innerHeight - rect.bottom)) + 'px');
             };
             if (global.ResizeObserver) {
                 viewer._mosaicCreditObserver = new global.ResizeObserver(measure);
                 viewer._mosaicCreditObserver.observe(cc);
+                var shell = viewer.container.closest('.mosaic-map-shell');
+                if (shell) {
+                    viewer._mosaicCreditObserver.observe(shell);
+                    var controls = shell.querySelector('.mosaic-map-style-switch');
+                    if (controls) viewer._mosaicCreditObserver.observe(controls);
+                }
             }
             measure();
         }

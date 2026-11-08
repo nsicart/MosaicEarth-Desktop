@@ -981,6 +981,8 @@ def render_home_master(
         .cesium-widget-credits, .cesium-credit-textContainer, .cesium-credit-expand-link {{ font: 11px/1.4 sans-serif !important; }}
         html body .mosaic-map-style-switch {{ bottom: calc(var(--mosaic-credit-height, 40px) + 14px) !important; }}
         html body .mosaic-map-locate {{ bottom: calc(var(--mosaic-credit-height, 40px) + 66px) !important; }}
+        html body .mosaic-map-shell .mosaic-map-style-switch {{ bottom: calc(var(--mosaic-credit-inset, 60px) + 10px) !important; }}
+        html body .mosaic-map-shell .mosaic-map-locate {{ bottom: calc(var(--mosaic-credit-inset, 60px) + var(--mosaic-map-controls-height, 46px) + 16px) !important; }}
         html body .sim-hud {{ bottom: calc(var(--mosaic-credit-height, 24px) + 12px) !important; }}
         @media (max-width: 767px) {{
             html body .container-fluid2 #itemsContainer {{ position: fixed !important; bottom: calc(var(--mosaic-credit-bottom, 28px) + var(--mosaic-credit-height, 24px) + 58px) !important; }}
