@@ -93,7 +93,7 @@ def build_mosaicearth_ico_bytes() -> bytes:
 
 
 def build_desktop_seed_json() -> str:
-    """Builds a seed JSON containing CesiumIonToken, 3D Globe public assets, categories, and a Local Workstation User."""
+    """Builds a seed JSON containing 3D Globe public assets, categories, and a Local Workstation User."""
     from .db_store import get_store
 
     store = get_store()
@@ -232,7 +232,7 @@ def build_desktop_seed_json() -> str:
 
     seed_payload = {
         "web_config_settings": {
-            "CesiumIonToken": store.get_setting("CesiumIonToken", ""),
+            "CesiumIonToken": "",
             "BingMapsKey": store.get_setting("BingMapsKey", ""),
             "PublicSiteUrl": "http://127.0.0.1:8095",
         },

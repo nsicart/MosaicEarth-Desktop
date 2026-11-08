@@ -3100,7 +3100,7 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
     head_extra = """
     <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />
     <script src="/vendor/cesium/Cesium.js"></script>
-    <script src="/js/front/MosaicCesiumRuntime.js?v=20261106-r10"></script>
+    <script src="/js/front/MosaicCesiumRuntime.js?v=20261108-openmaps1"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261016-r45"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261016-r45" />
     <link rel="stylesheet" href="/assets/css/Project.css?v=20261016-results-r42" />
@@ -5153,7 +5153,7 @@ def render_mymap_viewer_page(user: Optional[Dict[str, Any]], id_or_slug: str, la
     head_extra = """
     <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />
     <script src="/vendor/cesium/Cesium.js"></script>
-    <script src="/js/front/MosaicCesiumRuntime.js?v=20261106-r10"></script>
+    <script src="/js/front/MosaicCesiumRuntime.js?v=20261108-openmaps1"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261016-r45"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261016-r45" />
     <link rel="stylesheet" href="/assets/css/Profile.css" />
@@ -6815,7 +6815,7 @@ def render_internal_viewer_page(
     head_extra = """
     <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />
     <script src="/vendor/cesium/Cesium.js"></script>
-    <script src="/js/front/MosaicCesiumRuntime.js?v=20261106-r10"></script>
+    <script src="/js/front/MosaicCesiumRuntime.js?v=20261108-openmaps1"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261104"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261104" />
     <link rel="stylesheet" href="/assets/css/mosaic-map-controls.css?v=7" />"""

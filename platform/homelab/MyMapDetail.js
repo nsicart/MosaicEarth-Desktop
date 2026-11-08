@@ -102,7 +102,7 @@ function tableTemplateData(item) {
     var url = `${window.MOSAICEARTH_ASSET_BASE}${namefolder}/procesado/odm_orthophoto/odm_orthophoto.webp`;
     if (IS_EXTERNAL && LATITUDE != null && LONGITUDE != null) {
         var span = 0.012;
-        url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${LONGITUDE-span},${LATITUDE-span},${LONGITUDE+span},${LATITUDE+span}&bboxSR=4326&size=640,360&format=jpg&f=image`;
+        url = item.PREVIEW_URL || "/map-preview.svg";
     }
     var icon = imagenTipo(FILE_TYPE_ID);
 

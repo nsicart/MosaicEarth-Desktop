@@ -1,0 +1,28 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Map sources · MosaicEarth</title>
+<style>body{margin:0;background:#101610;color:#e8f1e8;font:16px/1.65 system-ui,sans-serif}main{max-width:850px;margin:32px auto;padding:24px}a{color:#c3e260}h1,h2{line-height:1.2}pre{white-space:pre-wrap;font:inherit;border-left:3px solid #a8d338;padding-left:18px}small{color:#c1cbc4}</style><main><a href="/en/Map">← MosaicEarth map</a><h1>Map sources and credits</h1>
+<p>The same sources are used on the web and in Desktop. Basemaps and place search require Internet access. Your local projects and processing remain independent of these services.</p>
+<h2>3D display and terrain</h2><p><a href="https://cesium.com/platform/cesiumjs/">CesiumJS</a> is distributed under Apache 2.0. The default map does not use Cesium ion.</p>
+<p><a href="https://registry.opendata.aws/terrain-tiles/">Mapzen Terrain Tiles</a> are hosted by the AWS Open Data program. MosaicEarth resamples Terrarium elevation pixels into the 3D globe. Detail varies by region; elevation beyond Web Mercator coverage (85.05° north/south) extends the edge value. This background terrain is for visualization, not a surveyed reference or a correction of the vertical datum of your files.</p>
+<p><a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md">Full source licences and attribution</a>:</p><pre>* ArcticDEM terrain data DEM(s) were created from DigitalGlobe, Inc., imagery and
+  funded under National Science Foundation awards 1043681, 1559691, and 1542736;
+* Australia terrain data © Commonwealth of Australia (Geoscience Australia) 2017;
+* Austria terrain data © offene Daten Österreichs – Digitales Geländemodell (DGM)
+  Österreich;
+* Canada terrain data contains information licensed under the Open Government
+  Licence – Canada;
+* Europe terrain data produced using Copernicus data and information funded by the
+  European Union - EU-DEM layers;
+* Global ETOPO1 terrain data U.S. National Oceanic and Atmospheric Administration
+* Mexico terrain data source: INEGI, Continental relief, 2016;
+* New Zealand terrain data Copyright 2011 Crown copyright (c) Land Information New
+  Zealand and the New Zealand Government (All rights reserved);
+* Norway terrain data © Kartverket;
+* United Kingdom terrain data © Environment Agency copyright and/or database right
+  2015. All rights reserved;
+* United States 3DEP (formerly NED) and global GMTED2010 and SRTM terrain data
+  courtesy of the U.S. Geological Survey.</pre>
+<h2>Satellite and aerial imagery</h2><p>Global background: <a href="https://cloudless.eox.at">EOxCloudless</a> by <a href="https://eox.at">EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data 2016), <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. This is the 2016 mosaic, not current high-resolution aerial imagery. Enlarging it does not add detail. <a href="https://cloudless.eox.at/documentation/faq">Service and licence information</a>.</p>
+<p>At closer zooms in mainland Spain, the Balearic and Canary Islands: PNOA · IGN 2022–2025, scne.es, <a href="https://www.ign.es/resources/licencia/Condiciones_licenciaUso_IGN.pdf">CC BY 4.0</a>, served by <a href="https://www.ign.es/wmts/pnoa-ma?SERVICE=WMTS&amp;REQUEST=GetCapabilities">IGN</a>. Capture year and resolution depend on the location. Tiles around the national boundary can contain the service's Sentinel overview. If this service fails, the global 2016 mosaic is used.</p>
+<h2>Street map and place search</h2><p>© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, ODbL. The Topographic button shows the standard OSM street map draped on 3D terrain; it is not a contour-map layer. <a href="https://www.openstreetmap.org/fixthemap">Report a map issue</a>.</p>
+<p>Place search uses <a href="https://github.com/komoot/photon">Photon</a> and OSM data. Only submitted searches are sent; typing does not make autocomplete requests. Coordinates can be entered without a place-search service. Desktop uses the public MosaicEarth search endpoint without sending account credentials.</p>
+<p><small>Public tile services operate on a best-effort basis, with attribution and reasonable-use conditions. No bulk/offline map downloads are offered. Existing browser cache follows provider HTTP headers. These map licences do not change the ownership or licence of your uploaded data.</small></p></main></html>

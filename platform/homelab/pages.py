@@ -548,7 +548,7 @@ def render_home_master(
         html body .mymosaic-map-controls {{
             position: fixed !important;
             right: 20px !important;
-            bottom: 38px !important;
+            bottom: calc(var(--mosaic-credit-bottom, 28px) + var(--mosaic-credit-height, 24px) + 10px) !important;
             left: auto !important;
             z-index: 1015 !important;
             display: flex !important;
@@ -926,7 +926,7 @@ def render_home_master(
             html body .base-layer-switch,
             html body .mymosaic-map-controls {{
                 position: fixed !important;
-                bottom: 32px !important;
+                bottom: calc(var(--mosaic-credit-height, 24px) + 10px) !important;
                 right: 8px !important;
                 left: 8px !important;
                 width: calc(100vw - 16px) !important;
@@ -960,14 +960,26 @@ def render_home_master(
             }}
             html body .container-fluid2 .cesium-viewer-toolbar {{
                 top: auto !important;
-                bottom: 88px !important;
+                bottom: calc(var(--mosaic-credit-height, 24px) + 66px) !important;
                 right: 8px !important;
                 z-index: 1004 !important;
             }}
-            html body .container-fluid2 .cesium-widget-credits {{
-                display: none !important;
-            }}
+
         }}
+    </style>
+    <style>
+        html body .cesium-viewer-bottom {{ left: 8px !important; right: auto !important; bottom: 4px !important; width: calc(100% - 16px) !important; max-width: calc(100% - 16px) !important; }}
+        html body .cesium-widget-credits {{ position: static !important; display: block !important; max-width: none !important; width: auto !important; white-space: normal !important; }}
+        .cesium-widget-credits, .cesium-credit-textContainer, .cesium-credit-expand-link {{ font: 11px/1.4 sans-serif !important; }}
+        html body .sim-hud {{ bottom: calc(var(--mosaic-credit-height, 24px) + 12px) !important; }}
+        @media (max-width: 767px) {{
+            html body .container-fluid2 #itemsContainer {{ position: fixed !important; bottom: calc(var(--mosaic-credit-bottom, 28px) + var(--mosaic-credit-height, 24px) + 58px) !important; }}
+            html body .map-mobile-toggle {{ position: fixed !important; bottom: calc(var(--mosaic-credit-bottom, 28px) + var(--mosaic-credit-height, 24px) + 260px) !important; }}
+            html body .map-mobile-toggle.is-collapsed {{ bottom: calc(var(--mosaic-credit-bottom, 28px) + var(--mosaic-credit-height, 24px) + 58px) !important; }}
+            html body .container-fluid2 .cesium-viewer-toolbar {{ top: 120px !important; bottom: auto !important; }}
+            html body #simMiniMapWrap {{ bottom: calc(var(--mosaic-credit-height, 24px) + 190px) !important; }}
+        }}
+        html body .base-layer-switch, html body .mymosaic-map-controls {{ bottom: calc(var(--mosaic-credit-bottom, 28px) + var(--mosaic-credit-height, 24px) + 10px) !important; }}
     </style>
     <script>window.MOSAICEARTH_ASSET_BASE={json.dumps(asset_base)};</script>
     <script type="text/javascript">
@@ -1383,7 +1395,7 @@ def render_map2_page(
     head_extra = """
     <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />
     <script src="/vendor/cesium/Cesium.js"></script>
-    <script src="/js/front/MosaicCesiumRuntime.js?v=20261106-r10"></script>
+    <script src="/js/front/MosaicCesiumRuntime.js?v=20261108-openmaps1"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261016-r45"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261016-r45" />
     <link rel="stylesheet" href="/assets/css/external-asset-import.css?v=7" />
@@ -2019,7 +2031,7 @@ def render_product_detail_page(
         }
     </style>
     <script src="/vendor/cesium/Cesium.js"></script>
-    <script src="/js/front/MosaicCesiumRuntime.js?v=20261106-r10"></script>
+    <script src="/js/front/MosaicCesiumRuntime.js?v=20261108-openmaps1"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261016-r45"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261016-r45" />
     <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />"""
@@ -2373,7 +2385,7 @@ def render_external_asset_detail_page(
         }
     </style>
     <script src="/vendor/cesium/Cesium.js"></script>
-    <script src="/js/front/MosaicCesiumRuntime.js?v=20261106-r10"></script>
+    <script src="/js/front/MosaicCesiumRuntime.js?v=20261108-openmaps1"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261103"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261103" />
     <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />"""
@@ -3158,7 +3170,7 @@ def render_world_simulator_page(
     head_extra = """
     <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />
     <script src="/vendor/cesium/Cesium.js"></script>
-    <script src="/js/front/MosaicCesiumRuntime.js?v=20261106-r10"></script>
+    <script src="/js/front/MosaicCesiumRuntime.js?v=20261108-openmaps1"></script>
     <style>
         .sim-shell { position: relative; width: 100%; height: calc(100vh - 64px); min-height: 640px; background: #050806; overflow: hidden; font-family: 'Inter', system-ui, -apple-system, sans-serif; user-select: none; }
         #simCesiumContainer { width: 100%; height: 100%; }

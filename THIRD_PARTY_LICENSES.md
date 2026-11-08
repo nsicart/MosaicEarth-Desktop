@@ -17,3 +17,7 @@
 | CPython 3.12.10 on Windows | PSF and other notices in the embedded distribution. [CPython source](https://github.com/python/cpython/tree/v3.12.10). |
 
 The Desktop installer includes the application and CesiumJS, plus Python on Windows. Source builds provision processing images from the versioned recipes. Official installations can download the verified CPU image archive listed in `resources/engine-payload.json`. Complete engine sources, upstream submodules, patches, build instructions and notices are available without sign-in at [MosaicEarth engine source](https://app.mosaicearth.app/open-source). This repository supplies the Desktop entry points, exports and image build recipes. Image containers retain their package copyright files. CUDA is not included in the official CPU archive.
+
+## Default map data and services
+
+The shared map uses CesiumJS (Apache 2.0), Mapzen terrain tiles from AWS Open Data, OpenStreetMap (ODbL), EOX cloudless 2016 (CC BY 4.0), and IGN PNOA (CC BY 4.0). Full data-source credits, service links, capture-year limitations and resampling notes are distributed in `platform/homelab/map_sources.html`, served locally at `/map-sources`. Photon supplies explicitly submitted place searches through the canonical shared cache. Public endpoints have no uptime guarantee; no bulk/offline basemap download is offered. Map licences do not change the ownership of user assets.

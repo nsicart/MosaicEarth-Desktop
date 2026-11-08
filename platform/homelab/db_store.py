@@ -1665,7 +1665,7 @@ class MosaicEarthDataStore:
         self.persist_table(dbo_name)
 
     def get_cesium_browser_token(self) -> str:
-        return self.get_setting("CesiumIonToken", "")
+        return ""  # Basemaps, relief and place search use open providers.
 
     def get_external_asset(self, project_id: int, asset_id: int) -> Optional[Dict[str, Any]]:
         ext = self.get_external_asset_by_id(asset_id)
@@ -7377,7 +7377,7 @@ class MosaicEarthDataStore:
                 eff_dt = cap_dt or cre_dt
                 title = str(ext.get("TITLE") or ext.get("DISPLAY_NAME") or (proj.get("NAME") if proj else None) or ext.get("SOURCE_FILE_NAME") or f"Asset {aid}")
                 icon_svg = ICON_CLOUD if type_id == 1 else ICON_3D if type_id == 3 else ICON_ORTHOPHOTO
-                preview_url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox={lon - 0.012:.6f},{lat - 0.012:.6f},{lon + 0.012:.6f},{lat + 0.012:.6f}&bboxSR=4326&imageSR=4326&size=640,360&format=jpg&f=image"
+                preview_url = "/map-preview.svg"
                 out.append({
                     "Id": aid,
                     "ProjectId": pid,

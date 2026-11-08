@@ -12,7 +12,7 @@ mkdir -p "$p/DEBIAN" "$p/usr/bin" "$p/usr/share/applications" "$p/usr/share/doc/
     "$p/opt/mosaicearth-desktop/src" "$p/opt/mosaicearth-desktop/resources"
 cat > "$p/DEBIAN/control" <<'EOF'
 Package: mosaicearth-desktop
-Version: 0.4.0
+Version: 0.4.1
 Architecture: amd64
 Maintainer: MosaicEarth
 Section: science
@@ -34,6 +34,6 @@ cp README.md THIRD_PARTY_LICENSES.md NOTICE GPU.md INSTALL_LINUX.md INSTALL_WIND
     BUILD.md CONNECTORS.md SIGNING.md RELEASE_NOTES.md "$p/usr/share/doc/mosaicearth-desktop/"
 printf '%s\n' "$source_rev" > "$p/usr/share/doc/mosaicearth-desktop/SOURCE_REVISION"
 find "$p" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
-artifact="installers/mosaicearth-desktop_0.4.0_amd64.deb"
+artifact="installers/mosaicearth-desktop_0.4.1_amd64.deb"
 dpkg-deb --root-owner-group --build "$p" "$artifact"
-(cd installers && sha256sum "$(basename "$artifact")" > SHA256SUMS.linux-0.4.0)
+(cd installers && sha256sum "$(basename "$artifact")" > SHA256SUMS.linux-0.4.1)

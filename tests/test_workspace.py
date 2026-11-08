@@ -55,6 +55,64 @@ class WorkspaceTest(unittest.TestCase):
                 client.download_range('/bundle', 4, 7, 8)
             request.assert_not_called()
 
+    def test_snapshot_pull_resumes_saved_bytes_and_retries_body_timeout(self):
+        import hashlib
+        client = Client()
+        payload = b'abcdefghij'
+        state = {'status': 'COMPLETE', 'bytes': len(payload), 'manifest': {'files': [
+            {'path': 'models/model.bin', 'size': len(payload), 'sha256': hashlib.sha256(payload).hexdigest()}]}}
+        responses = []
+        def request(method, path, **kwargs):
+            if not kwargs.get('raw'):
+                return state
+            start, end = map(int, kwargs['headers']['Range'][6:].split('-'))
+            responses.append((start, end))
+            response = MagicMock()
+            response.__enter__.return_value = response
+            response.status = 206
+            response.headers = {'Content-Range': f'bytes {start}-{end}/{len(payload)}'}
+            response.read.side_effect = TimeoutError('read timed out') if len(responses) == 2 else None
+            response.read.return_value = payload[start:end+1]
+            return response
+        with tempfile.TemporaryDirectory() as temp, patch.object(client, 'request', side_effect=request), \
+                patch('mosaicearth_sync.CHUNK', 4), patch('mosaicearth_sync.time.sleep'):
+            partial = Path(temp) / 'models/model.bin.mosaicearth-part'
+            partial.parent.mkdir()
+            partial.write_bytes(payload[:2])
+            client.pull('fixture', temp)
+            self.assertEqual((Path(temp) / 'models/model.bin').read_bytes(), payload)
+            self.assertFalse(partial.exists())
+            self.assertEqual(responses, [(2,5),(6,9),(6,9)])
+            client.pull('fixture', temp)
+            self.assertEqual(len(responses), 3, 'Completed files must not download again')
+
+    def test_snapshot_parallel_files_preserve_hashes_and_monotonic_progress(self):
+        import hashlib, threading, time
+        body = b'fixture data'
+        files = [{'path': f'tiles/{i}.bin', 'size': len(body), 'sha256': hashlib.sha256(body).hexdigest()} for i in range(12)]
+        progress = []
+        client = Client(progress=lambda done, total, message: progress.append(done))
+        active = peak = 0
+        lock = threading.Lock()
+        def receive(*args, **kwargs):
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            time.sleep(.01)
+            with lock:
+                active -= 1
+            return body
+        with tempfile.TemporaryDirectory() as temp, patch.object(client, 'request', return_value={
+                'status': 'COMPLETE', 'bytes': len(body)*len(files), 'manifest': {'files': files}}), \
+                patch.object(client, 'download_range', side_effect=receive):
+            client.pull('fixture', temp)
+            self.assertTrue(1 < peak <= 4)
+            self.assertEqual(progress, sorted(progress))
+            self.assertEqual(progress[-1], len(body)*len(files))
+            for f in files:
+                self.assertEqual((Path(temp)/f['path']).read_bytes(), body)
+
     def test_windows_docker_installed_after_session_started(self):
         with tempfile.TemporaryDirectory() as temp:
             executable = Path(temp) / 'Programs/DockerDesktop/resources/bin/docker.exe'

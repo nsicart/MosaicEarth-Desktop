@@ -3,6 +3,8 @@
 AGPL-3.0-or-later. Cloud access is explicit; local processing needs no account.
 """
 import hashlib
+import concurrent.futures
+import threading
 import http.client
 import json
 import os
@@ -54,7 +56,7 @@ class Client:
         if self.canceled():
             raise SyncError("Transfer paused. Resume to continue from the saved offset.")
         data = payload if isinstance(payload, bytes) else json.dumps(payload).encode() if payload is not None else None
-        h = {"User-Agent": "MosaicEarth/0.4.0", "Accept": "application/json", "Content-Type": "application/octet-stream" if isinstance(payload, bytes) else "application/json"}
+        h = {"User-Agent": "MosaicEarth/0.4.1", "Accept": "application/json", "Content-Type": "application/octet-stream" if isinstance(payload, bytes) else "application/json"}
         if self.token:
             h["Authorization"] = "Bearer " + self.token
         h.update(headers or {})
@@ -83,7 +85,7 @@ class Client:
                     raise SyncError("Cloud connection interrupted. Resume to continue safely.", retryable=True) from exc
                 time.sleep(2 ** attempt)
 
-    def download_range(self, path, start, end, total):
+    def download_range(self, path, start, end, total, retry_progress=None):
         """Retry a bounded chunk; only return complete, correctly located bytes."""
         for attempt in range(6):
             if self.canceled():
@@ -102,7 +104,7 @@ class Client:
                     raise
                 if attempt == 5:
                     raise SyncError('Connection unavailable. Retry to continue from the saved download; completed chunks are preserved.', retryable=True) from exc
-                self.progress(start, total, 'Connection interrupted. Retrying from the last saved chunk…')
+                (retry_progress or self.progress)(start, total, 'Connection interrupted. Retrying from the last saved chunk…')
                 for _ in range(min(30, 2 ** (attempt + 1))):
                     if self.canceled():
                         raise SyncError('Transfer paused. Resume to continue from the saved offset.')
@@ -165,8 +167,21 @@ class Client:
             raise SyncError("This cloud snapshot is not complete")
         destination = Path(destination).resolve()
         destination.mkdir(parents=True, exist_ok=True)
-        total, done = state["bytes"], 0
-        for index, item in enumerate(state["manifest"]["files"]):
+        total = state["bytes"]
+        completed = {}
+        progress_lock = threading.Lock()
+        stopped = threading.Event()
+        original_canceled = self.canceled
+        self.canceled = lambda: stopped.is_set() or original_canceled()
+
+        def report(index, size, message):
+            with progress_lock:
+                completed[index] = size
+                self.progress(sum(completed.values()), total, message)
+
+        def receive(index, item):
+            if self.canceled():
+                raise SyncError("Transfer paused. Resume to continue from the saved offset.")
             relative = PurePosixPath(item["path"])
             if relative.is_absolute() or ".." in relative.parts or "\\" in item["path"] or ":" in item["path"]:
                 raise SyncError("Unsafe path in cloud manifest")
@@ -177,8 +192,8 @@ class Client:
             if target.exists():
                 if checksum(target) != item["sha256"]:
                     raise SyncError(f"Local changes in {item['path']}. Download this revision to a new folder.")
-                done += item["size"]
-                continue
+                report(index, item["size"], "Verified " + item["path"])
+                return
             temporary = target.with_name(target.name + ".mosaicearth-part")
             if temporary.is_symlink():
                 raise SyncError("Unsafe download destination")
@@ -187,32 +202,40 @@ class Client:
                 temporary.unlink()
                 offset = 0
             if offset < item["size"]:
-                with self.request("GET", f"/api/v2/sync/sessions/{sid}/files/{index}",
-                                  headers={"Range": f"bytes={offset}-"}, raw=True) as response:
-                    if response.status != 206:
-                        offset = 0
-                    with temporary.open("ab" if offset else "wb") as stream:
-                        received = offset
-                        while True:
-                            if self.canceled():
-                                raise SyncError("Download paused; resume to continue")
-                            block = response.read(CHUNK)
-                            if not block:
-                                break
-                            received += len(block)
-                            if received > item["size"]:
-                                raise SyncError("Cloud file exceeds its declared size")
-                            stream.write(block)
-                            self.progress(done + received, total, "Downloading " + item["path"])
+                with temporary.open("ab" if offset else "wb") as stream:
+                    while offset < item["size"]:
+                        end = min(item["size"], offset + CHUNK) - 1
+                        block = self.download_range(f"/api/v2/sync/sessions/{sid}/files/{index}",
+                                                    offset, end, item["size"],
+                                                    retry_progress=lambda *_: report(index, offset, "Connection interrupted. Retrying " + item["path"]))
+                        stream.write(block)
                         stream.flush()
                         os.fsync(stream.fileno())
+                        offset += len(block)
+                        report(index, offset, "Downloading " + item["path"])
             elif item["size"] == 0:
                 temporary.touch(exist_ok=True)
             if not temporary.is_file() or temporary.stat().st_size != item["size"] or checksum(temporary) != item["sha256"]:
                 temporary.unlink(missing_ok=True)
                 raise SyncError("Download checksum mismatch. Retry the transfer.")
             temporary.replace(target)
-            done += item["size"]
+            report(index, item["size"], "Downloaded " + item["path"])
+
+        try:
+            # Bound concurrent files for large tiled models; each file still
+            # commits only verified chunks and a complete matching SHA-256.
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+                pending = [pool.submit(receive, i, item) for i, item in enumerate(state["manifest"]["files"])]
+                try:
+                    for future in concurrent.futures.as_completed(pending):
+                        future.result()
+                except BaseException:
+                    stopped.set()
+                    for future in pending:
+                        future.cancel()
+                    raise
+        finally:
+            self.canceled = original_canceled
         (destination / "mosaicearth-manifest.json").write_text(json.dumps(state["manifest"], indent=2), encoding="utf-8")
         return state
 

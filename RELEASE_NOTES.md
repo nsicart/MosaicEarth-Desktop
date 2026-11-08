@@ -1,3 +1,13 @@
+# 0.4.1 — open map sources and resilient synchronization
+
+Windows, Linux and web use the same open map configuration: Mapzen terrain on AWS, OpenStreetMap streets, the commercially reusable EOX 2016 global mosaic, and PNOA/IGN aerial imagery at closer zooms in Spain. CesiumJS remains the renderer; no Cesium ion or Esri service/token is used by the default map. The map credits link to complete source notices. Public tile endpoints are best effort and require Internet; the global satellite mosaic has lower resolution and is older than PNOA. These backgrounds are not a survey-grade elevation or vertical-datum reference.
+
+The terrain adapter reprojects Terrarium pixels into geographic meshes, shares pixel-centre samples across tile boundaries, limits network concurrency, cancels requests when a viewer closes and reports tile failures. Map credits remain visible on mobile. Place search is explicit, cached and rate limited; coordinate searches use a terrain-safe camera altitude. Local DEMs and original asset geometry remain separate from the background terrain.
+
+Desktop and connector 0.2.2 downloads now retry a bounded byte range after a response-body timeout. Four files can transfer concurrently, with SHA-256 verification before commit, monotonic total progress and preserved completed files on pause/resume. The prior sequential transport could leave a large project paused after a transient read timeout.
+
+This revision includes the CPU/CUDA integration and processing fixes described below. The v0.4.0 source tag is retained; its unpublished installer candidate is superseded. Windows Authenticode remains pending the owner's certificate purchase; detached project OpenPGP signatures are a separate mechanism.
+
 # 0.4.0 — automatic local GPU processing
 
 The full Desktop interface now detects compatible NVIDIA CUDA hardware on Windows and Linux. Detection runs a real CUDA computation inside Docker. Automatic mode selects GPU independently for NodeODX and OpenSplat; CPU only remains selectable. Unsupported GPUs, unavailable Docker GPU access or missing optional GPU engines leave CPU processing available. COLMAP remains on CPU; GPU acceleration does not apply to every processing stage. See [GPU.md](GPU.md) for supported architectures, driver requirements and installation space.

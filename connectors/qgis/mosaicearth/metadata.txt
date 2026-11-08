@@ -2,7 +2,7 @@
 name=MosaicEarth
 qgisMinimumVersion=3.34
 qgisMaximumVersion=4.99
-version=0.2.1
+version=0.2.2
 description=Synchronize complete QGIS projects, data, styles and results with MosaicEarth Cloud.
 about=Explicit private synchronization with resumable transfers and SHA-256 verification. Local QGIS use needs no MosaicEarth account.
 author=MosaicEarth

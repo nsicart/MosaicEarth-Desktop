@@ -34,4 +34,4 @@ docker build --platform linux/amd64 -f engines/Dockerfile.nodeodx \
 python3 scripts/prepare-platform-web.py
 docker build --platform linux/amd64 -f engines/Dockerfile.platform \
   --build-arg LOCAL_ENGINE=mosaicearth-desktop/local-engine:0.4.0-cuda \
-  -t mosaicearth-desktop/platform:0.4.0-cuda .
+  -t mosaicearth-desktop/platform:0.4.1-cuda .

@@ -178,77 +178,76 @@
     }
 
     function createBaseProvider(mode) {
-        return mode === "topographic"
-            ? new Cesium.UrlTemplateImageryProvider({
-                url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                credit: "OpenStreetMap contributors (Open Data)",
-                maximumLevel: 19
-            })
-            : new Cesium.UrlTemplateImageryProvider({
-                url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-                credit: "Esri World Imagery",
-                maximumLevel: 19
-            });
+        return global.MosaicMapSources.createImagery(Cesium, mode);
     }
 
-    function resolvedIonToken(ionToken) {
-        return ionToken || Cesium.Ion.defaultAccessToken || "";
-    }
-
-    function prepareViewerOptions(options, ionToken, terrainOptions) {
+    function prepareViewerOptions(options) {
         var prepared = copyOptions(options);
         if (!Object.prototype.hasOwnProperty.call(prepared, "showRenderLoopErrors")) prepared.showRenderLoopErrors = false;
         if (!Object.prototype.hasOwnProperty.call(prepared, "navigationInstructionsInitiallyVisible")) prepared.navigationInstructionsInitiallyVisible = false;
         prepared.infoBox = false;
         prepared.selectionIndicator = false;
-        var token = resolvedIonToken(ionToken);
+        // CesiumJS is open source. Our basemaps, terrain and place search do not
+        // use ion or the SDK's demo token, even if an old database has a key.
+        Cesium.Ion.defaultAccessToken = "";
+        Cesium.CreditDisplay.cesiumCredit = new Cesium.Credit('<a href="https://cesium.com/platform/cesiumjs/" target="_blank" rel="noopener">CesiumJS</a>', true);
+        prepared.terrainProvider = global.MosaicMapSources.createTerrain(Cesium);
+        if (prepared.geocoder !== false) prepared.geocoder = [global.MosaicMapSources.createGeocoder(Cesium, prepared.terrainProvider)];
         if (Object.prototype.hasOwnProperty.call(prepared, "imageryProvider")) {
-            prepared.baseLayer = prepared.imageryProvider === false
-                ? false
-                : new Cesium.ImageryLayer(prepared.imageryProvider);
+            prepared.baseLayer = prepared.imageryProvider === false ? false : new Cesium.ImageryLayer(prepared.imageryProvider);
             delete prepared.imageryProvider;
         } else if (!Object.prototype.hasOwnProperty.call(prepared, "baseLayer")) {
             prepared.baseLayer = new Cesium.ImageryLayer(createBaseProvider("satellite"));
         }
-        if (token) {
-            Cesium.Ion.defaultAccessToken = token;
-            delete prepared.terrainProvider;
-            prepared.terrain = Cesium.Terrain.fromWorldTerrain(terrainOptions || {
-                requestVertexNormals: true,
-                requestWaterMask: true
-            });
-        } else if (!prepared.terrain && !prepared.terrainProvider) {
-            prepared.terrainProvider = new Cesium.EllipsoidTerrainProvider();
-        }
+        delete prepared.terrain;
         return prepared;
     }
 
-    function applyOpen3DTerrainAndCleanAttribution(viewer, ionToken) {
-        if (!alive(viewer)) return;
-        try {
-            if (viewer.cesiumWidget && viewer.cesiumWidget.creditContainer) {
-                var cc = viewer.cesiumWidget.creditContainer;
-                // Cesium owns these nodes and updates/removes them as layers
-                // change. Replacing innerHTML breaks CreditDisplay and loses
-                // the providers' attribution links.
-                cc.style.cssText = "position:absolute;bottom:4px;left:8px;z-index:5;font-size:10px;color:#e2e8e4;background:rgba(10,14,12,0.8);padding:2px 8px;border-radius:6px;max-width:calc(100% - 16px);";
-            }
-        } catch (ignore) { }
-        if (!resolvedIonToken(ionToken)) {
-            try {
-                if (Cesium.ArcGisTiledElevationTerrainProvider && typeof Cesium.ArcGisTiledElevationTerrainProvider.fromUrl === "function") {
-                    viewer._mosaicTerrainReady = Cesium.ArcGisTiledElevationTerrainProvider.fromUrl(
-                        "https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer"
-                    ).then(function (tp) {
-                        if (alive(viewer) && tp) {
-                            viewer.terrainProvider = tp;
-                            viewer.scene.globe.depthTestAgainstTerrain = false;
-                        }
-                        return tp;
-                    }).catch(function () { return null; });
-                }
-            } catch (ignore) { }
+    function applyOpen3DTerrainAndCleanAttribution(viewer) {
+        if (!alive(viewer) || viewer._mosaicMapSourcesAttached) return;
+        viewer._mosaicMapSourcesAttached = true;
+        viewer._mosaicOpenTerrain = viewer.terrainProvider;
+        viewer._mosaicTerrainReady = Promise.resolve(viewer.terrainProvider);
+        if (viewer.geocoder) {
+            var geocoder = viewer.geocoder.viewModel;
+            geocoder.autoComplete = false;
+            // Our service already samples terrain and supplies a safe camera
+            // altitude. Cesium's default callback discards that altitude.
+            geocoder.destinationFound = function (model, destination) {
+                if (!alive(viewer)) return;
+                viewer.camera.flyTo({destination: destination, duration: 1.5,
+                    complete: function () { if (alive(viewer)) model.complete.raiseEvent(); }});
+            };
         }
+        var cc = viewer.cesiumWidget && viewer.cesiumWidget.creditContainer;
+        if (cc) {
+            // Keep Cesium's own credit nodes and popup. Never remove provider
+            // attribution or hide credits on mobile.
+            cc.style.cssText = "position:absolute;bottom:4px;left:8px;z-index:5;font:11px/1.4 sans-serif;color:#e2e8e4;background:rgba(10,14,12,.85);padding:3px 8px;border-radius:5px;width:fit-content;max-width:calc(100% - 16px);";
+            var measure = function () {
+                if (!alive(viewer)) return;
+                var rect = cc.getBoundingClientRect();
+                global.document.documentElement.style.setProperty('--mosaic-credit-height', Math.ceil(rect.height) + 'px');
+                global.document.documentElement.style.setProperty('--mosaic-credit-bottom', Math.max(0, Math.ceil(global.innerHeight - rect.bottom)) + 'px');
+            };
+            if (global.ResizeObserver) {
+                viewer._mosaicCreditObserver = new global.ResizeObserver(measure);
+                viewer._mosaicCreditObserver.observe(cc);
+            }
+            measure();
+        }
+        viewer._mosaicOpenTerrain.setStatusListener(function (healthy) {
+            if (!alive(viewer)) return;
+            var notice = viewer.container.querySelector('.mosaic-terrain-warning');
+            if (healthy) { if (notice) notice.remove(); return; }
+            if (notice) return;
+            notice = global.document.createElement('div');
+            notice.className = 'mosaic-terrain-warning';
+            notice.setAttribute('role', 'alert');
+            notice.style.cssText = 'position:absolute;top:54px;left:12px;right:12px;z-index:6;padding:8px 12px;background:#352c16;color:#fff4ce;border-radius:6px;font:13px/1.4 sans-serif;pointer-events:none;';
+            notice.textContent = 'Some 3D terrain could not load. Check your connection and reload to retry.';
+            viewer.container.appendChild(notice);
+        });
     }
 
     function observeViewerSize(viewer) {
@@ -398,6 +397,8 @@
     function destroyViewer(viewer) {
         if (!alive(viewer)) return;
         if (viewer._mosaicTerrainAbort) viewer._mosaicTerrainAbort.abort();
+        if (viewer._mosaicOpenTerrain) viewer._mosaicOpenTerrain.destroy();
+        if (viewer._mosaicCreditObserver) viewer._mosaicCreditObserver.disconnect();
         var host = viewer.container;
         if (viewer._mosaicAnnotations) viewer._mosaicAnnotations.destroy();
         if (viewer._mosaicResizeObserver) viewer._mosaicResizeObserver.disconnect();
@@ -1513,14 +1514,19 @@
 
                 if (typeof Cesium.CustomHeightmapTerrainProvider === "function") {
                     var customTp = new Cesium.CustomHeightmapTerrainProvider({
+                        tilingScheme: baseGlobalTp ? baseGlobalTp.tilingScheme : new Cesium.GeographicTilingScheme(),
+                        credit: baseGlobalTp ? baseGlobalTp.credit : undefined,
                         width: tileW,
                         height: tileH,
                         callback: function (x, y, level) {
                             var out = new Float32Array(tileW * tileH);
                             var tilingScheme = customTp.tilingScheme;
                             var rect = tilingScheme.tileXYToRectangle(x, y, level);
+                            var projection = tilingScheme.projection;
+                            var northY = projection.project(new Cesium.Cartographic(0, rect.north)).y;
+                            var southY = projection.project(new Cesium.Cartographic(0, rect.south)).y;
                             for (var r = 0; r < tileH; r++) {
-                                var latR = rect.north - (r / (tileH - 1)) * (rect.north - rect.south);
+                                var latR = projection.unproject(new Cesium.Cartesian3(0, northY - (r / (tileH - 1)) * (northY - southY), 0)).latitude;
                                 for (var c = 0; c < tileW; c++) {
                                     var lonR = rect.west + (c / (tileW - 1)) * (rect.east - rect.west);
                                     out[r * tileW + c] = sampleDemBilinear(lonR, latR, level);

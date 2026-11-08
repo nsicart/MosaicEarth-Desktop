@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.staticfiles import StaticFiles
 
 from . import stripe_payments
+from .map_search import router as map_search_router
 from .blob_store import get_blob_store
 from .db_store import DEFAULT_CATEGORIES, family_display, get_store, to_slug
 from .email_service import get_email_service
@@ -92,6 +93,7 @@ app = FastAPI(
 
 # Mount 4DTwinMaps Interoperability Gateway
 app.include_router(interop_router)
+app.include_router(map_search_router)
 app.include_router(connector_sync_router)
 app.include_router(desktop_activation_router)
 
@@ -154,13 +156,24 @@ async def mymap_detail_javascript():
     return FileResponse(Path(__file__).parent / "MyMapDetail.js", media_type="text/javascript", headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
+@app.get("/map-preview.svg")
+async def map_preview_placeholder():
+    return FileResponse(Path(__file__).parent / "map-preview.svg", media_type="image/svg+xml")
+
+
+@app.get("/map-sources")
+async def map_source_notices():
+    return FileResponse(Path(__file__).parent / "map_sources.html", media_type="text/html")
+
+
 @app.get("/js/front/MosaicCesiumRuntime.js")
 async def route_custom_cesium_runtime():
     custom_js = Path(__file__).resolve().parent / "MosaicCesiumRuntime.js"
     if custom_js.is_file():
-        return FileResponse(
-            str(custom_js),
-            media_type="application/javascript; charset=utf-8",
+        sources_js = custom_js.with_name("MosaicMapSources.js")
+        return Response(
+            sources_js.read_text() + "\n" + custom_js.read_text(),
+            media_type="application/javascript",
             headers={"Cache-Control": "no-cache, must-revalidate"},
         )
     fallback_js = LIVE_WEB_ROOT / "js" / "front" / "MosaicCesiumRuntime.js"
@@ -187,7 +200,7 @@ async def _ensure_desktop_static_file(rel_path: str) -> Optional[Path]:
 
 @app.get("/js/front/Map2.js")
 async def route_custom_map2_js():
-    src_js = await _ensure_desktop_static_file("js/front/Map2.js")
+    src_js = Path(__file__).with_name("Map2.js")
     if not src_js or not src_js.is_file():
         raise HTTPException(status_code=404, detail="Map2.js not found")
     text = src_js.read_text(encoding="utf-8", errors="ignore")
