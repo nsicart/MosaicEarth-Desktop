@@ -69,6 +69,7 @@ class PlatformLauncher:
                     self.command('stop', '--time', '30', name)
                 self.command('rm', name)
             else:
+                self.command('update', '--restart', 'unless-stopped', name)
                 self.command('start', name)
                 return
         self.command('run', '-d', '--pull=never', '--name', name, '--label', self.label,
