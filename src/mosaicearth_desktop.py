@@ -290,6 +290,7 @@ class Workspace:
             if offset > expected["bytes"]:
                 archive.unlink()
                 offset = 0
+            progress(offset, expected["bytes"], "Resuming saved engine download" if offset else "Downloading local NodeODX and OpenSplat engines")
             with archive.open("ab") as stream:
                 while offset < expected["bytes"]:
                     # A slow first install can outlast a provisioning session.
