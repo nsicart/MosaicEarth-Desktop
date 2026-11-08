@@ -106,8 +106,11 @@ class PlatformLauncher:
             root = self.workspace.root
             commercial = (self.resources / 'edition-commercial').is_file()
             if commercial:
-                verify_grant(json.loads((root / 'account-grant.json').read_text()),
-                             json.loads((self.resources / 'license-public.json').read_text()))
+                try:
+                    verify_grant(json.loads((root / 'account-grant.json').read_text()),
+                                 json.loads((self.resources / 'license-public.json').read_text()))
+                except (OSError, ValueError):
+                    raise ValueError('Activate or renew this official installation below, then click Retry.') from None
             try:
                 info = self.command('info', '--format', '{{.OSType}}', timeout=45, check=False)
             except FileNotFoundError:
