@@ -1,7 +1,7 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const Cesium=require('../resources/cesium/index.cjs');
 let requests=0,active=0,peak=0,fail=false;
-const context={window:{},Map,Promise,AbortController,Float32Array,setTimeout,clearTimeout,
+const context={window:{MosaicMapConfig:{openOnly:true}},Map,Promise,AbortController,Float32Array,setTimeout,clearTimeout,
 fetch:async(url,{signal})=>{assert(!signal.aborted);requests++;active++;peak=Math.max(peak,active);await new Promise(r=>setImmediate(r));active--;if(fail)return{ok:false,status:503};const[z,x,y]=url.match(/terrarium\/(\d+)\/(\d+)\/(\d+)/).slice(1).map(Number);return{ok:true,blob:async()=>({x,y,z})}},
 createImageBitmap:async b=>({...b,width:256,height:256,close(){}}),
 document:{createElement(){return{getContext(){let image;return{drawImage(i){image=i},getImageData(){const data=new Uint8ClampedArray(256*256*4);for(let y=0;y<256;y++)for(let x=0;x<256;x++){const h=100+((image.x*256+x)%2048)/8+((image.y*256+y)%2048)/16;const v=h+32768,i=(y*256+x)*4;data[i]=Math.floor(v/256);data[i+1]=Math.floor(v)%256;data[i+2]=Math.round((v%1)*256);data[i+3]=255}return{data}}}}}}}};

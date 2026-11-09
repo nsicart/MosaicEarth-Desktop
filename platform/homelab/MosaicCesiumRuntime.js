@@ -181,6 +181,33 @@
         return global.MosaicMapSources.createImagery(Cesium, mode);
     }
 
+    function observeBaseImagery(viewer, provider) {
+        viewer._mosaicBaseImageryProvider = provider;
+        var oldNotice = viewer.container.querySelector('.mosaic-imagery-warning');
+        if (oldNotice) oldNotice.remove();
+        if (!provider || !provider.setStatusListener) return;
+        provider.setStatusListener(function (healthy, message, refresh) {
+            if (!alive(viewer) || viewer._mosaicBaseImageryProvider !== provider) return;
+            var notice = viewer.container.querySelector('.mosaic-imagery-warning');
+            if (healthy) {
+                if (notice) notice.remove();
+                if (refresh) global.requestAnimationFrame(function () {
+                    if (alive(viewer) && viewer._mosaicBaseImageryProvider === provider) setBaseLayer(viewer, 'satellite');
+                });
+            } else {
+                if (!notice) {
+                    notice = global.document.createElement('div');
+                    notice.className = 'mosaic-imagery-warning';
+                    notice.setAttribute('role', 'status');
+                    notice.style.cssText = 'position:absolute;bottom:calc(var(--mosaic-credit-height, 24px) + 58px);left:12px;max-width:min(460px, calc(100% - 24px));z-index:6;padding:8px 12px;background:#352c16;color:#fff4ce;border-radius:6px;font:13px/1.4 sans-serif;pointer-events:none;';
+                    viewer.container.appendChild(notice);
+                }
+                notice.textContent = message;
+            }
+            viewer.scene.requestRender();
+        });
+    }
+
     function prepareViewerOptions(options) {
         var prepared = copyOptions(options);
         if (!Object.prototype.hasOwnProperty.call(prepared, "showRenderLoopErrors")) prepared.showRenderLoopErrors = false;
@@ -208,6 +235,7 @@
         viewer._mosaicMapSourcesAttached = true;
         viewer._mosaicOpenTerrain = viewer.terrainProvider;
         viewer._mosaicTerrainReady = viewer.terrainProvider.readyPromise || Promise.resolve(viewer.terrainProvider);
+        if (viewer.imageryLayers && viewer.imageryLayers.length) observeBaseImagery(viewer, viewer.imageryLayers.get(0).imageryProvider);
         if (viewer.geocoder) {
             var geocoder = viewer.geocoder.viewModel;
             geocoder.autoComplete = false;
@@ -416,6 +444,7 @@
         if (!alive(viewer)) return;
         if (viewer._mosaicTerrainAbort) viewer._mosaicTerrainAbort.abort();
         if (viewer._mosaicOpenTerrain) viewer._mosaicOpenTerrain.destroy();
+        if (viewer._mosaicBaseImageryProvider && viewer._mosaicBaseImageryProvider.destroy) viewer._mosaicBaseImageryProvider.destroy();
         if (viewer._mosaicCreditObserver) viewer._mosaicCreditObserver.disconnect();
         var host = viewer.container;
         if (viewer._mosaicAnnotations) viewer._mosaicAnnotations.destroy();
@@ -482,9 +511,11 @@
         var prev = previousLayer || viewer._mosaicBaseImageryLayer || (viewer.imageryLayers && viewer.imageryLayers.length ? viewer.imageryLayers.get(0) : null);
         var next = viewer.imageryLayers.addImageryProvider(createBaseProvider(mode), 0);
         if (prev && viewer.imageryLayers.contains(prev)) {
+            if (prev.imageryProvider && prev.imageryProvider.destroy) prev.imageryProvider.destroy();
             viewer.imageryLayers.remove(prev, true);
         }
         viewer._mosaicBaseImageryLayer = next;
+        observeBaseImagery(viewer, next.imageryProvider);
         viewer.scene.requestRender();
         return next;
     }

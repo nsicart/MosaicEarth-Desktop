@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import stripe_payments
 from .map_search import router as map_search_router
+from .map_sessions import router as map_sessions_router, public_map_config
 from .terrain_gateway import router as terrain_gateway_router
 from .blob_store import get_blob_store
 from .db_store import DEFAULT_CATEGORIES, family_display, get_store, to_slug
@@ -95,6 +96,7 @@ app = FastAPI(
 # Mount 4DTwinMaps Interoperability Gateway
 app.include_router(interop_router)
 app.include_router(map_search_router)
+app.include_router(map_sessions_router)
 app.include_router(terrain_gateway_router)
 app.include_router(connector_sync_router)
 app.include_router(desktop_activation_router)
@@ -183,7 +185,7 @@ async def route_custom_cesium_runtime():
     if custom_js.is_file():
         sources_js = custom_js.with_name("MosaicMapSources.js")
         return Response(
-            sources_js.read_text() + "\n" + custom_js.read_text(),
+            public_map_config() + sources_js.read_text() + "\n" + custom_js.read_text(),
             media_type="application/javascript",
             headers={"Cache-Control": "no-cache, must-revalidate"},
         )

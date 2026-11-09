@@ -33,7 +33,7 @@ git clone https://github.com/nsicart/MosaicEarth-Desktop.git
 cd MosaicEarth-Desktop
 ```
 
-The default branch includes the latest documentation and maintenance changes. To use the exact source corresponding to a published installer, check out its tag, for example `git checkout v0.4.2` in a clean checkout. A detached HEAD at a release tag is normal.
+The default branch includes the latest documentation and maintenance changes. To use the exact source corresponding to a published installer, check out its tag, for example `git checkout v0.4.3` in a clean checkout. A detached HEAD at a release tag is normal.
 
 ### 3. Build the engines and interface
 

@@ -8,11 +8,11 @@
     },
     {
       "path": "homelab/MosaicCesiumRuntime.js",
-      "sha256": "cf43d7de35e7a3db0d7f3328cbf0b0ee2932d2c353b8b4d41ce22f90ad1eba36"
+      "sha256": "af23ea1cbe9f9f071d8e6c9927007e8f6a45e4fd541d5cc4e0a4dc6e1ac7505e"
     },
     {
       "path": "homelab/MosaicMapSources.js",
-      "sha256": "d582d3efa0b26601b373315851640eef1507bb4067923b19a1d1bd177330275b"
+      "sha256": "e6b8fcbf38e802df3ff83e2eb41a8cf5ef53809776821b4d7f50bb46d36f4bea"
     },
     {
       "path": "homelab/MyMap.js",
@@ -28,7 +28,7 @@
     },
     {
       "path": "homelab/app.py",
-      "sha256": "30ff74afe867bbc878ec2461db85b88e59ab3e55f954b75fa6674f6a85687132"
+      "sha256": "f4dd937fb6e1015cd83c9da7f2f2e264b33726bb703cb704931b5df93cf1f1bd"
     },
     {
       "path": "homelab/asset_metadata.py",
@@ -99,8 +99,12 @@
       "sha256": "4c17c2fd6c661aa50482e3d5e1c2c58423390e25dac0f400be9db0fad1b3447f"
     },
     {
+      "path": "homelab/map_sessions.py",
+      "sha256": "f4dfc37ba272ab8c4f3a6332928f82e8916b2c4c324d4b8d98a3243555ade1e2"
+    },
+    {
       "path": "homelab/map_sources.html",
-      "sha256": "830601a311550dd6ee68fc5f5b4e18c738eb39ff5cd5d9c462564b27213c9bb5"
+      "sha256": "58e0bcf983c02c262d29a8c7cb42956353cab286d09ee137652de7afc4587c7f"
     },
     {
       "path": "homelab/mesh_preview.py",
@@ -203,5 +207,6 @@
       "sha256": "8a1e138fb26feba45281ae04238f311c8cce40e515824a431677dbe2a12f3fcc"
     }
   ],
-  "shared_terrain_revision": "ab67f3b5078f9d32173d35811c2ecd16c3d64df3"
+  "shared_terrain_revision": "ab67f3b5078f9d32173d35811c2ecd16c3d64df3",
+  "shared_imagery_revision": "a8cebd483ea656c75688fd8105e623132fc2398e"
 }

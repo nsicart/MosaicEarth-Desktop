@@ -13,17 +13,17 @@ Unicode true
 !include "WinVer.nsh"
 
 Name "MosaicEarth Desktop"
-OutFile "../installers/MosaicEarth-Desktop-0.4.2-x64-Setup.exe"
+OutFile "../installers/MosaicEarth-Desktop-0.4.3-x64-Setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\MosaicEarth Desktop"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 SetDateSave off
 !define MUI_ICON "../resources/mosaicearth.ico"
 !define MUI_UNICON "../resources/mosaicearth.ico"
-VIProductVersion "0.4.2.0"
+VIProductVersion "0.4.3.0"
 VIAddVersionKey "ProductName" "MosaicEarth Desktop"
 VIAddVersionKey "FileDescription" "MosaicEarth Desktop Setup"
-VIAddVersionKey "FileVersion" "0.4.2"
+VIAddVersionKey "FileVersion" "0.4.3"
 VIAddVersionKey "LegalCopyright" "MosaicEarth contributors"
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\python\pythonw.exe"
@@ -109,6 +109,7 @@ Section "MosaicEarth Desktop"
   File "../CONNECTORS.md"
   File "../SIGNING.md"
   File "../RELEASE_NOTES.md"
+  File "../MAP_SERVICES.md"
   File "../build/SOURCE_REVISION"
   File "windows-launch.pyw"
   SetOutPath "$INSTDIR\src"
@@ -127,7 +128,7 @@ Section "MosaicEarth Desktop"
   CreateShortCut "$DESKTOP\MosaicEarth Desktop.lnk" "$INSTDIR\python\pythonw.exe" '"$INSTDIR\windows-launch.pyw"' "$INSTDIR\resources\mosaicearth.ico"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "DisplayName" "MosaicEarth Desktop"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "DisplayIcon" "$INSTDIR\resources\mosaicearth.ico"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "DisplayVersion" "0.4.2"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "DisplayVersion" "0.4.3"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MosaicEarthDesktop" "UninstallString" '"$INSTDIR\Uninstall.exe"'
 SectionEnd
 

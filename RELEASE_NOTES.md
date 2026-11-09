@@ -1,3 +1,11 @@
+# 0.4.3 — global satellite imagery
+
+- Web and both Desktop platforms share Esri World Imagery for global detail, with PNOA/IGN in Spain and EOX as the open fallback. Resolution and capture dates vary by location.
+- Satellite access uses individual temporary sessions. Private application credentials remain on the server, and a persistent reservation ledger bounds service use across restarts and concurrent requests.
+- Service outages or exhausted allowance display a clear notice and keep the globe usable with the open background. Recovery reloads the detailed background. Attribution follows the actual loaded source, including asynchronous failures.
+- The source edition remains accountless; source operators can select open-only imagery or configure their own licensed broker. No Esri imagery or permanent credentials are distributed with the source or installers.
+- Map service, privacy and storage notices are updated. NodeODX/OpenSplat engines, NVIDIA/CPU selection and connector protocols are unchanged. Windows Authenticode signing remains pending.
+
 # 0.4.2 — worldwide terrain and rear flight camera
 
 - Re:Earth / Mapterhorn quantized-mesh terrain replaces client-side terrain conversion as the primary background on Windows, Linux and the web.

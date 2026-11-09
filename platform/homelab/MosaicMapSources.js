@@ -277,6 +277,52 @@
             destroy: () => { abort.abort(); cache.clear(); }
         };
     }
+    // A session belongs to one browser/app instance. No Esri application key is
+    // embedded in source, installers or responses from the public broker.
+    let basemapSession = null, basemapPending = null, basemapRetryAt = 0, basemapReason = '';
+    let clientNonce = null;
+    function sessionNonce() {
+        if (clientNonce) return clientNonce;
+        try { clientNonce = global.sessionStorage.getItem('mosaic-basemap-client-v1'); } catch (_) {}
+        if (!/^[a-f0-9]{64}$/.test(clientNonce || '')) {
+            const bytes = new Uint8Array(32);
+            global.crypto.getRandomValues(bytes);
+            clientNonce = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+            try { global.sessionStorage.setItem('mosaic-basemap-client-v1', clientNonce); } catch (_) {}
+        }
+        return clientNonce;
+    }
+    function sessionError(reason, retry) {
+        const error = new Error('Satellite session unavailable');
+        error.reason = reason || 'unavailable';
+        error.retry = Math.max(60, Math.min(3600, Number(retry) || 60));
+        return error;
+    }
+    function getBasemapSession() {
+        if (basemapSession && basemapSession.expiresAt > Date.now() + 120000) return Promise.resolve(basemapSession);
+        if (Date.now() < basemapRetryAt) return Promise.reject(sessionError(basemapReason, (basemapRetryAt-Date.now())/1000));
+        if (basemapPending) return basemapPending;
+        basemapPending = (async function () {
+            const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
+            try {
+                const config = global.MosaicMapConfig || {};
+                const url = config.sessionUrl || 'https://app.mosaicearth.app/api/v2/maps/session';
+                const response = await fetch(url, {method:'POST', credentials:'omit', cache:'no-store',
+                    referrerPolicy:'no-referrer', headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({client:sessionNonce()}), signal:controller.signal});
+                const data = await response.json();
+                if (!response.ok) throw sessionError(data.error, data.retryAfter);
+                if (typeof data.sessionToken !== 'string' || !data.sessionToken || !Number.isFinite(data.expiresAt) || data.expiresAt <= Date.now()+60000) throw sessionError();
+                basemapSession = data;
+                return data;
+            } catch (error) {
+                basemapReason = error.reason || 'unavailable';
+                basemapRetryAt = Date.now() + (error.retry || 60) * 1000;
+                throw sessionError(basemapReason, error.retry);
+            } finally { clearTimeout(timer); basemapPending = null; }
+        })();
+        return basemapPending;
+    }
     function createImagery(Cesium, mode) {
         const osmCredit = new Cesium.Credit('© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors', true);
         if (mode === 'topographic') return new Cesium.UrlTemplateImageryProvider({
@@ -299,7 +345,52 @@
             }
             return inside;
         }
-        const fallback = new Set(), parents = new Map();
+        const fallback = new Set(), parents = new Map(), tileCredits = new Map(), esriImages = new WeakSet();
+        const esriCredit = new Cesium.Credit('<a href="https://www.esri.com/" target="_blank" rel="noopener">Powered by Esri</a>', true);
+        const openOnly = !!(global.MosaicMapConfig && global.MosaicMapConfig.openOnly);
+        let esri = null, esriUntil = 0, preparing = null, retryAt = 0, retryTimer = null, disposed = false;
+        let statusListener = null, healthy = true, message = '', usedFallback = false;
+        function status(ok, text, refresh) {
+            healthy = ok; message = text || '';
+            if (statusListener && !disposed) statusListener(ok, message, !!refresh);
+        }
+        function remember(x,y,z,credits) {
+            // Cesium obtains the credits immediately after requestImage(),
+            // before its promise resolves. Keep that array alive and update it
+            // in place if the request falls back to a different data source.
+            const key=z+'/'+x+'/'+y, current=tileCredits.get(key);
+            if(current)current.splice(0,current.length,...credits);
+            else tileCredits.set(key,credits);
+            if(tileCredits.size>4096)tileCredits.delete(tileCredits.keys().next().value);
+        }
+        function degrade(error) {
+            if (disposed) return;
+            esri = null;
+            const retry = error && error.retry || 60;
+            retryAt = Date.now()+retry*1000;
+            const budget = error && error.reason === 'budget';
+            status(false, budget ? 'Detailed satellite imagery has reached its monthly service allowance. A lower-resolution background is shown; your projects remain available.' : 'Detailed satellite imagery is temporarily unavailable. A lower-resolution background is shown; retrying automatically.');
+            clearTimeout(retryTimer);
+            retryTimer = setTimeout(() => { retryTimer=null; prepareEsri(); }, retry*1000+50);
+        }
+        function prepareEsri() {
+            if (disposed || openOnly || preparing || Date.now()<retryAt) return;
+            preparing = (async function () {
+                let timer;
+                try {
+                    const session = await getBasemapSession();
+                    const provider = await Promise.race([
+                        Cesium.ArcGisMapServerImageryProvider.fromBasemapType(Cesium.ArcGisBaseMapType.SATELLITE, {token:session.sessionToken, enablePickFeatures:false}),
+                        new Promise((_, reject) => {timer=setTimeout(()=>reject(sessionError()),20000);})
+                    ]);
+                    if (disposed) return;
+                    esri=provider; esriUntil=session.expiresAt; retryAt=0;
+                    const refresh=usedFallback; usedFallback=false;
+                    status(true,'',refresh);
+                } catch (error) { degrade(error); }
+                finally { clearTimeout(timer); preparing=null; }
+            })();
+        }
         function national(x,y,z) {
             if (z < 12) return false;
             const p = Cesium.Rectangle.center(eox.tilingScheme.tileXYToRectangle(x,y,z));
@@ -307,7 +398,8 @@
             const lon=Cesium.Math.toDegrees(p.longitude),lat=Cesium.Math.toDegrees(p.latitude);
             return spain.some(poly=>inRing(lon,lat,poly[0])&&!poly.slice(1).some(ring=>inRing(lon,lat,ring)));
         }
-        function globalImage(x,y,z,request) {
+        function openImage(x,y,z,request) {
+            remember(x,y,z,[eoxCredit]);
             if (z <= 14) return eox.requestImage(x,y,z,request);
             const factor=2**(z-14), px=Math.floor(x/factor), py=Math.floor(y/factor), key=px+'/'+py;
             let image=parents.get(key);
@@ -324,26 +416,60 @@
                 return canvas;
             });
         }
+        function globalImage(x,y,z,request) {
+            if(openOnly)return openImage(x,y,z,request);
+            if(!esri || esriUntil<=Date.now()+60000) {
+                esri=null;
+                if(Date.now()>=retryAt) {prepareEsri();return undefined;}
+                usedFallback=true;
+                return openImage(x,y,z,request);
+            }
+            const provider=esri;
+            remember(x,y,z,[esriCredit].concat(provider.credit?[provider.credit]:[],provider.getTileCredits(x,y,z)||[]));
+            const result=provider.requestImage(x,y,z,request);
+            if(!result)return undefined;
+            return Promise.resolve(result).then(image=>{
+                esriImages.add(image);
+                return image;
+            }).catch(error=>{
+                if(request && request.cancelled)throw error;
+                degrade(sessionError()); usedFallback=true;
+                return openImage(x,y,z,undefined);
+            });
+        }
         return {
             tileWidth:256,tileHeight:256,minimumLevel:0,maximumLevel:19,rectangle:eox.rectangle,tilingScheme:eox.tilingScheme,
-            errorEvent:new Cesium.Event(),hasAlphaChannel:true,credit:undefined,tileDiscardPolicy:undefined,
-            getTileCredits:(x,y,z)=>[national(x,y,z)&&!fallback.has(z+'/'+x+'/'+y)?ignCredit:eoxCredit],
+            errorEvent:new Cesium.Event(),hasAlphaChannel:true,credit:undefined,
+            tileDiscardPolicy:{isReady:()=>!esri || !esri.tileDiscardPolicy || esri.tileDiscardPolicy.isReady(),
+                shouldDiscardImage:image=>!!(esriImages.has(image) && esri && esri.tileDiscardPolicy && esri.tileDiscardPolicy.shouldDiscardImage(image))},
+            getTileCredits:(x,y,z)=>{
+                const key=z+'/'+x+'/'+y;
+                if(!tileCredits.has(key))remember(x,y,z,[national(x,y,z)&&!fallback.has(key)?ignCredit:eoxCredit]);
+                return tileCredits.get(key);
+            },
             requestImage:(x,y,z,request)=>{
                 if(!national(x,y,z))return globalImage(x,y,z,request);
                 const result=ign.requestImage(x,y,z,request);
                 if(!result)return undefined;
                 return Promise.resolve(result).then(image=>{
                     fallback.delete(z+'/'+x+'/'+y);
+                    remember(x,y,z,[ignCredit]);
                     return image;
                 }).catch(error=>{
                     if(request && request.cancelled)throw error;
                     fallback.add(z+'/'+x+'/'+y);
                     // Use an unthrottled fallback; returning undefined inside a
                     // promise would otherwise produce an invalid imagery tile.
-                    return globalImage(x,y,z,undefined);
+                    // The async national failure must resolve to an image even
+                    // while the global provider's metadata is still loading.
+                    const backup=globalImage(x,y,z,undefined);
+                    if(backup)return backup;
+                    return Promise.resolve(preparing).then(()=>globalImage(x,y,z,undefined)||openImage(x,y,z,undefined));
                 });
             },
-            pickFeatures:()=>undefined
+            pickFeatures:()=>undefined,
+            setStatusListener:listener=>{statusListener=listener;if(listener)listener(healthy,message,false);},
+            destroy:()=>{disposed=true;statusListener=null;clearTimeout(retryTimer);parents.clear();tileCredits.clear();fallback.clear();}
         };
     }
     function createGeocoder(Cesium, terrain) {

@@ -29,3 +29,7 @@ Re:Earth Terrain serves Mapterhorn-derived quantized meshes. Service implementat
 The two bundled polar grids in `platform/homelab/terrain-data` are derived from NOAA NCEI ETOPO 2022 60 arc-second **surface** elevation and its EGM2008 geoid. NOAA publishes these data under CC0 1.0; credit: NOAA National Centers for Environmental Information (2022), ETOPO 2022 15 Arc-Second Global Relief Model, https://doi.org/10.25921/fd45-gt74. The build script resamples longitude, clamps ocean bathymetry to sea surface, adds geoid undulation and stores quarter-metre samples. Reproduce them with `scripts/build_polar_terrain.py` in a Python environment with GDAL and NumPy. Metadata and hashes accompany the grids. These background data are not suitable for navigation or survey certification.
 
 The 0.4.2 global fallback grid is derived from NOAA ETOPO 2022 (CC0-1.0), at 0.25° resolution with ellipsoidal heights. Its provenance and hashes are in `platform/homelab/terrain-data/global-etopo2022-v1.json`. It is contextual display terrain, not survey or navigation data.
+
+## Online imagery service (0.4.3)
+
+Esri World Imagery is accessed through ArcGIS Location Platform under its service and data terms. It is not bundled or licensed under the AGPL. Temporary per-client session tokens are issued by a private broker; no permanent Esri credential is included in the source or installer. The viewer preserves Powered by Esri and upstream data attribution, with EOX/PNOA open fallbacks. See [map service terms and configuration](MAP_SERVICES.md).

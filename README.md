@@ -73,7 +73,7 @@ Local projects and bundled viewers remain usable without a cloud session. Initia
 | Python / FastAPI / SQLite | Local application and project storage. |
 | Docker | Isolated local processing environments on Windows and Linux. |
 
-Dependency revisions and notices are included in [third-party licenses](THIRD_PARTY_LICENSES.md) and the [engine dependency manifest](engines/dependencies.txt). Default map sources are Re:Earth / Mapterhorn terrain with bundled NOAA polar coverage, OpenStreetMap, EOX global imagery and PNOA/IGN imagery in Spain. Public terrain tiles are requested on demand through a bounded MosaicEarth cache, with direct Re:Earth recovery and bundled coarse NOAA terrain if both detailed services fail. Attribution is preserved. No planet-sized download or self-hosted Re:Earth worker is needed.
+Dependency revisions and notices are included in [third-party licenses](THIRD_PARTY_LICENSES.md) and the [engine dependency manifest](engines/dependencies.txt). Map sources are Re:Earth / Mapterhorn terrain with bundled NOAA polar coverage, OpenStreetMap, Esri World Imagery and PNOA/IGN imagery in Spain, with EOX as an open imagery fallback. Esri imagery is a separate licensed online service, not part of the AGPL source or installer. Public terrain tiles are requested on demand through a bounded MosaicEarth cache, with direct Re:Earth recovery and bundled coarse NOAA terrain if both detailed services fail. Attribution is preserved. See [map services, open-only mode and source-deployment configuration](MAP_SERVICES.md).
 
 ## Documentation and help
 
