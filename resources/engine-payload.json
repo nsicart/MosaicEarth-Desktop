@@ -1,19 +1,19 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.2",
   "variant": "cpu",
-  "filename": "mosaicearth-engines-cpu-0.4.1-6cc43593562b.tar.gz",
-  "sha256": "6cc43593562b2b5933d95a340c548a58c6ea36e99fbe25e18a254b1583691318",
-  "bytes": 1395042746,
-  "unpacked_bytes": 8537499830,
+  "filename": "mosaicearth-engines-cpu-0.4.2-618d6c83d672.tar.gz",
+  "sha256": "618d6c83d67206edf34a3ea2a15f865f329bed57682b3403c5adb360a0ceaa3c",
+  "bytes": 1396710685,
+  "unpacked_bytes": 8540889113,
   "images": [
     "mosaicearth-desktop/nodeodx:0.1.0",
     "mosaicearth-desktop/local-engine:0.1.0",
-    "mosaicearth-desktop/platform:0.4.1"
+    "mosaicearth-desktop/platform:0.4.2"
   ],
   "source_url": "https://app.mosaicearth.app/open-source",
   "image_ids": {
     "mosaicearth-desktop/nodeodx:0.1.0": "sha256:c38482bc0b2997430eb05d1f36992cb7a2f29fceadcfd3148acdb91c5acf55f7",
     "mosaicearth-desktop/local-engine:0.1.0": "sha256:927104aa0c74ca01944fe6382771cf62e660e9a48be601874e5f1a2165a90505",
-    "mosaicearth-desktop/platform:0.4.1": "sha256:7105ecb9adf4494c85e5b63307cef19346536146f0761c0276a8b24ffb94eb7d"
+    "mosaicearth-desktop/platform:0.4.2": "sha256:9632de57bf24f30002046ef888d43cafcdf464c665143c240226bbd2ee81a402"
   }
 }
