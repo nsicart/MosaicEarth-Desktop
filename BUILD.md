@@ -1,5 +1,7 @@
 # Build and provision
 
+To run the open-source edition, start with [Install from source](INSTALL_FROM_SOURCE.md). This document covers how the engines and distributable packages are built.
+
 Extract the public source archive or check out the desired Git revision to run the source edition using the provisioning script and Python launcher described in the README. Building native installer packages requires a clean Git checkout so their source revision can be recorded. See the [engine dependency manifest](engines/dependencies.txt) for the validated package versions. On Debian-compatible Linux with Python 3, curl, OpenSSL and dpkg tools, run `./scripts/build-linux.sh`. This produces the official account-associated Debian package and SHA-256 manifest. Set `ME_DESKTOP_EDITION=community` to build the source edition without account requirements. Both builds require a clean Git checkout so the embedded source revision is exact. The package includes its source revision and the exact Cesium package verified with the npm distribution integrity hash.
 
 The shared interface resources are downloaded anonymously from a versioned public source archive. `platform/web-manifest.json` pins the archive and every file by size and SHA-256; a clean checkout does not depend on the live website's changing JavaScript or CSS. Cesium is fetched separately from npm with its pinned integrity hash. No account is needed to obtain or build these source resources.
