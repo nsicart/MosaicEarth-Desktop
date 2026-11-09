@@ -21,3 +21,11 @@ The Desktop installer includes the application and CesiumJS, plus Python on Wind
 ## Default map data and services
 
 The shared map uses CesiumJS (Apache 2.0), Mapzen terrain tiles from AWS Open Data, OpenStreetMap (ODbL), EOX cloudless 2016 (CC BY 4.0), and IGN PNOA (CC BY 4.0). The Natural Earth Spain boundary (public domain) selects the national imagery provider. Full data-source credits, service links, capture-year limitations and resampling notes are distributed in `platform/homelab/map_sources.html`, served locally at `/map-sources`. Photon supplies explicitly submitted place searches through the canonical shared cache. Public endpoints have no uptime guarantee; no bulk/offline basemap download is offered. Map licences do not change the ownership of user assets.
+
+## Worldwide background terrain (0.4.2)
+
+Re:Earth Terrain serves Mapterhorn-derived quantized meshes. Service implementation: MIT; terrain data: CC BY 4.0 and the upstream regional notices at https://download.mapterhorn.com/attribution.json. Source and service information: https://github.com/reearth/reearth-terrain and https://terrain.reearth.land/. These remote datasets are not bundled in the installer.
+
+The two bundled polar grids in `platform/homelab/terrain-data` are derived from NOAA NCEI ETOPO 2022 60 arc-second **surface** elevation and its EGM2008 geoid. NOAA publishes these data under CC0 1.0; credit: NOAA National Centers for Environmental Information (2022), ETOPO 2022 15 Arc-Second Global Relief Model, https://doi.org/10.25921/fd45-gt74. The build script resamples longitude, clamps ocean bathymetry to sea surface, adds geoid undulation and stores quarter-metre samples. Reproduce them with `scripts/build_polar_terrain.py` in a Python environment with GDAL and NumPy. Metadata and hashes accompany the grids. These background data are not suitable for navigation or survey certification.
+
+The 0.4.2 global fallback grid is derived from NOAA ETOPO 2022 (CC0-1.0), at 0.25° resolution with ellipsoidal heights. Its provenance and hashes are in `platform/homelab/terrain-data/global-etopo2022-v1.json`. It is contextual display terrain, not survey or navigation data.

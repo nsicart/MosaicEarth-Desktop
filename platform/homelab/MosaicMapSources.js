@@ -1,5 +1,192 @@
 (function (global) {
     'use strict';
+    // Re:Earth supplies native quantized meshes with ellipsoidal heights. Its
+    // upstream Mercator DEM stops near 85 degrees: bundled NOAA ice-surface
+    // grids fill the polar caps, blended over 84–85 degrees at every LOD.
+    const polarGrids = new Map();
+    const gatewayUrl = 'https://terrain.mosaicearth.app/terrain/v1/global';
+    const directUrl = 'https://terrain.reearth.land/cesium-mesh/ellipsoid';
+    function polarGrid(hemisphere) {
+        if (polarGrids.has(hemisphere)) return polarGrids.get(hemisphere);
+        const promise = (async function () {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 15000);
+            try {
+                const response = await fetch('/maps/terrain/polar-' + hemisphere + '-etopo2022-v1.bin.gz', {signal: controller.signal, credentials: 'omit'});
+                if (!response.ok) throw new Error('Polar terrain unavailable (' + response.status + ')');
+                const buffer = await response.arrayBuffer();
+                if (buffer.byteLength !== 1440 * 361 * 2) throw new Error('Invalid polar terrain grid');
+                return new DataView(buffer);
+            } finally { clearTimeout(timer); }
+        })();
+        polarGrids.set(hemisphere, promise);
+        promise.catch(() => { if (polarGrids.get(hemisphere) === promise) polarGrids.delete(hemisphere); });
+        return promise;
+    }
+    function polarHeight(grid, lon, lat, hemisphere) {
+        const width = 1440, height = 361;
+        const px = ((lon + 180) % 360 + 360) % 360 * 4;
+        const py = Math.max(0, Math.min(height - 1, ((hemisphere === 'north' ? 90 : -84) - lat) * 60));
+        const x = Math.floor(px), y = Math.floor(py), fx = px - x, fy = py - y;
+        const x1 = (x + 1) % width, y1 = Math.min(y + 1, height - 1);
+        const value = (col, row) => grid.getInt16((row * width + col) * 2, true) * .25;
+        return (value(x,y)*(1-fx)+value(x1,y)*fx)*(1-fy)+(value(x,y1)*(1-fx)+value(x1,y1)*fx)*fy;
+    }
+    // Packaged low-resolution globe: the last resort has no external service
+    // dependency, including on a Desktop with no cloud account or Internet.
+    function createLocalTerrain(Cesium) {
+        const scheme = new Cesium.GeographicTilingScheme(), availability = new Cesium.TileAvailability(scheme, 6);
+        for(let z=0;z<=6;z++)availability.addAvailableTileRange(z,0,0,2**(z+1)-1,2**z-1);
+        let gridPromise;
+        async function grid() {
+            if(!gridPromise)gridPromise=fetch('/maps/terrain/global-etopo2022-v1.bin.gz',{credentials:'omit'})
+                .then(r=>{if(!r.ok)throw new Error('Local terrain unavailable');return r.arrayBuffer();})
+                .then(buffer=>{if(buffer.byteLength!==1440*720*2)throw new Error('Invalid local terrain grid');return new DataView(buffer);})
+                .catch(e=>{gridPromise=null;throw e;});
+            return gridPromise;
+        }
+        function sample(data,lon,lat) {
+            const px=((lon+180)%360+360)%360*4-.5,py=Math.max(0,Math.min(719,(90-lat)*4-.5));
+            const x=Math.floor(px),y=Math.floor(py),fx=px-x,fy=py-y;
+            const value=(col,row)=>data.getInt16((row*1440+((col%1440)+1440)%1440)*2,true)*.5;
+            return (value(x,y)*(1-fx)+value(x+1,y)*fx)*(1-fy)+(value(x,Math.min(719,y+1))*(1-fx)+value(x+1,Math.min(719,y+1))*fx)*fy;
+        }
+        return {tilingScheme:scheme,availability,errorEvent:new Cesium.Event(),hasWaterMask:false,hasVertexNormals:false,
+            credit:new Cesium.Credit('<a href="/map-sources" target="_blank" rel="noopener">NOAA ETOPO · coarse backup terrain</a>',true),
+            getTileDataAvailable:(x,y,z)=>availability.isTileAvailable(z,x,y),loadTileDataAvailability:()=>undefined,
+            getLevelMaximumGeometricError:z=>Cesium.TerrainProvider.getEstimatedLevelZeroGeometricErrorForAHeightmap(scheme.ellipsoid,65,2)/2**z,
+            async requestTileGeometry(x,y,z,request) {
+                const data=await grid(),rect=scheme.tileXYToRectangle(x,y,z),size=65,heights=new Float32Array(size*size);
+                if(request?.cancelled)throw new Error('Terrain request cancelled');
+                for(let row=0;row<size;row++)for(let col=0;col<size;col++)
+                    heights[row*size+col]=sample(data,Cesium.Math.toDegrees(rect.west+(rect.east-rect.west)*col/(size-1)),Cesium.Math.toDegrees(rect.north+(rect.south-rect.north)*row/(size-1)));
+                return new Cesium.HeightmapTerrainData({buffer:heights,width:size,height:size,childTileMask:z<6?15:0});
+            }
+        };
+    }
+    function createWorldTerrain(Cesium, onStatus) {
+        const scheme = new Cesium.GeographicTilingScheme();
+        const availability = new Cesium.TileAvailability(scheme, 14);
+        for (let z = 0; z <= 14; z++) {
+            const n = 2 ** z;
+            // The polar grids are contextual, about 1.9 km N/S and up to
+            // 2.9 km E/W. Stop refining pure polar tiles beyond level 8.
+            availability.addAvailableTileRange(z, 0, z <= 8 ? 0 : Math.floor(5 / 180 * n),
+                2*n-1, z <= 8 ? n-1 : Math.ceil(175 / 180 * n)-1);
+        }
+        const errorEvent = new Cesium.Event(), pending = new Set(), failed = new Set();
+        const rootError = Cesium.TerrainProvider.getEstimatedLevelZeroGeometricErrorForAHeightmap(scheme.ellipsoid, 65, 2);
+        let provider, destroyed = false, backup = false, direct = false, directPromise;
+        const timers=new Set();
+        function loadProvider(url) {
+            let timer;
+            const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Terrain metadata timed out')),6000);timers.add(timer);});
+            return Promise.race([Cesium.CesiumTerrainProvider.fromUrl(url,{requestVertexNormals:false,requestWaterMask:false}),timeout])
+                .finally(()=>{clearTimeout(timer);timers.delete(timer);});
+        }
+        async function alternate() {
+            if(destroyed)throw new Error('Terrain viewer closed');
+            if(backup)return provider;
+            if(!directPromise)directPromise=loadProvider(directUrl).then(p=>{direct=true;return p;});
+            try { return await directPromise; }
+            catch (_) { backup=true; return createLocalTerrain(Cesium); }
+        }
+        function status() {
+            if (onStatus && !destroyed) onStatus(!backup && !failed.size, failed.size
+                ? 'Some 3D terrain could not load. Check your connection and reload to retry.'
+                : 'Detailed terrain is unavailable. Showing bundled NOAA terrain at low resolution. Reload when the connection is restored.');
+        }
+        const primaryCredit = new Cesium.Credit('<a href="https://terrain.reearth.land/" target="_blank" rel="noopener">Re:Earth</a> · <a href="https://mapterhorn.com/" target="_blank" rel="noopener">Mapterhorn</a> · <a href="https://earth-info.nga.mil/" target="_blank" rel="noopener">EGM2008</a> · <a href="/map-sources" target="_blank" rel="noopener">NOAA · sources</a>', true);
+        const credits=new Map();
+        const result = {
+            tilingScheme: scheme, get availability(){return backup?provider.availability:availability;}, errorEvent, hasWaterMask: false, hasVertexNormals: false,
+            get source(){return backup?'bundled-noaa':direct?'direct-reearth':'mosaicearth-cache';},
+            get credit() {
+                if(backup)return provider.credit;
+                if(!provider?.credit)return primaryCredit;
+                if(!credits.has(provider))credits.set(provider,new Cesium.Credit(provider.credit.html+' · <a href="/map-sources" target="_blank" rel="noopener">NOAA · sources</a>',true));
+                return credits.get(provider);
+            },
+            setStatusListener(fn) { onStatus = fn; status(); },
+            getLevelMaximumGeometricError: z => provider ? provider.getLevelMaximumGeometricError(z) : rootError / 2 ** z,
+            getTileDataAvailable: (x,y,z) => (backup?provider.availability:availability).isTileAvailable(z,x,y),
+            loadTileDataAvailability: () => undefined,
+            requestTileGeometry(x,y,z,request) {
+                if (destroyed) return Promise.reject(new Error('Terrain viewer closed'));
+                if (!provider) return undefined; // Cesium retries after metadata; no extra FIFO queue.
+                const tileRequest = request || new Cesium.Request({throttle:false, throttleByServer:false});
+                const requestedProvider=provider;
+                const tile = requestedProvider.requestTileGeometry(x,y,z,tileRequest);
+                if (!tile) return undefined; // Preserve native scheduler throttling.
+                pending.add(tileRequest);
+                const key = z+'/'+x+'/'+y;
+                return Promise.resolve(tile).catch(async error=>{
+                    if(destroyed||tileRequest.cancelled)throw error;
+                    let attempted=requestedProvider;
+                    for(let attempt=0;attempt<2;attempt++){
+                        if(provider===attempted){
+                            if(!direct&&!backup)provider=await alternate();
+                            else if(!backup){backup=true;provider=createLocalTerrain(Cesium);}
+                        }
+                        status();
+                        if(destroyed||tileRequest.cancelled)throw error;
+                        attempted=provider;
+                        // Recovery bypasses scheduling: undefined cannot be
+                        // returned from inside a promise as a terrain result.
+                        const retry=new Cesium.Request({throttle:false,throttleByServer:false});
+                        pending.add(retry);
+                        try { return await attempted.requestTileGeometry(x,y,z,retry); }
+                        catch(e){error=e;}
+                        finally { pending.delete(retry); }
+                    }
+                    throw error;
+                }).then(async data => {
+                    if (destroyed || tileRequest.cancelled) throw new Error('Terrain request cancelled');
+                    const rect = scheme.tileXYToRectangle(x,y,z);
+                    if (rect.north > Cesium.Math.toRadians(84) || rect.south < Cesium.Math.toRadians(-84)) {
+                        const north = rect.north > Cesium.Math.toRadians(84) ? await polarGrid('north') : null;
+                        const south = rect.south < Cesium.Math.toRadians(-84) ? await polarGrid('south') : null;
+                        if (destroyed || tileRequest.cancelled) throw new Error('Terrain request cancelled');
+                        const size=65, heights=new Float32Array(size*size);
+                        for(let row=0;row<size;row++) for(let col=0;col<size;col++) {
+                            const lon=rect.west+(rect.east-rect.west)*col/(size-1);
+                            const lat=rect.north+(rect.south-rect.north)*row/(size-1);
+                            const latitude=Cesium.Math.toDegrees(lat), longitude=Cesium.Math.toDegrees(lon);
+                            const t=Math.max(0,Math.min(1,Math.abs(latitude)-84));
+                            // Smoothstep has zero slope at both data boundaries.
+                            const weight=t*t*(3-2*t);
+                            const original=weight < 1 ? data.interpolateHeight(rect,lon,lat) : 0;
+                            const polar=weight > 0 ? polarHeight(latitude>=0?north:south,longitude,latitude,latitude>=0?'north':'south') : 0;
+                            const value=original*(1-weight)+polar*weight;
+                            if(!Number.isFinite(value)) throw new Error('Invalid terrain elevation');
+                            heights[row*size+col]=value;
+                        }
+                        let mask=0;
+                        for (const [bit,dx,dy] of [[1,0,1],[2,1,1],[4,0,0],[8,1,0]])
+                            if((backup?provider.availability:availability).isTileAvailable(z+1,x*2+dx,y*2+dy))mask|=bit;
+                        const upstreamCredits=data.credits;
+                        data=new Cesium.HeightmapTerrainData({buffer:heights,width:size,height:size,childTileMask:mask});
+                        // HeightmapTerrainData 1.144 ignores constructor credits;
+                        // expose the TerrainData interface on this derived tile.
+                        if(upstreamCredits)Object.defineProperty(data,'credits',{value:upstreamCredits});
+                    }
+                    failed.delete(key); status(); return data;
+                }).catch(error => {
+                    if (!destroyed && !tileRequest.cancelled) { failed.add(key); status(); }
+                    throw error;
+                }).finally(() => pending.delete(tileRequest));
+            },
+            destroy() {
+                destroyed = true; for(const timer of timers)clearTimeout(timer);timers.clear();
+                for (const request of pending) request.cancel();
+                pending.clear(); provider?.destroy?.();
+            }
+        };
+        result.readyPromise = loadProvider(gatewayUrl).catch(alternate)
+            .then(p=>{if(!destroyed)provider=p;status();return result;})
+            .catch(error=>{if(destroyed)return result;throw error;});
+        return result;
+    }
     // Mapzen Terrarium pixels represent pixel centres. Sample neighbouring
     // pixels at tile boundaries so adjacent Cesium meshes share exact edges.
     function createOpenTerrain(Cesium, onStatus) {
@@ -164,7 +351,7 @@
         async function destination(lon,lat,requestedHeight) {
             const point=Cesium.Cartographic.fromDegrees(lon,lat);
             let height=10000;
-            try { const result=await Cesium.sampleTerrain(terrain,12,[point]); if(Number.isFinite(result[0].height))height=result[0].height; } catch (_) {}
+            try { if (terrain.readyPromise) await terrain.readyPromise; const result=await Cesium.sampleTerrain(terrain,12,[point]); if(Number.isFinite(result[0].height))height=result[0].height; } catch (_) {}
             return Cesium.Cartesian3.fromDegrees(lon,lat,Math.max(Number(requestedHeight)||0,height+5000));
         }
         return {
@@ -190,5 +377,5 @@
             }
         };
     }
-    global.MosaicMapSources = {createTerrain:createOpenTerrain, createImagery:createImagery, createGeocoder:createGeocoder};
+    global.MosaicMapSources = {createTerrain:createWorldTerrain, createBackupTerrain:createOpenTerrain, createImagery:createImagery, createGeocoder:createGeocoder};
 })(window);

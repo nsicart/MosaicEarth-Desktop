@@ -33,7 +33,7 @@ git clone https://github.com/nsicart/MosaicEarth-Desktop.git
 cd MosaicEarth-Desktop
 ```
 
-The default branch includes the latest documentation and maintenance changes. To use the exact source corresponding to a published installer, check out its tag, for example `git checkout v0.4.1` in a clean checkout. A detached HEAD at a release tag is normal.
+The default branch includes the latest documentation and maintenance changes. To use the exact source corresponding to a published installer, check out its tag, for example `git checkout v0.4.2` in a clean checkout. A detached HEAD at a release tag is normal.
 
 ### 3. Build the engines and interface
 
@@ -122,7 +122,7 @@ The interface opens in an Edge app window when Edge is available, otherwise in t
 
 Back up the workspace before changing machines or installations. Closing a browser window does not cancel processing. Finish or cancel active tasks before stopping Docker. Removing the checkout does not remove a workspace stored elsewhere; removing Docker images can require rebuilding the engines.
 
-Initial provisioning, online basemaps, the public catalog and synchronization require Internet. Once provisioned, the local workspace and bundled viewers do not require a cloud session; offline operation does not include a downloaded copy of the world's basemaps.
+Initial provisioning, online basemaps, the public catalog and synchronization require Internet. Once provisioned, the local workspace and bundled viewers do not require a cloud session; offline operation includes a coarse NOAA terrain fallback, but does not include a downloaded copy of worldwide imagery or street maps.
 
 ## Troubleshooting
 

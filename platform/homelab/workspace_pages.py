@@ -5414,7 +5414,7 @@ def render_mymap_viewer_page(user: Optional[Dict[str, Any]], id_or_slug: str, la
         <div class="base-row">
             <button type="button" class="active" data-base="satellite" onclick="setMyMosaicBaseLayer('satellite')">Satellite</button>
             <button type="button" data-base="topographic" onclick="setMyMosaicBaseLayer('topographic')">Topographic</button>
-            <button type="button" onclick="launchMyMosaicFly({map_id})" style="background:#99CC00;color:#070b09;font-weight:700;border-color:#99CC00;margin-left:6px;"><i class="fas fa-plane-departure me-1"></i> Fly 1st Person</button>
+            <button type="button" onclick="launchMyMosaicFly({map_id})" style="background:#99CC00;color:#070b09;font-weight:700;border-color:#99CC00;margin-left:6px;"><i class="fas fa-plane-departure me-1"></i> Fly View</button>
         </div>
     </div>
 
@@ -7319,7 +7319,7 @@ def render_internal_viewer_page(
     </div>"""
 
     fly_control_btn = (
-        f'<button type="button" onclick="window.location.href=\'/Fly.aspx?asset_id={html.escape(asset_key_str, quote=True)}&lat={lat_val}&lon={lon_val}\'" style="background:#99CC00;color:#070b09;font-weight:700;border-color:#99CC00;margin-left:6px;"><i class="fas fa-plane-departure me-1"></i> Fly 1st Person</button>'
+        f'<button type="button" onclick="window.location.href=\'/Fly.aspx?asset_id={html.escape(asset_key_str, quote=True)}&lat={lat_val}&lon={lon_val}\'" style="background:#99CC00;color:#070b09;font-weight:700;border-color:#99CC00;margin-left:6px;"><i class="fas fa-plane-departure me-1"></i> Fly View</button>'
         if mode == "view"
         else ""
     )

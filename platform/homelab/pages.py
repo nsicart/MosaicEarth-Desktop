@@ -1502,8 +1502,8 @@ def render_map2_page(
     <div class="base-layer-switch" aria-label="Base map" style="display:flex;align-items:center;gap:6px;">
         <button id="base-satellite" type="button" class="active" onclick="setMosaicBaseLayer('satellite')">Satellite</button>
         <button id="base-topographic" type="button" onclick="setMosaicBaseLayer('topographic')">Topographic</button>
-        <button id="btn-fly-global-map" type="button" onclick="launchGlobalFirstPersonFly()" style="background:#99CC00;color:#070b09;font-weight:700;border:none;padding:6px 12px;border-radius:3px;cursor:pointer;" title="Fly in 1st Person across the Global 3D World with all live MosaicAssets">
-            <i class="fas fa-plane-departure me-1"></i> Fly 1st Person
+        <button id="btn-fly-global-map" type="button" onclick="launchGlobalFirstPersonFly()" style="background:#99CC00;color:#070b09;font-weight:700;border:none;padding:6px 12px;border-radius:3px;cursor:pointer;" title="Fly View across the Global 3D World with all live MosaicAssets">
+            <i class="fas fa-plane-departure me-1"></i> Fly View
         </button>
     </div>
     <div class="container-fluid2">
@@ -2151,8 +2151,8 @@ def render_product_detail_page(
                                     <h1 class="product-title">{html.escape(name)}</h1>
                                     <div class="asset-detail-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
                                         <a id="btnView" class="btn btn-primary" href="/Potree.aspx?id={pid}&type={ftype}&pub={publish_id or 0}" target="_blank" rel="noopener">OPEN VIEWER FOR SHARING</a>
-                                        <a id="btnFlyFirstPersonAsset" class="btn" style="background:#99CC00;color:#070b09;font-weight:700;" href="/Fly.aspx?asset_id={html.escape(asset_key, quote=True)}&amp;lat={lat_val}&amp;lon={lon_val}" title="Fly in 1st Person over this MosaicAsset">
-                                            <i class="fas fa-plane-departure me-1"></i> Fly in 1st Person
+                                        <a id="btnFlyFirstPersonAsset" class="btn" style="background:#99CC00;color:#070b09;font-weight:700;" href="/Fly.aspx?asset_id={html.escape(asset_key, quote=True)}&amp;lat={lat_val}&amp;lon={lon_val}" title="Fly View over this MosaicAsset">
+                                            <i class="fas fa-plane-departure me-1"></i> Fly View
                                         </a>
                                     </div>
                                     <div class="asset-summary-lines">
@@ -2551,7 +2551,7 @@ def render_external_asset_detail_page(
                             <div class="asset-detail-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
                                 <a class="btn btn-primary" href="/MapView.aspx?id={project_id}&amp;asset_id={asset_id}" target="_blank" rel="noopener">OPEN FULL VIEWER</a>
                                 <a id="btnFlyFirstPersonExt" class="btn" style="background:#99CC00;color:#070b09;font-weight:700;" href="/Fly.aspx?asset_id={html.escape(asset_key, quote=True)}&amp;lat={lat_val}&amp;lon={lon_val}">
-                                    <i class="fas fa-plane-departure me-1"></i> Fly in 1st Person
+                                    <i class="fas fa-plane-departure me-1"></i> Fly View
                                 </a>
                             </div>
                             <dl class="processed-asset-facts">
@@ -3278,7 +3278,7 @@ def render_world_simulator_page(
                     <i class="fas fa-helicopter me-1"></i> HANGAR / AIRCRAFT
                 </button>
                 <button type="button" id="btnToggleCam" class="btn btn-sm btn-outline-light">
-                    <i class="fas fa-video me-1"></i> Camera: <span id="lblCamMode">1st Person HUD</span>
+                    <i class="fas fa-video me-1"></i> Camera: <span id="lblCamMode">Rear view</span>
                 </button>
                 <button type="button" id="btnResetApproach" class="btn btn-sm btn-outline-light" title="Reset approach over MosaicAsset (R)">
                     <i class="fas fa-crosshairs me-1"></i> Reset Over Asset
@@ -3299,7 +3299,7 @@ def render_world_simulator_page(
                         <span class="sim-badge">MosaicEarth &times; 4DTwinMaps AirEngine</span>
                         <h1 style="font-size:22px;font-weight:800;margin:8px 0 4px;color:#fff;">Select Your Exploration Mode</h1>
                         <p style="font-size:13px;color:#9ca3af;margin:0;">
-                            Flying over <strong style="color:#fff;">{html.escape(asset_title)}</strong> ({format_coordinates(lat, lon)}) in 1st-Person HUD or 3rd-Person Chase Camera.
+                            Flying over <strong style="color:#fff;">{html.escape(asset_title)}</strong> ({format_coordinates(lat, lon)}) with the aircraft visible from behind. Switch to cockpit or free orbit at any time.
                         </p>
                     </div>
                     <a id="lnkHangar4DTwinMaps" href="{html.escape(global_4dtm_url, quote=True)}" target="_blank" rel="noopener" class="btn-4dtm-global">
@@ -3364,10 +3364,10 @@ def render_world_simulator_page(
                         <code>&uarr; / &darr;</code> Forward / Backward (Pitch) &middot;
                         <code>A / D</code> Yaw + Bank Roll &middot;
                         <code>Q / E</code> or <code>&larr; / &rarr;</code> Roll + Strafe &middot;
-                        <code>C</code> Toggle 1st Person / 3rd Person
+                        <code>C</code> Change camera: Rear view / Cockpit / Free orbit
                     </div>
                     <button type="button" id="btnStartFlying" class="btn btn-lg" style="background:#99CC00;color:#070b09;font-weight:800;padding:11px 30px;border-radius:10px;box-shadow:0 10px 25px rgba(153,204,0,0.35);">
-                        <i class="fas fa-play me-2"></i> LAUNCH 1ST-PERSON FLIGHT
+                        <i class="fas fa-play me-2"></i> LAUNCH FLIGHT
                     </button>
                 </div>
             </div>
@@ -3591,10 +3591,10 @@ def render_world_simulator_page(
             }};
 
             var CAMERA_PRESETS = {{
-                aircraft: {{ chaseDistance: 40, chaseHeight: 12, lookAhead: 10, lookHeight: -1, speedLookAhead: 0.014, minFov: 52, maxFov: 67 }},
-                agile:    {{ chaseDistance: 29, chaseHeight: 8.5, lookAhead: 7, lookHeight: -0.7, speedLookAhead: 0.012, minFov: 55, maxFov: 74 }},
-                hover:    {{ chaseDistance: 20, chaseHeight: 6.2, lookAhead: 3, lookHeight: -0.4, speedLookAhead: 0.015, minFov: 51, maxFov: 64 }},
-                paramotor:{{ chaseDistance: 22, chaseHeight: 6.8, lookAhead: 4, lookHeight: -0.5, speedLookAhead: 0.012, minFov: 54, maxFov: 68 }}
+                aircraft: {{ chaseDistance: 40, chaseHeight: 6, lookAhead: 10, lookHeight: -1, speedLookAhead: 0.014, minFov: 52, maxFov: 67 }},
+                agile:    {{ chaseDistance: 29, chaseHeight: 4.4, lookAhead: 7, lookHeight: -0.7, speedLookAhead: 0.012, minFov: 55, maxFov: 74 }},
+                hover:    {{ chaseDistance: 20, chaseHeight: 3, lookAhead: 3, lookHeight: -0.4, speedLookAhead: 0.015, minFov: 51, maxFov: 64 }},
+                paramotor:{{ chaseDistance: 22, chaseHeight: 3.3, lookAhead: 4, lookHeight: -0.5, speedLookAhead: 0.012, minFov: 54, maxFov: 68 }}
             }};
 
             function defModel(cfg) {{
@@ -3615,14 +3615,15 @@ def render_world_simulator_page(
                     id: 'helicopter', name: 'HELICOPTER', physicsType: 'rotor', assisted: true,
                     modelUrl: '/assets/4dtwinmaps/models/helicopter-zsky-flight.glb', scale: 0.22, minPx: 32, maxScale: 4.2, headingOffset: -90, heightOffset: 0,
                     propellerNodes: ['TailRotor'], rotorNodes: ['MainRotor'],
-                    camera: {{ chaseDistance: 29, chaseHeight: 10, lookAhead: 3, lookHeight: -0.55, speedLookAhead: 0.015, minFov: 51, maxFov: 64 }},
+                    camera: {{ chaseDistance: 29, chaseHeight: 4.4, lookAhead: 3, lookHeight: -0.55, speedLookAhead: 0.015, minFov: 51, maxFov: 64 }},
                     spawnAlt: 110, spawnDistDeg: 0.0022, initialSpeed: 0,
                     physics: {{ massKg: 2700, cruiseSpeed: 54, maximumSpeed: 82, acceleration: 19, braking: 28, turnRate: 54, pitchRate: 24, rollLimit: 28, stallSpeed: 0, inertia: 0.95, climbRate: 16, descentRate: 13, minimumClearance: 2.2 }}
                 }}),
                 'paramotor': defModel({{
                     id: 'paramotor', name: 'PARAMOTOR', physicsType: 'paramotor', assisted: true,
-                    modelUrl: '/assets/4dtwinmaps/models/adventurer-paramotor.glb', scale: 0.9, minPx: 26, maxScale: 3.6, headingOffset: -90, heightOffset: 0,
-                    propellerNodes: ['Propeller'], rotorNodes: [],
+                    // This character GLB uses centimetres; keep its pilot within the rear camera.
+                    modelUrl: '/assets/4dtwinmaps/models/adventurer-paramotor.glb', scale: 0.01, minPx: 26, maxScale: 0.04, headingOffset: -90, heightOffset: -1,
+                    propellerNodes: ['ParamotorPropeller'], propellerAxis: 'z', rotorNodes: [],
                     camera: CAMERA_PRESETS.paramotor, spawnAlt: 85, spawnDistDeg: 0.0018, initialSpeed: 12.5,
                     physics: {{ massKg: 115, cruiseSpeed: 12.5, maximumSpeed: 22, acceleration: 8, braking: 12, turnRate: 42, pitchRate: 18, rollLimit: 34, stallSpeed: 6.5, inertia: 0.72, climbRate: 6.5, descentRate: 5.5, minimumSinkRate: 1.2, minimumClearance: 1.4 }}
                 }}),
@@ -3670,7 +3671,7 @@ def render_world_simulator_page(
             var simControl = {{
                 flying: false,
                 paused: false,
-                camMode: 'cockpit' // 'cockpit' | 'chase' | 'free'
+                camMode: 'chase' // 'chase' | 'cockpit' | 'free'
             }};
 
             var activePrimitive = null;
@@ -3764,7 +3765,8 @@ def render_world_simulator_page(
                     var node = partNodes.get(name);
                     if (!node) return;
                     var angle = name === 'TailRotor' ? now * 0.028 : propellerPhase;
-                    var rot = Cesium.Matrix4.fromRotationTranslation(Cesium.Matrix3.fromRotationX(angle));
+                    var rotation = currentDef.propellerAxis === 'z' ? Cesium.Matrix3.fromRotationZ(angle) : Cesium.Matrix3.fromRotationX(angle);
+                    var rot = Cesium.Matrix4.fromRotationTranslation(rotation);
                     node.matrix = Cesium.Matrix4.multiply(node.originalMatrix, rot, new Cesium.Matrix4());
                 }});
                 (currentDef.rotorNodes || []).forEach(function(name) {{
@@ -3846,8 +3848,7 @@ def render_world_simulator_page(
 
                 rigState.initialized = false;
                 rigState.orbitHeading = 0;
-                rigState.orbitPitch = -Math.atan2(currentDef.spawnAlt,
-                    currentDef.spawnDistDeg * Math.PI / 180 * EARTH_RADIUS_METERS) * 180 / Math.PI - pose.pitch + 3;
+                rigState.orbitPitch = 0; // Rear view stays level with the aircraft, not aimed down at the asset.
                 rigState.zoom = 1.0;
                 trailPositions = [];
 
@@ -4300,8 +4301,8 @@ def render_world_simulator_page(
             }});
 
             document.getElementById('btnToggleCam').addEventListener('click', function() {{
-                simControl.camMode = simControl.camMode === 'cockpit' ? 'chase' : simControl.camMode === 'chase' ? 'free' : 'cockpit';
-                var label = simControl.camMode === 'cockpit' ? '1st Person HUD' : simControl.camMode === 'chase' ? 'Rear Chase Rig' : 'Free Globe Orbit';
+                simControl.camMode = simControl.camMode === 'chase' ? 'cockpit' : simControl.camMode === 'cockpit' ? 'free' : 'chase';
+                var label = simControl.camMode === 'cockpit' ? 'Cockpit' : simControl.camMode === 'chase' ? 'Rear view' : 'Free orbit';
                 document.getElementById('lblCamMode').textContent = label;
                 if (simControl.camMode === 'chase') rigState.initialized = false;
             }});
@@ -4553,7 +4554,7 @@ def render_public_mosaics_page(user: Optional[Dict[str, Any]] = None, lang: str 
                         <div class="content-box" style="padding: 20px 24px;">
                             <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;">
                                 <p style="color:#d1d5db;font-size:13px;margin:0;">
-                                    Explore multi-asset 3D scenes combining geolocated orthophotos, 3D meshes, point clouds and Gaussian splats. Open any Mosaic to inspect its layers on the 3D Globe or launch <strong>Fly 1st Person</strong>.
+                                    Explore multi-asset 3D scenes combining geolocated orthophotos, 3D meshes, point clouds and Gaussian splats. Open any Mosaic to inspect its layers on the 3D Globe or launch <strong>Fly View</strong>.
                                 </p>
                                 <div style="position:relative;min-width:260px;">
                                     <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#8fa099;font-size:12px;"></i>

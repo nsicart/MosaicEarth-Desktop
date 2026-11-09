@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "datum": "WGS84 ellipsoidal (ice surface + EGM2008)",
+  "source": "NOAA NCEI ETOPO 2022 v1 60 arc-second ice surface",
+  "doi": "https://doi.org/10.25921/fd45-gt74",
+  "license": "CC0-1.0",
+  "accessed": "2026-11-09",
+  "sources": {
+    "surface": "https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/60s/60s_surface_elev_gtif/ETOPO_2022_v1_60s_N90W180_surface.tif",
+    "geoid": "https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/60s/60s_geoid_gtif/ETOPO_2022_v1_60s_N90W180_geoid.tif"
+  },
+  "width": 1440,
+  "height": 361,
+  "west": -180,
+  "longitudeStep": 0.25,
+  "latitudeStep": 0.016666666666666666,
+  "scale": 0.25,
+  "format": "int16 little-endian",
+  "grids": {
+    "north": {
+      "north": 90,
+      "south": 84,
+      "file": "polar-north-etopo2022-v1.bin.gz",
+      "bytes": 1039680,
+      "sha256": "bd2872c65f37128ed48ae907451e5c041cf436afe95e0ddd60ef483d369c9758",
+      "gzipSha256": "8037062de7210ed80a7b84eaea94ae31cffaf9ee3185a3a81f8af21bbdf97f44",
+      "min": 5.304445385932922,
+      "max": 28.588196277618408,
+      "pole": 14.899669068720605
+    },
+    "south": {
+      "north": -84,
+      "south": -90,
+      "file": "polar-south-etopo2022-v1.bin.gz",
+      "bytes": 1039680,
+      "sha256": "67023c9a32c85b767eb7025723a425ad4fd61a6acb220de2c5368f258a2f376c",
+      "gzipSha256": "25397fec2e8d5cc4c16d8f4b3c104277a63b367749452952d57ec5700a59214e",
+      "min": -25.43307089805603,
+      "max": 4209.231040954313,
+      "pole": 2801.9027789208626
+    }
+  }
+}

@@ -60,7 +60,7 @@ The browser opens the local application. Keep Docker and the launcher running wh
 
 Originals and local results remain on your computer until you explicitly synchronize them. Cloud copies are private revisions, with integrity verification; synchronization does not silently merge simultaneous edits or propagate deletions to another computer. Preparing a cloud viewer is separate from transferring the completed files.
 
-Local projects and bundled viewers remain usable without a cloud session. Initial setup, public basemaps, the public catalog and cloud transfers need Internet. Background terrain is a visual reference, not a survey-grade vertical datum. Global imagery resolution and age vary by source.
+Local projects and bundled viewers remain usable without a cloud session. Initial setup, public basemaps, the public catalog and cloud transfers need Internet. The bundled NOAA terrain remains available at low resolution when detailed terrain services fail. Background terrain is a visual reference, not a survey-grade vertical datum. Global imagery resolution and age vary by source.
 
 ## Built with open-source tools
 
@@ -73,7 +73,7 @@ Local projects and bundled viewers remain usable without a cloud session. Initia
 | Python / FastAPI / SQLite | Local application and project storage. |
 | Docker | Isolated local processing environments on Windows and Linux. |
 
-Dependency revisions and notices are included in [third-party licenses](THIRD_PARTY_LICENSES.md) and the [engine dependency manifest](engines/dependencies.txt). Default map sources are OpenStreetMap, Mapzen terrain, EOX global imagery and PNOA/IGN imagery in Spain, with attribution preserved.
+Dependency revisions and notices are included in [third-party licenses](THIRD_PARTY_LICENSES.md) and the [engine dependency manifest](engines/dependencies.txt). Default map sources are Re:Earth / Mapterhorn terrain with bundled NOAA polar coverage, OpenStreetMap, EOX global imagery and PNOA/IGN imagery in Spain. Public terrain tiles are requested on demand through a bounded MosaicEarth cache, with direct Re:Earth recovery and bundled coarse NOAA terrain if both detailed services fail. Attribution is preserved. No planet-sized download or self-hosted Re:Earth worker is needed.
 
 ## Documentation and help
 
@@ -88,6 +88,6 @@ Dependency revisions and notices are included in [third-party licenses](THIRD_PA
 | Build packages or contribute | [Build](BUILD.md) · [Contributing and repository map](CONTRIBUTING.md) |
 | Report a problem | [GitHub issues](https://github.com/nsicart/MosaicEarth-Desktop/issues) · [Private security reports](SECURITY.md) |
 
-Current release: **0.4.1**, with connectors **0.2.2**. Windows and Linux x86-64 are the supported distribution targets; there is no macOS installer. The Windows trusted-publisher certificate is pending: OpenPGP signatures verify release artifacts but do not remove Windows SmartScreen/unknown-publisher warnings.
+Current release: **0.4.2**, with connectors **0.2.2**. Windows and Linux x86-64 are the supported distribution targets; there is no macOS installer. The Windows trusted-publisher certificate is pending: OpenPGP signatures verify release artifacts but do not remove Windows SmartScreen/unknown-publisher warnings.
 
 MosaicEarth Desktop is licensed under **[AGPL-3.0](LICENSE)**. See [NOTICE](NOTICE) and [third-party licenses](THIRD_PARTY_LICENSES.md) for bundled components. The software license is separate from licenses for user-uploaded data and map imagery.

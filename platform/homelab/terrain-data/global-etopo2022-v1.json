@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source": "NOAA NCEI ETOPO 2022 v1 60 arc-second surface and EGM2008 geoid",
+  "doi": "https://doi.org/10.25921/fd45-gt74",
+  "license": "CC0-1.0",
+  "datum": "WGS84 ellipsoidal",
+  "width": 1440,
+  "height": 720,
+  "step": 0.25,
+  "pixel_centres": true,
+  "scale": 0.5,
+  "format": "int16 little-endian",
+  "file": "global-etopo2022-v1.bin.gz",
+  "sha256": "1e08e0bf63e1e696794cdb143a9d21a86aefb4dd55784c120ec1cfbd803d01e1",
+  "gzipSha256": "e89cae4e9e60844023d254dfe1732d57951b03d10aa344b9f6fcaa6cb2f2bcbc",
+  "bytes": 856119,
+  "note": "Coarse display fallback (~28 km at equator); negative mean elevations clamped to sea surface before adding geoid. Use bundled polar grids beyond 84 degrees. Not for surveying or navigation."
+}

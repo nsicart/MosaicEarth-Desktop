@@ -207,7 +207,7 @@
         if (!alive(viewer) || viewer._mosaicMapSourcesAttached) return;
         viewer._mosaicMapSourcesAttached = true;
         viewer._mosaicOpenTerrain = viewer.terrainProvider;
-        viewer._mosaicTerrainReady = Promise.resolve(viewer.terrainProvider);
+        viewer._mosaicTerrainReady = viewer.terrainProvider.readyPromise || Promise.resolve(viewer.terrainProvider);
         if (viewer.geocoder) {
             var geocoder = viewer.geocoder.viewModel;
             geocoder.autoComplete = false;
@@ -254,16 +254,16 @@
             }
             measure();
         }
-        viewer._mosaicOpenTerrain.setStatusListener(function (healthy) {
+        viewer._mosaicOpenTerrain.setStatusListener(function (healthy, message) {
             if (!alive(viewer)) return;
             var notice = viewer.container.querySelector('.mosaic-terrain-warning');
             if (healthy) { if (notice) notice.remove(); return; }
-            if (notice) return;
+            if (notice) { notice.textContent = message; return; }
             notice = global.document.createElement('div');
             notice.className = 'mosaic-terrain-warning';
             notice.setAttribute('role', 'alert');
             notice.style.cssText = 'position:absolute;top:54px;left:12px;right:12px;z-index:6;padding:8px 12px;background:#352c16;color:#fff4ce;border-radius:6px;font:13px/1.4 sans-serif;pointer-events:none;';
-            notice.textContent = 'Some 3D terrain could not load. Check your connection and reload to retry.';
+            notice.textContent = message || 'Some 3D terrain could not load. Check your connection and reload to retry.';
             viewer.container.appendChild(notice);
         });
     }

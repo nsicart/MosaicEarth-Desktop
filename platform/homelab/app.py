@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import stripe_payments
 from .map_search import router as map_search_router
+from .terrain_gateway import router as terrain_gateway_router
 from .blob_store import get_blob_store
 from .db_store import DEFAULT_CATEGORIES, family_display, get_store, to_slug
 from .email_service import get_email_service
@@ -94,6 +95,7 @@ app = FastAPI(
 # Mount 4DTwinMaps Interoperability Gateway
 app.include_router(interop_router)
 app.include_router(map_search_router)
+app.include_router(terrain_gateway_router)
 app.include_router(connector_sync_router)
 app.include_router(desktop_activation_router)
 
@@ -159,6 +161,15 @@ async def mymap_detail_javascript():
 @app.get("/map-preview.svg")
 async def map_preview_placeholder():
     return FileResponse(Path(__file__).parent / "map-preview.svg", media_type="image/svg+xml")
+
+
+@app.get("/maps/terrain/{filename}")
+async def polar_terrain_file(filename: str):
+    if filename not in {"polar-north-etopo2022-v1.bin.gz", "polar-south-etopo2022-v1.bin.gz", "global-etopo2022-v1.bin.gz"}:
+        raise HTTPException(404, "Terrain grid not found")
+    return FileResponse(Path(__file__).parent / "terrain-data" / filename,
+                        media_type="application/octet-stream",
+                        headers={"Content-Encoding": "gzip", "Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/map-sources")
@@ -487,6 +498,10 @@ async def seo_and_api_dispatch_middleware(request: Request, call_next):
     path = request.scope.get("path") or ""
     if "//" in path:
         request.scope["path"] = re.sub(r"/+", "/", path)
+
+    if path.startswith("/terrain/") and any(k not in {"extensions", "v"} for k in request.query_params):
+        return JSONResponse({"detail": "Unsupported terrain query"}, status_code=400,
+                            headers={"Cache-Control": "no-store"})
 
     api_mode = request.query_params.get("mosaicearth_api", "").strip().lower()
     if api_mode == "webodm-device":

@@ -1,6 +1,6 @@
 # Install on Windows
 
-Download `MosaicEarth-Desktop-0.4.1-x64-Setup.exe` from [Desktop](https://app.mosaicearth.app/en/Desktop), using the account that purchased Desktop or has an eligible Studio plan. Compare its SHA-256 with the published manifest. This is a native graphical NSIS wizard, with no manual `.bat` step. It is unsigned; Windows can display an unknown-publisher/reputation prompt.
+Download `MosaicEarth-Desktop-0.4.2-x64-Setup.exe` from [Desktop](https://app.mosaicearth.app/en/Desktop), using the account that purchased Desktop or has an eligible Studio plan. Compare its SHA-256 with the published manifest. This is a native graphical NSIS wizard, with no manual `.bat` step. It is unsigned; Windows can display an unknown-publisher/reputation prompt.
 
 Use Windows 10/11 x64. The wizard shows the license, chooses an installation folder, creates shortcuts and provides an uninstaller. On first launch, activate this computer in your browser using Google, GitHub, Microsoft or your MosaicEarth email. The setup page also accepts a MosaicEarth password. The workspace stays locked until activation succeeds. Existing valid activation is preserved during an update. It never saves the password. Activation supports two active devices; manage them on the Desktop website. The signed grant allows 30 days offline; reactivate online after expiry. Copying that grant to a different device does not activate it.
 

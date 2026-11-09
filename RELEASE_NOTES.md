@@ -1,3 +1,14 @@
+# 0.4.2 — worldwide terrain and rear flight camera
+
+- Re:Earth / Mapterhorn quantized-mesh terrain replaces client-side terrain conversion as the primary background on Windows, Linux and the web.
+- Bundled NOAA ETOPO 2022 ice-surface elevation completes the polar caps. Heights use the WGS84 ellipsoid, with a gradual transition at 84–85 degrees latitude; the coarse polar supplement is for geographic context.
+- Terrain requests retain Cesium throttling and cancellation. A stable MosaicEarth endpoint caches public terrain. Gateway failures recover through Re:Earth directly; if both detailed providers fail, bundled NOAA global terrain supplies a visibly disclosed low-resolution fallback.
+- Fly opens behind the visible aircraft with a low rear camera. Drone, helicopter, paramotor and plane share the rear / cockpit / free camera cycle and consistent entry labels.
+- Corrected the centimetre-based paramotor model scale and propeller node so it remains visible in the flight camera.
+- Existing accounts, local projects, complete cloud transfers and CPU/NVIDIA GPU selection are preserved.
+- No Cesium ion token, paid terrain account or new cloud processing charge is required. Detailed background services require Internet access and provide no uptime guarantee; the bundled coarse terrain is available locally.
+- Windows trusted-publisher signing remains pending. Release OpenPGP signatures are separate from Authenticode.
+
 # 0.4.1 — open map sources and resilient synchronization
 
 Windows, Linux and web use the same open map configuration: Mapzen terrain on AWS, OpenStreetMap streets, the commercially reusable EOX 2016 global mosaic, and PNOA/IGN aerial imagery at closer zooms in Spain. CesiumJS remains the renderer; no Cesium ion or Esri service/token is used by the default map. The map credits link to complete source notices. Public tile endpoints are best effort and require Internet; the global satellite mosaic has lower resolution and is older than PNOA. These backgrounds are not a survey-grade elevation or vertical-datum reference.

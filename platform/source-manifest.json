@@ -3,8 +3,16 @@
   "revision": "fea84f56577c674adc2e358c5e33674d46d79cd6",
   "files": [
     {
+      "path": "homelab/Map2.js",
+      "sha256": "f8ddad60fb3f53c898226cf68f518235b46d063809549f9af10d4a5dbf952019"
+    },
+    {
       "path": "homelab/MosaicCesiumRuntime.js",
-      "sha256": "ed2758a46a0681b080878cbb35cd35c5208457799e26d3f81dadfae9d40670d5"
+      "sha256": "cf43d7de35e7a3db0d7f3328cbf0b0ee2932d2c353b8b4d41ce22f90ad1eba36"
+    },
+    {
+      "path": "homelab/MosaicMapSources.js",
+      "sha256": "d582d3efa0b26601b373315851640eef1507bb4067923b19a1d1bd177330275b"
     },
     {
       "path": "homelab/MyMap.js",
@@ -12,7 +20,7 @@
     },
     {
       "path": "homelab/MyMapDetail.js",
-      "sha256": "28b058871739444e3625c44e37d052a210aa184b0ce950207df5f966f0b32f88"
+      "sha256": "23f82ac915ac118a4f19b1f68d9fa88e97d95190b8f05ff5a192e71c22a266dd"
     },
     {
       "path": "homelab/__init__.py",
@@ -20,19 +28,19 @@
     },
     {
       "path": "homelab/app.py",
-      "sha256": "4720b6b3014933c1d49d2e4ffa883f11c54863043af3828e553c3d2731fc17fd"
+      "sha256": "30ff74afe867bbc878ec2461db85b88e59ab3e55f954b75fa6674f6a85687132"
     },
     {
       "path": "homelab/asset_metadata.py",
-      "sha256": "a885ce8ee8c22362067641eb54fb2fbba0341c39c91d6a3a94cf4b64a096a001"
+      "sha256": "c33ab6055fcf7302b76c7db531e16060b3f7e3b9a105924e0ac4d9dd960b9f14"
     },
     {
       "path": "homelab/asset_upload.js",
-      "sha256": "4a6c1bb7feb694a0ab09837a3b8f8385be77c00ec7b76437a33ad6e8c936efee"
+      "sha256": "a0f7c5e34acc34fc26348b81b71eb36e1edac42b9fcaf915bd58ea70bb4f4535"
     },
     {
       "path": "homelab/asset_uploads.py",
-      "sha256": "6a4e86f1ab961b2269a0fb867c8b067f0dc61f73c62a2c26e10a263684fb493e"
+      "sha256": "3137a379a9f19f89582fae2c4ab609419748cbccbbf5ac09163647c045eeb967"
     },
     {
       "path": "homelab/blob_store.py",
@@ -40,19 +48,19 @@
     },
     {
       "path": "homelab/connector_sync.py",
-      "sha256": "b0056e9a745e00beb9e59eedf852e91d0fa0bbc0161b589a2ff96f4a5c04b60a"
+      "sha256": "2be9406e3367bbaeea42449a03a3ebe6d684cb344c4cf15c926008686f1a3d47"
     },
     {
       "path": "homelab/db_store.py",
-      "sha256": "a50ab49a305d828bb965b221d4f9a0dde0cc05e574b11b3a942422dd13a00bbb"
+      "sha256": "826532ac2d6732ed6162b937f5e82b0310ac485106539f47386ff093b6b88403"
     },
     {
       "path": "homelab/desktop_activation.py",
-      "sha256": "01085c01360204fa070a48f160f2bb6fc72fe75b7b47f7372d1dd0ebd489da6b"
+      "sha256": "36fbc335368d9aab85413f2cc8a81a95fcf97251b51fcd5f629bdfefb2f36a2b"
     },
     {
       "path": "homelab/desktop_builder.py",
-      "sha256": "7b38230ae834c81603c2928c2e4366183c65e66ba2db20f85967fa256ef094c3"
+      "sha256": "ad9d7d414a36062dbdde4302d3591694f701e0bd4a9cd10e6dd76d2c5e408e54"
     },
     {
       "path": "homelab/desktop_distribution.js",
@@ -72,7 +80,7 @@
     },
     {
       "path": "homelab/gis_splat_engine.py",
-      "sha256": "76edc0ecb29ea7d440d970be09a5dc138c547a76d3bb2002d66376aeeed70007"
+      "sha256": "e8b7b0ee6e6b70f4a0b5fe72516bfc8cce5bb4d6f7d0a6dc44f81212c0552924"
     },
     {
       "path": "homelab/interoperability.py",
@@ -81,6 +89,18 @@
     {
       "path": "homelab/ksplat.py",
       "sha256": "61b3e9100efb7ba62696404c06dbaa74d032f86f41d3df16935af260165bd62a"
+    },
+    {
+      "path": "homelab/map-preview.svg",
+      "sha256": "bf852ec6353242b5e9f1cb625f5c2833a97bd0606013ca5ffb4ddad4f819f749"
+    },
+    {
+      "path": "homelab/map_search.py",
+      "sha256": "4c17c2fd6c661aa50482e3d5e1c2c58423390e25dac0f400be9db0fad1b3447f"
+    },
+    {
+      "path": "homelab/map_sources.html",
+      "sha256": "830601a311550dd6ee68fc5f5b4e18c738eb39ff5cd5d9c462564b27213c9bb5"
     },
     {
       "path": "homelab/mesh_preview.py",
@@ -92,7 +112,7 @@
     },
     {
       "path": "homelab/opensplat_engine.py",
-      "sha256": "acbff76fb72fbf7d7b9fdcbb5d7ed302794dbc43934c39e0f07802ec270169ba"
+      "sha256": "9a4b2d0901a6a685f4af02d50871b33b5417419f0173e50bb5b0f6b81969d397"
     },
     {
       "path": "homelab/opensplat_worker.py",
@@ -100,7 +120,11 @@
     },
     {
       "path": "homelab/pages.py",
-      "sha256": "da1bea3a6d521c0019fdf71c186d8a5bcdcf46f871d15dd58afb319af322e87c"
+      "sha256": "92cf32d1383677b3dcad6180f2d6239379564e6fe585f3d816584b27b22adbed"
+    },
+    {
+      "path": "homelab/photo_metadata.py",
+      "sha256": "4981e3552517a37e4c651579d9899606f0983719d2487332558e17f9b70e512a"
     },
     {
       "path": "homelab/photogrammetry_engine.py",
@@ -108,7 +132,7 @@
     },
     {
       "path": "homelab/processing_architecture.py",
-      "sha256": "d50b859ad0b322a775638bac7cff6dd00ecdb27cc9d8890a096bad58db6a3deb"
+      "sha256": "becd8a5a41a6d61a3a2b6c190c81392c2d4b282e767831c50302beb526e3c299"
     },
     {
       "path": "homelab/raster_products.py",
@@ -131,6 +155,34 @@
       "sha256": "7315d9c3a1fe30e46476a58db3827165c00456f2903541d3f2852904e7842a9e"
     },
     {
+      "path": "homelab/terrain-data/global-etopo2022-v1.bin.gz",
+      "sha256": "e89cae4e9e60844023d254dfe1732d57951b03d10aa344b9f6fcaa6cb2f2bcbc"
+    },
+    {
+      "path": "homelab/terrain-data/global-etopo2022-v1.json",
+      "sha256": "2aa85d9ae3259ee629b2a038645f4c344e3ac46a0c798e0a21d7deb48d6dfd44"
+    },
+    {
+      "path": "homelab/terrain-data/polar-etopo2022-v1.json",
+      "sha256": "38283cdc78232d5a36c3089d662fdcf4bc7eff5f12cc2e892d6eb44aa697788f"
+    },
+    {
+      "path": "homelab/terrain-data/polar-north-etopo2022-v1.bin.gz",
+      "sha256": "8037062de7210ed80a7b84eaea94ae31cffaf9ee3185a3a81f8af21bbdf97f44"
+    },
+    {
+      "path": "homelab/terrain-data/polar-south-etopo2022-v1.bin.gz",
+      "sha256": "25397fec2e8d5cc4c16d8f4b3c104277a63b367749452952d57ec5700a59214e"
+    },
+    {
+      "path": "homelab/terrain_gateway.py",
+      "sha256": "c375302880561c1d3e1ec465973ba1ceacc30744d8a7c5bad9073fe48307e140"
+    },
+    {
+      "path": "homelab/terrain_service.py",
+      "sha256": "e25c9f5088dc85b9bcc34db66bc12dd0f8e410bd2a06d3a2c70936250cf77c0a"
+    },
+    {
       "path": "homelab/vector_preview.py",
       "sha256": "8709dd2b7651faad94b028248cd6526cf1f61d8835d55af994c24b3bc5031a47"
     },
@@ -143,8 +195,13 @@
       "sha256": "7b57536d44a8af71a4456b5de5ea12efab2c299681b2fa4ebd3bc015ffa0582f"
     },
     {
+      "path": "homelab/workspace_exchange.py",
+      "sha256": "40300f7ad31bb30f37abf5043989495e10ce7dcb0274e7663cbdb996c842927c"
+    },
+    {
       "path": "homelab/workspace_pages.py",
-      "sha256": "a558feeefd202847c5118288f5020f61751cbbd6cf00cb6ccdc6e6c1e35d0bc5"
+      "sha256": "8a1e138fb26feba45281ae04238f311c8cce40e515824a431677dbe2a12f3fcc"
     }
-  ]
+  ],
+  "shared_terrain_revision": "ab67f3b5078f9d32173d35811c2ecd16c3d64df3"
 }
