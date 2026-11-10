@@ -2,7 +2,9 @@
 
 These are actual, unaltered MosaicEarth Desktop screenshots, not generated mockups.
 
-- `desktop-workspace.jpg`: source edition 0.4.1, captured on 9 November 2026 in a new local workspace without signing in. Shows the online public catalog and globe. Imagery: EOxCloudless by EOX IT Services GmbH, containing modified Copernicus Sentinel data 2016. Terrain: Mapzen.
-- `desktop-fly-view.jpg`: Linux Desktop 0.4.1 Fly View, captured during release validation on 8 November 2026, without a connected cloud account. Imagery: PNOA · IGN 2022–2025, CC BY 4.0, scne.es. Terrain: Mapzen.
+- `desktop-workspace.jpg`: installed Linux Desktop 0.4.3, captured during release validation on 9 November 2026, with the cloud account disconnected. Shows the public Sk8 St.Z asset and Esri World Imagery.
+- `desktop-fly-view.jpg`: Linux source edition 0.4.3, captured during the same release validation without a connected cloud account. Shows the rear drone camera over Esri World Imagery in Bulgaria.
+
+Terrain in this version uses Re:Earth / Mapterhorn with EGM2008 conversion and bundled NOAA fallback. The providers' original attribution remains visible. World Imagery and its contributors are licensed separately; see the linked map-source notices and the viewer's Data attribution control for the location-dependent contributors.
 
 CesiumJS renders both views. Attribution is retained in the screenshots. See [complete map-source notices](https://app.mosaicearth.app/map-sources) and [third-party licenses](../../THIRD_PARTY_LICENSES.md). The software's AGPL license does not replace the imagery providers' licenses. Screenshots contain no private project names, account details or activation information.

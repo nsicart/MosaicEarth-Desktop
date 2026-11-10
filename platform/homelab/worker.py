@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
@@ -12,6 +13,31 @@ from .email_service import get_email_service
 from .seo_engine import get_public_site_url
 
 
+def reconcile_payments(store):
+    # Resume verified paid tasks and confirm cash refunds after restarts.
+    try:
+        import asyncio
+        import sqlite3
+        from .app import _dispatch_stripe_processing
+        from .stripe_payments import reconcile_processing_refunds, reconcile_processing_checkouts
+        with sqlite3.connect(store.sqlite_path, timeout=30) as db:
+            paid_tasks = db.execute("SELECT session_id FROM stripe_processing_outbox WHERE dispatched=0").fetchall()
+        for (session_id,) in paid_tasks:
+            try:
+                _dispatch_stripe_processing(session_id)
+            except Exception as dispatch_exc:
+                print(f"[MosaicEarth Worker] Paid task dispatch will retry: {type(dispatch_exc).__name__}", flush=True)
+        for reconcile in (reconcile_processing_checkouts, reconcile_processing_refunds):
+            try:
+                asyncio.run(reconcile(store))
+            except Exception as exc:
+                print(f'[MosaicEarth Worker] {reconcile.__name__} will retry: {type(exc).__name__}', flush=True)
+        from .creator_payouts import reconcile_all
+        reconcile_all(store)
+    except Exception as settlement_exc:
+        print(f"[MosaicEarth Worker] Payment reconciliation will retry: {type(settlement_exc).__name__}", flush=True)
+
+
 def run_worker_loop(poll_seconds: int = 10) -> None:
     print("[MosaicEarth Linux Worker] Starting background job processor...", flush=True)
     store = get_store()
@@ -20,28 +46,18 @@ def run_worker_loop(poll_seconds: int = 10) -> None:
     scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
     prepare_model_script = scripts_dir / "prepare-model-viewer.py"
 
+    payment_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="payments")
+    payment_future = None
+    payment_started = 0.0
     while True:
         try:
             # Reload shared SQLite overlay so jobs queued by mosaicearth-web are visible immediately
             with store.lock:
                 store._init_sqlite_overlay()
 
-            # Resume verified paid tasks and confirm cash refunds after restarts.
-            try:
-                import asyncio
-                import sqlite3
-                from .app import _dispatch_stripe_processing
-                from .stripe_payments import reconcile_processing_refunds
-                with sqlite3.connect(store.sqlite_path, timeout=30) as db:
-                    paid_tasks = db.execute("SELECT session_id FROM stripe_processing_outbox WHERE dispatched=0").fetchall()
-                for (session_id,) in paid_tasks:
-                    try:
-                        _dispatch_stripe_processing(session_id)
-                    except Exception as dispatch_exc:
-                        print(f"[MosaicEarth Worker] Paid task dispatch will retry: {type(dispatch_exc).__name__}", flush=True)
-                asyncio.run(reconcile_processing_refunds(store))
-            except Exception as settlement_exc:
-                print(f"[MosaicEarth Worker] Payment reconciliation will retry: {type(settlement_exc).__name__}", flush=True)
+            if payment_future is None or (payment_future.done() and time.monotonic() - payment_started >= 60):
+                payment_started = time.monotonic()
+                payment_future = payment_pool.submit(reconcile_payments, store)
 
             # 0. Process Unified Persistent Background Job Queue (dbo.MOSAICEARTH_BACKGROUND_JOBS: Heavy GIS Imports & 3D Gaussian Splatting)
             try:

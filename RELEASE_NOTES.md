@@ -1,3 +1,11 @@
+# 0.4.4 — consistent cloud pricing and shared-source cleanup
+
+- Cloud quotes use the same published Free / Pro / Studio prices and effective-image formula as the website. Storage is labelled in GiB and the 12 MiB size multiplier and billed-task minimum are explicit.
+- Cloud billing and verified Stripe bank withdrawals remain on the hosted service; local source use remains accountless and local processing stays free. No payment credential is included.
+- Shared-source cleanup removes the development LAN/tunnel CORS entries and makes IndexNow operator configuration opt-in, disabled for local Desktop.
+- Updated the repository screenshots and installation instructions. Local identity, local asset IDs, bundled static UI, projects, complete cloud sync and CPU/CUDA selection are preserved.
+- Processing engine binaries and connector packages are unchanged. Windows Authenticode remains deferred; project OpenPGP signatures are separate.
+
 # 0.4.3 — global satellite imagery
 
 - Web and both Desktop platforms share Esri World Imagery for global detail, with PNOA/IGN in Spain and EOX as the open fallback. Resolution and capture dates vary by location.

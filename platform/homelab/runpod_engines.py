@@ -9,6 +9,7 @@ import re
 import secrets
 import sqlite3
 import time
+import datetime
 
 import httpx
 
@@ -60,6 +61,13 @@ class RunPodEngineJobs:
         db.execute("""CREATE TABLE IF NOT EXISTS node_uploads (
             job_key TEXT PRIMARY KEY, attempt INTEGER NOT NULL, task_id TEXT NOT NULL
         )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS job_costs (
+            job_key TEXT PRIMARY KEY, hourly_rate REAL, closed_at REAL, accounted_usd REAL
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS capacity_holds (
+            hold_key TEXT PRIMARY KEY, engine TEXT NOT NULL, amount REAL NOT NULL,
+            created_at REAL NOT NULL, expires_at REAL, state TEXT NOT NULL, job_key TEXT UNIQUE
+        )""")
         return db
 
     def _request(self, method, path, **kwargs):
@@ -102,7 +110,7 @@ class RunPodEngineJobs:
     @staticmethod
     def policy():
         try:
-            budget = float(os.environ["MOSAICEARTH_ENGINE_POD_BUDGET_USD"])
+            budget = float(os.environ.get("MOSAICEARTH_ENGINE_POD_MONTHLY_BUDGET_USD") or os.environ["MOSAICEARTH_ENGINE_POD_BUDGET_USD"])
             maximum_rate = float(os.environ["MOSAICEARTH_ENGINE_POD_MAX_GPU_USD_HOUR"])
             maximum_seconds = int(os.environ.get("MOSAICEARTH_ENGINE_POD_MAX_SECONDS", "3600"))
         except (KeyError, ValueError):
@@ -110,6 +118,68 @@ class RunPodEngineJobs:
         if not all(math.isfinite(x) and x > 0 for x in (budget, maximum_rate)) or not 60 <= maximum_seconds <= 14400:
             raise RunPodEngineError("RunPod budget, price or duration limits are invalid.")
         return budget, maximum_rate, maximum_seconds
+
+    @staticmethod
+    def _period_start(now):
+        if not os.environ.get("MOSAICEARTH_ENGINE_POD_MONTHLY_BUDGET_USD"):
+            return 0.0  # Original pilot authorization never becomes a recurring budget implicitly.
+        return datetime.datetime.fromtimestamp(now, datetime.timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp()
+
+    def _usage(self, db, now):
+        start = self._period_start(now)
+        rows = db.execute("SELECT j.*, c.hourly_rate, c.closed_at, c.accounted_usd FROM jobs j LEFT JOIN job_costs c USING(job_key) WHERE state!='closed' OR created_at>=? OR closed_at>=?", (start, start)).fetchall()
+        total = 0.0
+        for row in rows:
+            if row['state'] == 'closed':
+                # Old rows have no verified stop time/rate: preserve the full historical charge.
+                total += row['accounted_usd'] if row['accounted_usd'] is not None else row['reserved_usd']
+            else:
+                elapsed = max(0, now - row['created_at']) * (row['hourly_rate'] or 0) / 3600
+                total += max(row['reserved_usd'], elapsed)
+        total += db.execute("SELECT COALESCE(SUM(amount),0) FROM capacity_holds WHERE state='held' AND (expires_at IS NULL OR expires_at>?)", (now,)).fetchone()[0]
+        return total
+
+    def reserve_capacity(self, hold_key, engine):
+        if engine not in PORTS:
+            raise ValueError('Unsupported processing engine')
+        budget, rate, seconds = self.policy()
+        amount = (rate + 0.15) * (seconds + 60) / 3600
+        now = time.time()
+        with closing(self._db()) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM capacity_holds WHERE hold_key=?', (hold_key,)).fetchone()
+            if row and row['engine'] == engine and row['state'] == 'held' and (row['expires_at'] is None or row['expires_at'] > now):
+                return dict(row)
+            if row and row['state'] == 'held' and row['expires_at'] is not None and row['expires_at'] <= now:
+                db.execute('DELETE FROM capacity_holds WHERE hold_key=?', (hold_key,))
+                row = None  # No Checkout intent was ever committed against this expired draft.
+            if row:
+                raise RunPodEngineError('The previous processing reservation was consumed or released. Request a new quote.')
+            if self._usage(db, now) + amount > budget + 1e-9:
+                raise RunPodEngineError('Cloud processing capacity is temporarily full. No payment has been taken; try later or process locally.')
+            db.execute("INSERT INTO capacity_holds VALUES(?,?,?,?,?,'held',NULL)", (hold_key, engine, amount, now, now+15*60))
+            return dict(hold_key=hold_key, amount=amount, expires_at=now+15*60)
+
+    def commit_capacity(self, hold_key):
+        with closing(self._db()) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM capacity_holds WHERE hold_key=?', (hold_key,)).fetchone()
+            if not row or row['state'] != 'held' or (row['expires_at'] is not None and row['expires_at'] <= time.time()):
+                raise RunPodEngineError('Processing capacity requires reconciliation before payment settlement.')
+            db.execute('UPDATE capacity_holds SET expires_at=NULL WHERE hold_key=?', (hold_key,))
+
+    def release_capacity(self, hold_key):
+        with closing(self._db()) as db, db:
+            db.execute("UPDATE capacity_holds SET state='released' WHERE hold_key=? AND state='held'", (hold_key,))
+
+    def capacity_status(self):
+        budget, rate, seconds = self.policy()
+        with closing(self._db()) as db:
+            used = self._usage(db, time.time())
+        return dict(budget_usd=budget, accounted_and_reserved_usd=round(used, 6),
+                    available_usd=round(max(0, budget-used), 6),
+                    period='monthly_utc' if self._period_start(time.time()) else 'pilot_lifetime',
+                    accounting='conservative runtime estimate, including disk allowance; not a provider invoice')
 
     @staticmethod
     def _pod(row):
@@ -120,7 +190,7 @@ class RunPodEngineJobs:
         pods = data.get("pods", []) if isinstance(data, dict) else data
         return next((pod.get("id") for pod in pods if pod.get("name") == name), None)
 
-    def start(self, job_key, engine):
+    def start(self, job_key, engine, *, capacity_key=None):
         if engine not in PORTS:
             raise ValueError("Unsupported RunPod processing engine")
         image = os.environ.get(
@@ -146,12 +216,18 @@ class RunPodEngineJobs:
         token = secrets.token_urlsafe(32)
         with closing(self._db()) as db, db:
             db.execute("BEGIN IMMEDIATE")
-            reserved = db.execute("SELECT COALESCE(SUM(reserved_usd),0) FROM jobs").fetchone()[0]
-            if reserved + reservation > budget:
+            hold = db.execute("SELECT * FROM capacity_holds WHERE hold_key=?", (capacity_key,)).fetchone() if capacity_key else None
+            if capacity_key and (not hold or hold['state'] != 'held' or hold['engine'] != engine
+                                 or (hold['expires_at'] is not None and hold['expires_at'] <= now)):
+                raise RunPodEngineError('The job has no valid processing capacity reservation.')
+            reserved = self._usage(db, now) - (hold['amount'] if hold else 0)
+            if reserved + reservation > budget + 1e-9:
                 raise RunPodEngineError("The RunPod budget cannot reserve this job's maximum cost.")
             try:
-                db.execute("INSERT INTO jobs VALUES (?, ?, ?, ?, NULL, 'starting', ?, ?, ?)",
+                db.execute("INSERT INTO jobs (job_key,engine,name,token,pod_id,state,expires_at,reserved_usd,created_at) VALUES (?, ?, ?, ?, NULL, 'starting', ?, ?, ?)",
                            (job_key, engine, name, token, now + seconds, reservation, now))
+                if hold:
+                    db.execute("UPDATE capacity_holds SET state='consumed', job_key=? WHERE hold_key=?", (job_key, capacity_key))
             except sqlite3.IntegrityError:
                 raise RunPodEngineError("A concurrent worker already reserved this RunPod job.") from None
 
@@ -214,6 +290,7 @@ class RunPodEngineJobs:
             self.finish(job_key)
             raise
         with closing(self._db()) as db, db:
+            db.execute("INSERT INTO job_costs(job_key,hourly_rate) VALUES(?,?) ON CONFLICT(job_key) DO UPDATE SET hourly_rate=excluded.hourly_rate", (job_key, float(actual_rate) + 0.15))
             changed = db.execute("UPDATE jobs SET state='running' WHERE job_key=? AND state='starting' AND expires_at>?",
                                  (job_key, time.time())).rowcount
         if not changed:
@@ -270,13 +347,13 @@ class RunPodEngineJobs:
             raise ValueError("Unsupported RunPod processing engine")
         with closing(self._db()) as db, db:
             now = time.time()
-            db.execute("INSERT OR IGNORE INTO jobs VALUES (?, ?, ?, '', NULL, 'closed', ?, 0, ?)",
+            db.execute("INSERT OR IGNORE INTO jobs (job_key,engine,name,token,pod_id,state,expires_at,reserved_usd,created_at) VALUES (?, ?, ?, '', NULL, 'closed', ?, 0, ?)",
                        (job_key, engine, "canceled-" + secrets.token_hex(12), now, now))
         self.finish(job_key)
 
     def finish(self, job_key):
         with closing(self._db()) as db, db:
-            row = db.execute("SELECT * FROM jobs WHERE job_key=? AND state!='closed'", (job_key,)).fetchone()
+            row = db.execute("SELECT j.*, c.hourly_rate, c.closed_at, c.accounted_usd FROM jobs j LEFT JOIN job_costs c USING(job_key) WHERE job_key=? AND state!='closed'", (job_key,)).fetchone()
             if not row:
                 return
             db.execute("UPDATE jobs SET state='closing' WHERE job_key=?", (job_key,))
@@ -285,16 +362,21 @@ class RunPodEngineJobs:
             if not re.fullmatch(r"[a-z0-9]{8,32}", pod_id):
                 raise RunPodEngineError("RunPod returned an unexpected Pod identifier during cleanup.")
             result = self._request("DELETE", f"/pods/{pod_id}")
-            if result.status_code == 202:
+            if result.status_code in (200, 202, 204):
                 result = self._request("GET", f"/pods/{pod_id}")
                 if result.status_code != 404:
                     raise RunPodEngineError("RunPod termination is still pending.")
-            elif result.status_code not in (200, 204, 404):
+            elif result.status_code != 404:
                 raise RunPodEngineError("RunPod did not confirm Pod termination.")
         elif time.time() < row["expires_at"]:
             return
         with closing(self._db()) as db, db:
+            closed_at = time.time()
+            accounted = ((closed_at - row['created_at']) * row['hourly_rate'] / 3600
+                         if row['hourly_rate'] is not None else row['reserved_usd'])
             db.execute("UPDATE jobs SET state='closed', token='' WHERE job_key=?", (job_key,))
+            db.execute("INSERT INTO job_costs(job_key,closed_at,accounted_usd) VALUES(?,?,?) ON CONFLICT(job_key) DO UPDATE SET closed_at=excluded.closed_at, accounted_usd=excluded.accounted_usd",
+                       (job_key, closed_at, max(0, accounted)))
 
     def reap(self):
         if not self.path.is_file():

@@ -1064,11 +1064,11 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
         if os.environ.get('MOSAICEARTH_DESKTOP_SHARED_UI') == '1':
             vis_badge = f'<span class="myearth-vis-chip myearth-vis-chip--private">LOCAL &middot; {size_mb:.1f} MB</span>'
         elif vis_mode == "marketplace":
-            vis_badge = f'<span class="myearth-vis-chip myearth-vis-chip--market">MARKETPLACE &middot; {price_eur} &euro; (0 GB QUOTA)</span>'
+            vis_badge = f'<span class="myearth-vis-chip myearth-vis-chip--market">MARKETPLACE &middot; {price_eur} &euro; (0 GiB QUOTA)</span>'
         elif vis_mode == "public_free":
-            vis_badge = '<span class="myearth-vis-chip myearth-vis-chip--public">PUBLIC FREE &middot; 0 &euro; (0 GB QUOTA)</span>'
+            vis_badge = '<span class="myearth-vis-chip myearth-vis-chip--public">PUBLIC FREE &middot; 0 &euro; (0 GiB QUOTA)</span>'
         else:
-            vis_badge = f'<span class="myearth-vis-chip myearth-vis-chip--private">PRIVATE &middot; {size_mb:.1f} MB (5 GB QUOTA)</span>'
+            vis_badge = f'<span class="myearth-vis-chip myearth-vis-chip--private">PRIVATE &middot; {size_mb:.1f} MB (5 GiB QUOTA)</span>'
 
         meta_chips = [
             f'<span class="myearth-origin-chip">{a_origin_lbl}</span>',
@@ -1184,8 +1184,8 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                         <label>Visibility &amp; Storage Quota</label>
                         <select id="meVis_{aid_str}" class="form-control">
                             <option value="private" {'selected' if vis_mode == 'private' else ''}>Private (Counts Toward Storage Quota)</option>
-                            <option value="public_free" {'selected' if vis_mode == 'public_free' else ''}>Public Free (0 € · 0 GB Quota)</option>
-                            <option value="marketplace" {'selected' if vis_mode == 'marketplace' else ''}>Marketplace € (0 GB Quota)</option>
+                            <option value="public_free" {'selected' if vis_mode == 'public_free' else ''}>Public Free (0 € · 0 GiB Quota)</option>
+                            <option value="marketplace" {'selected' if vis_mode == 'marketplace' else ''}>Marketplace € (0 GiB Quota)</option>
                         </select>
                     </div>
                     <div class="col-md-1 col-6">
@@ -1527,7 +1527,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                 <button type="button" class="myearth-action-btn myearth-action-btn--primary" onclick="quickPublishFreeQuotaAsset({qa_task_pid}, {qa_ft}, {qa_ext_aid})" title="Publish Free on Global Map to free up {qa_size_mb:.1f} MB of Private Quota">
-                    {MYEARTH_ICON_GLOBE} Publish Free (0 € &rarr; 0 GB Quota)
+                    {MYEARTH_ICON_GLOBE} Publish Free (0 € &rarr; 0 GiB Quota)
                 </button>
                 <a href="{qa_det_url}" class="myearth-action-btn">Asset Page</a>
                 <a href="{qa_v_url}" class="myearth-action-btn">3D View</a>
@@ -1702,11 +1702,11 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                                         PRIVATE CLOUD STORAGE QUOTA ({html.escape(storage['plan_name'])})
                                     </div>
                                     <div style="font-size:14px;color:#ffffff;font-family:OpenSansSemiBold,Arial,sans-serif;margin-top:3px;">
-                                        {storage['used_gb']:.2f} GB <span style="color:#8fa099;font-family:OpenSansRegular,Arial,sans-serif;">used of</span> {storage['quota_gb']:.2f} GB Private Quota
-                                        <span style="font-size:12px;color:#b5d979;margin-left:10px;">&middot; Public Global Map Assets ({storage['public_asset_count']}): <strong>0 GB Quota Used</strong></span>
+                                        {storage['used_gb']:.2f} GiB <span style="color:#8fa099;font-family:OpenSansRegular,Arial,sans-serif;">used of</span> {storage['quota_gb']:.2f} GiB Private Quota
+                                        <span style="font-size:12px;color:#b5d979;margin-left:10px;">&middot; Public Global Map Assets ({storage['public_asset_count']}): <strong>0 GiB Quota Used</strong></span>
                                     </div>
                                     <div style="font-size:12px;color:#acbbb0;margin-top:3px;">
-                                        Structured in four levels: <strong>{html.escape(i18n['projects'])} &rarr; {html.escape(i18n['surveys'])} &rarr; Tasks &rarr; {html.escape(i18n['assets'])}</strong>. Assets published to the Global Map (Free 0 &euro; or Marketplace &euro;) consume 0 GB of private quota and earn 80% creator revenue.
+                                        Structured in four levels: <strong>{html.escape(i18n['projects'])} &rarr; {html.escape(i18n['surveys'])} &rarr; Tasks &rarr; {html.escape(i18n['assets'])}</strong>. Assets published to the Global Map (Free 0 &euro; or Marketplace &euro;) consume 0 GiB of private quota and earn 80% creator revenue.
                                     </div>
                                 </div>
                                 <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
@@ -1717,11 +1717,11 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                                         <button type="button" class="myearth-action-btn myearth-action-btn--accent" onclick="setMyEarthView('quota')" style="padding:3px 10px;font-size:11px;">
                                             {MYEARTH_ICON_QUOTA} Manage Private Quota Assets ({len(private_quota_assets)})
                                         </button>
-                                        <button type="button" class="myearth-action-btn" onclick="purchaseExtraStorage(250)" style="padding:3px 10px;font-size:11px;border-color:#99CC00;color:#99CC00;" title="Add +250 GB Private Cloud Storage (9 €/month)">
-                                            <i class="fas fa-hdd"></i> +250 GB Extra (9 &euro;/mo)
+                                        <button type="button" class="myearth-action-btn" onclick="purchaseExtraStorage(250)" style="padding:3px 10px;font-size:11px;border-color:#99CC00;color:#99CC00;" title="Add +250 GiB Private Cloud Storage (9 €/month)">
+                                            <i class="fas fa-hdd"></i> +250 GiB Extra (9 &euro;/mo)
                                         </button>
-                                        <button type="button" class="myearth-action-btn" onclick="purchaseExtraStorage(1000)" style="padding:3px 10px;font-size:11px;border-color:#99CC00;color:#99CC00;" title="Add +1 TB Private Cloud Storage (29 €/month)">
-                                            <i class="fas fa-hdd"></i> +1 TB Extra (29 &euro;/mo)
+                                        <button type="button" class="myearth-action-btn" onclick="purchaseExtraStorage(1000)" style="padding:3px 10px;font-size:11px;border-color:#99CC00;color:#99CC00;" title="Add +1,000 GiB Private Cloud Storage (29 €/month)">
+                                            <i class="fas fa-hdd"></i> +1,000 GiB Extra (29 &euro;/mo)
                                         </button>
                                         <a href="/{norm_lang}/CreditPacks" style="font-size:11.5px;color:#99CC00;font-family:OpenSansSemiBold,Arial,sans-serif;text-decoration:none;">
                                             Plans &amp; Extra Storage &rarr;
@@ -1773,7 +1773,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                                         {MYEARTH_ICON_PROJECT} <span>Tree View ({len(projects_tree)})</span>
                                     </button>
                                     <button type="button" id="btnViewQuota" class="myearth-view-btn" onclick="setMyEarthView('quota')">
-                                        {MYEARTH_ICON_QUOTA} <span>Local files &middot; {storage['used_gb']:.2f} GB ({len(private_quota_assets)})</span>
+                                        {MYEARTH_ICON_QUOTA} <span>Local files &middot; {storage['used_gb']:.2f} GiB ({len(private_quota_assets)})</span>
                                     </button>
                                     <button type="button" id="btnViewAcquired" class="myearth-view-btn" onclick="setMyEarthView('acquired')">
                                         {MYEARTH_ICON_ACQUIRED} <span>{html.escape(i18n['acquired_assets'])} ({len(acquired_assets)})</span>
@@ -1794,14 +1794,14 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                                         <div style="display:flex;align-items:center;gap:12px;">
                                             <span class="myearth-icon-badge myearth-icon-project">{MYEARTH_ICON_QUOTA}</span>
                                             <div>
-                                                <strong style="font-size:15.5px;color:#ffffff;font-family:OpenSansSemiBold,Arial,sans-serif;">Private Storage Quota Manager ({storage['used_gb']:.2f} GB used of {storage['quota_gb']:.2f} GB)</strong>
-                                                <div style="font-size:12px;color:#acbbb0;">All your Private assets sorted from largest to smallest. Switch any asset to <strong>Public Free (0 €)</strong> or <strong>Marketplace (€)</strong> to immediately reduce its private quota usage to <strong>0 GB</strong>, or delete unneeded files.</div>
+                                                <strong style="font-size:15.5px;color:#ffffff;font-family:OpenSansSemiBold,Arial,sans-serif;">Private Storage Quota Manager ({storage['used_gb']:.2f} GiB used of {storage['quota_gb']:.2f} GiB)</strong>
+                                                <div style="font-size:12px;color:#acbbb0;">All your Private assets sorted from largest to smallest. Switch any asset to <strong>Public Free (0 €)</strong> or <strong>Marketplace (€)</strong> to immediately reduce its private quota usage to <strong>0 GiB</strong>, or delete unneeded files.</div>
                                             </div>
                                         </div>
                                         <a href="/{norm_lang}/CreditPacks" class="myearth-action-btn myearth-action-btn--accent">Upgrade Storage Plan &rarr;</a>
                                     </div>
                                     <div>
-                                        {''.join(quota_rows_html) if quota_rows_html else '<div style="padding:18px;color:#8fa099;font-size:13px;">You currently have 0 Private assets consuming your 5 GB Private Storage Quota. All your published Global Map assets consume 0 GB of quota!</div>'}
+                                        {''.join(quota_rows_html) if quota_rows_html else '<div style="padding:18px;color:#8fa099;font-size:13px;">You currently have 0 Private assets consuming your 5 GiB Private Storage Quota. All your published Global Map assets consume 0 GiB of quota!</div>'}
                                     </div>
                                 </div>
                             </div>
@@ -2414,7 +2414,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                     priceEur: 0
                 }),
                 success: function() {
-                    toastr.success('Asset published as Public Free (0 € · 0 GB Private Quota)!');
+                    toastr.success('Asset published as Public Free (0 € · 0 GiB Private Quota)!');
                     window.location.reload();
                 }
             });
@@ -2503,7 +2503,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                 if (data && data.requiresStripe && data.checkoutUrl) {
                     window.location.href = data.checkoutUrl;
                 } else if (data && data.ok) {
-                    toastr.success(data.message || ('+' + extraGb + ' GB Extra Storage activated!'));
+                    toastr.success(data.message || ('+' + extraGb + ' GiB Extra Storage activated!'));
                     setTimeout(function() { window.location.reload(); }, 500);
                 } else {
                     toastr.error((data && data.message) || 'Could not start Extra Storage checkout.');
@@ -2882,7 +2882,7 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
         is_pub = pub_state == 2
         credits_p = int(round(float(pub.get("CREDITS") or 0))) if is_pub else 0
         badge_cls = "result-publication-badge is-published" if is_pub else "result-publication-badge is-private"
-        badge_txt = ("Published · Free (0 € · 0 GB Quota)" if credits_p <= 0 else f"Published · Marketplace ({credits_p} € · 0 GB Quota)") if is_pub else "Private (Counts Toward Storage Quota)"
+        badge_txt = ("Published · Free (0 € · 0 GiB Quota)" if credits_p <= 0 else f"Published · Marketplace ({credits_p} € · 0 GiB Quota)") if is_pub else "Private (Counts Toward Storage Quota)"
         detail_href = (
             f"/{norm_lang}/ProductDetail?id={pub_id}"
             if is_pub and pub_id > 0
@@ -2942,9 +2942,9 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                 <div class="col-8">
                     <label style="font-size:10px;color:#9ca3af;display:block;">Publication &amp; Storage Quota Mode</label>
                     <select id="assetVis_{ft}" onchange="toggleAssetPriceInput({ft})" class="form-control form-control-sm" style="background:#181818;color:#fff;border-color:#99CC00;font-size:12px;">
-                        <option value="private" {'selected' if v_mode == 'private' else ''}>Private (Owner Only · Uses 5 GB Quota)</option>
-                        <option value="public_free" {'selected' if v_mode == 'public_free' else ''}>Public Free · 0 € (0 GB Quota · Global Map)</option>
-                        <option value="marketplace" {'selected' if v_mode == 'marketplace' else ''}>Marketplace · Paid € (0 GB Quota + 80% Payout)</option>
+                        <option value="private" {'selected' if v_mode == 'private' else ''}>Private (Owner Only · Uses 5 GiB Quota)</option>
+                        <option value="public_free" {'selected' if v_mode == 'public_free' else ''}>Public Free · 0 € (0 GiB Quota · Global Map)</option>
+                        <option value="marketplace" {'selected' if v_mode == 'marketplace' else ''}>Marketplace · Paid € (0 GiB Quota + 80% Payout)</option>
                     </select>
                 </div>
                 <div class="col-4" id="assetPriceWrap_{ft}" style="{'display:block;' if v_mode == 'marketplace' else 'display:none;'}">
@@ -3029,13 +3029,13 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
         upgrade_btn_style = "display:none;"
     elif has_any_published:
         ret_eyebrow = "GLOBAL MAP & STORAGE QUOTA"
-        ret_title = "Published Assets consume 0 GB of your Private Storage Quota · Permanent Hosting"
-        ret_exp = "Assets published on the Global Map (Free 0 € or Marketplace €) do not count against your 5 GB Free Private Quota, act as your global 3D portfolio, and earn 80% on Marketplace sales."
+        ret_title = "Published Assets consume 0 GiB of your Private Storage Quota · Permanent Hosting"
+        ret_exp = "Assets published on the Global Map (Free 0 € or Marketplace €) do not count against your 5 GiB Free Private Quota, act as your global 3D portfolio, and earn 80% on Marketplace sales."
         upgrade_btn_style = "display:none;"
     else:
-        ret_eyebrow = "PERMANENT PRIVATE STORAGE (5 GB FREE QUOTA · NO 15-DAY EXPIRATION)"
-        ret_title = "Stored permanently in your 5 GB Free Private Quota (or 250 GB Pro / 1 TB Studio)"
-        ret_exp = "Why publish an Asset to the Global Map? 1) Published assets consume 0 GB of your 5 GB private quota, 2) You can sell licenses in Euros (€) on the Marketplace (80% creator payout), and 3) Your brand appears on the Global 3D Map."
+        ret_eyebrow = "PERMANENT PRIVATE STORAGE (5 GiB FREE QUOTA · NO 15-DAY EXPIRATION)"
+        ret_title = "Stored permanently in your 5 GiB Free Private Quota (or 250 GiB Pro / 1,000 GiB Studio)"
+        ret_exp = "Why publish an Asset to the Global Map? 1) Published assets consume 0 GiB of your 5 GiB private quota, 2) You can sell licenses in Euros (€) on the Marketplace (80% creator payout), and 3) Your brand appears on the Global 3D Map."
         upgrade_btn_style = "display:none;"
 
     # Additional results (DSM, DTM, PointCloud2D, etc.)
@@ -3347,7 +3347,7 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                         </div>
                     </div>
                     <div class="content-box" style="padding-left: 30px!important; padding-right: 30px!important;">
-                        <div class="processed-retention-explainer"><strong>Per-Asset Practical Controls &amp; Global Map Benefits (No 15-day deletion).</strong><span>Edit each MosaicAsset's Name, 3D Location (Lat, Lon, Height Offset) and Publication Mode directly on its card below. Private assets use your <strong>5 GB Free Private Quota</strong>; assets published to the Global Map (Free 0 € or Marketplace €) consume <strong>0 GB of your Private Quota</strong> and earn <strong>80% creator payout</strong> on Marketplace sales.</span></div>
+                        <div class="processed-retention-explainer"><strong>Per-Asset Practical Controls &amp; Global Map Benefits (No 15-day deletion).</strong><span>Edit each MosaicAsset's Name, 3D Location (Lat, Lon, Height Offset) and Publication Mode directly on its card below. Private assets use your <strong>5 GiB Free Private Quota</strong>; assets published to the Global Map (Free 0 € or Marketplace €) consume <strong>0 GiB of your Private Quota</strong> and earn <strong>80% creator payout</strong> on Marketplace sales.</span></div>
                         <div class="row processed-assets-grid" style="padding-top: 40px; padding-bottom: 50px; margin-right: 0px; margin-left: 0px;">
                             <div class="col-12 col-md-6 col-xl-4 processed-asset-column" style="{'display:none;' if 2 not in available_types else ''}">
                                 <div class="container processed-result-card mosaic-card-v2">
@@ -5571,7 +5571,7 @@ def render_profile_page(user: Dict[str, Any], lang: str = "en") -> str:
     used_gb = float(storage_info.get("used_gb") or 0.0)
     quota_gb = float(storage_info.get("quota_gb") or 5.0)
     pct_used = float(storage_info.get("percent") or 0.0)
-    plan_name = html.escape(str(storage_info.get("plan_name") or "Free Plan (5 GB)"))
+    plan_name = html.escape(str(storage_info.get("plan_name") or "Free Plan (5 GiB)"))
 
     seo_head = build_head_metadata_html(
         title="Account, Storage & Processing · MosaicEarth",
@@ -5891,16 +5891,16 @@ def render_profile_page(user: Dict[str, Any], lang: str = "en") -> str:
                                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:10px;">
                                     <div>
                                         <span style="background:rgba(153,204,0,0.16);color:#99CC00;border:1px solid #99CC00;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;">{plan_name}</span>
-                                        <strong style="color:#fff;font-size:14px;margin-left:10px;">{used_gb:.2f} GB / {quota_gb:.0f} GB Private Storage Used ({pct_used:.1f}%)</strong>
+                                        <strong style="color:#fff;font-size:14px;margin-left:10px;">{used_gb:.2f} GiB / {quota_gb:.0f} GiB Private Storage Used ({pct_used:.1f}%)</strong>
                                     </div>
-                                    <a href="/{norm_lang}/CreditPacks" class="btn btn-primary" style="font-size:11px;padding:7px 18px;">UPGRADE STORAGE PLAN (250 GB / 1 TB)</a>
+                                    <a href="/{norm_lang}/CreditPacks" class="btn btn-primary" style="font-size:11px;padding:7px 18px;">UPGRADE STORAGE PLAN (250 GiB / 1,000 GiB)</a>
                                 </div>
                                 <div style="height:10px;background:#0d0d0d;border-radius:999px;overflow:hidden;border:1px solid #2d2d2d;">
                                     <div style="width:{max(2.0, min(100.0, pct_used)):.1f}%;height:100%;background:linear-gradient(90deg,#99CC00,#c8ff29);border-radius:999px;"></div>
                                 </div>
                                 <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:12px;color:#9ca3af;">
-                                    <span><i class="fas fa-lock me-1" style="color:#99CC00;"></i><strong>Private Assets:</strong> Stored permanently within your {quota_gb:.0f} GB quota ({int(storage_info.get('private_assets_count') or 0)} private layers).</span>
-                                    <span style="color:#d9f99d;"><i class="fas fa-globe me-1" style="color:#99CC00;"></i><strong>Public Global Map Assets:</strong> Consume <strong>0 GB</strong> of your private quota ({int(storage_info.get('public_assets_count') or 0)} public layers).</span>
+                                    <span><i class="fas fa-lock me-1" style="color:#99CC00;"></i><strong>Private Assets:</strong> Stored permanently within your {quota_gb:.0f} GiB quota ({int(storage_info.get('private_assets_count') or 0)} private layers).</span>
+                                    <span style="color:#d9f99d;"><i class="fas fa-globe me-1" style="color:#99CC00;"></i><strong>Public Global Map Assets:</strong> Consume <strong>0 GiB</strong> of your private quota ({int(storage_info.get('public_assets_count') or 0)} public layers).</span>
                                 </div>
                             </div>
                         </div>
@@ -6146,7 +6146,7 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
 
     seo_head = build_head_metadata_html(
         title="Subscription Plans, Cloud Storage & Pay-Per-Use Processing (€) · MosaicEarth",
-        description="Choose your MosaicEarth Subscription Plan (Free 5 GB, Pro 250 GB + 1,000 Cloud GPU images/mo, Studio 1 TB + 4,000 Cloud GPU images/mo + Desktop License) and pay per purchase in Euros (€) with no prepaid wallet required.",
+        description="Choose your MosaicEarth Subscription Plan (Free 5 GiB, Pro 250 GiB + 1,000 Cloud GPU images/mo, Studio 1,000 GiB + 4,000 Cloud GPU images/mo + Desktop License) and pay per purchase in Euros (€) with no prepaid wallet required.",
         canonical_path=f"/{norm_lang}/CreditPacks",
         robots="noindex, nofollow",
     )
@@ -6154,6 +6154,8 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
     head_extra = """
     <link rel="stylesheet" href="/assets/css/CreditPacks.css?v=3" />
     <style>
+        .me-rate-box code { color:#d9edb4; font-size:inherit; background:transparent; }
+        #requestPayoutButton:disabled, #setupPayoutButton:disabled { opacity:0.45; cursor:not-allowed; }
         .me-plan-card {
             background: #141c17;
             border: 1.5px solid #2e3d33;
@@ -6191,7 +6193,7 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
     )
     is_legacy_studio = bool(storage_info.get("is_legacy_studio"))
     btn_studio = (
-        '<button type="button" class="btn btn-primary w-100" disabled style="font-size:12px;font-weight:700;">ACTIVE PLAN (STUDIO &middot; LEGACY &middot; 1 TB INCLUDED)</button>'
+        '<button type="button" class="btn btn-primary w-100" disabled style="font-size:12px;font-weight:700;">ACTIVE PLAN (STUDIO &middot; LEGACY &middot; 1,000 GiB INCLUDED)</button>'
         if (active_plan == "studio" and is_legacy_studio)
         else (
             '<button type="button" class="btn btn-primary w-100" disabled style="font-size:12px;font-weight:700;">ACTIVE PLAN (STUDIO &middot; 59 &euro;/MO)</button>'
@@ -6212,16 +6214,17 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
                                     <a class="section-back-link" href="/{norm_lang}/Profile" style="margin-right:10px;"><span aria-hidden="true">&larr;</span> Account</a>
                                     <span class="credit-packs-title">Subscription Plans, Cloud Storage &amp; Direct Pay-Per-Use (&euro;)</span>
                                 </div>
-                                <span style="font-size:12px;color:#99CC00;font-family:OpenSansBold,Arial,sans-serif;">Active Plan: {html.escape(str(storage_info.get('plan_name') or 'Free (5 GB)'))}</span>
+                                <span style="font-size:12px;color:#99CC00;font-family:OpenSansBold,Arial,sans-serif;">Active Plan: {html.escape(str(storage_info.get('plan_name') or 'Free (5 GiB)'))}</span>
                             </div>
                         </div>
                         <div class="content-box" style="padding: 24px;">
                             <p class="page-purpose" style="margin-bottom:20px;">
-                                <strong>No Prepaid Wallet ("Bossa de Diners") Required &mdash; Direct Pay-Per-Purchase in Euros (&euro;).</strong>
-                                Every account includes <strong>5 GB of Free Private Storage</strong> forever (plus <strong>0 GB quota cost</strong> for any asset published to the Global 3D Map).
+                                <strong>Choose a plan or pay for individual cloud tasks in Euros (&euro;).</strong>
+                                Every account includes <strong>5 GiB of Free Private Storage</strong> forever (plus <strong>0 GiB quota cost</strong> for any asset published to the Global 3D Map).
                                 Upgrade to <strong>Pro (19 &euro;/mo)</strong> or <strong>Studio (59 &euro;/mo)</strong> for expanded private cloud storage, included monthly Cloud GPU processing, unlisted client link sharing, and higher Marketplace creator payouts (up to 90%). Outside your plan's monthly quota, you simply pay per individual task or asset purchase in Euros (&euro;).
                             </p>
 
+                            <p style="font-size:13px;color:#cbd5cf;">Storage is measured in GiB (1 GiB = 1,073,741,824 bytes). Cloud photogrammetry beyond your allowance costs 0.030 €/effective image on Free, 0.020 € on Pro or 0.015 € on Studio, with a 2.00 € minimum per billed task. Photos averaging over 12 MiB use a size multiplier: for example, 100 photos averaging 24 MiB count as 200 effective images (fractions round up). Included allowances use the same effective-image count and reset on the first day of each UTC calendar month; unused allowance does not roll over. Extra Gaussian reconstructions cost 3.00 €, 2.00 € or 1.50 €, respectively. The final quote is shown before payment. Processing failure triggers refund reconciliation; bank delays may apply.</p>
                             <!-- 3 Subscription Plans -->
                             <div class="row g-4 mb-4">
                                 <div class="col-lg-4 col-md-12">
@@ -6232,13 +6235,13 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
                                                 {('<span style="background:#99CC00;color:#0b110d;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;">CURRENT PLAN</span>' if active_plan == 'free' else '')}
                                             </div>
                                             <div style="color:#fff;font-size:28px;font-weight:800;margin:6px 0;">0 &euro; <small style="font-size:13px;color:#9ca3af;">/ month</small></div>
-                                            <div style="color:#d9f99d;font-size:13px;font-weight:700;margin-bottom:12px;">5 GB Private Storage + Unlimited Public Assets</div>
+                                            <div style="color:#d9f99d;font-size:13px;font-weight:700;margin-bottom:12px;">5 GiB Private Storage + Unlimited Public Assets</div>
                                             <ul style="color:#d1d5db;font-size:12.5px;line-height:1.7;padding-left:18px;margin-bottom:18px;">
-                                                <li><strong>5 GB Private Cloud Storage</strong> (Projects &rarr; Surveys &rarr; Tasks &rarr; Assets)</li>
-                                                <li><strong>0 GB Quota Used</strong> by Public Global Map &amp; Marketplace assets</li>
-                                                <li><strong>WebODM, NodeODM, QGIS &amp; CLI Cloud Sync INCLUDED</strong> (uses your 5 GB Private Quota or 0 GB if Public)</li>
+                                                <li><strong>5 GiB Private Cloud Storage</strong> (Projects &rarr; Surveys &rarr; Tasks &rarr; Assets)</li>
+                                                <li><strong>0 GiB Quota Used</strong> by Public Global Map &amp; Marketplace assets</li>
+                                                <li><strong>WebODM, WebUI, QGIS &amp; CLI Cloud Sync INCLUDED</strong> (uses your 5 GiB Private Quota or 0 GiB if Public)</li>
                                                 <li><strong>Public &amp; Private MyMosaics</strong> &amp; <strong>80% Creator Payout</strong> on Marketplace sales (&euro;)</li>
-                                                <li><strong>0 &euro; Local NodeODM Processing</strong> or Pay-Per-Task Cloud GPU (<code>0.03 &euro;/image</code>, min <code>2 &euro;</code>; <code>3 &euro;</code>/Gaussian Splat)</li>
+                                                <li><strong>0 &euro; Local Desktop Processing</strong> or Pay-Per-Task Cloud GPU (<code>0.03 &euro;/effective image</code>, min <code>2 &euro;</code>; <code>3 &euro;</code>/Gaussian Splat)</li>
                                             </ul>
                                         </div>
                                         {btn_free}
@@ -6253,13 +6256,13 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
                                                 {('<span style="background:#99CC00;color:#0b110d;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;">CURRENT PLAN</span>' if active_plan == 'pro' else '<span style="background:rgba(153,204,0,0.18);color:#99CC00;border:1px solid #99CC00;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">MOST POPULAR</span>')}
                                             </div>
                                             <div style="color:#fff;font-size:28px;font-weight:800;margin:6px 0;">19 &euro; <small style="font-size:13px;color:#9ca3af;">/ month</small></div>
-                                            <div style="color:#d9f99d;font-size:13px;font-weight:700;margin-bottom:12px;">250 GB Private Storage + Monthly Cloud GPU Quota</div>
+                                            <div style="color:#d9f99d;font-size:13px;font-weight:700;margin-bottom:12px;">250 GiB Private Storage + Monthly Cloud GPU Quota</div>
                                             <ul style="color:#e5e7eb;font-size:12.5px;line-height:1.7;padding-left:18px;margin-bottom:18px;">
-                                                <li><strong>250 GB Private Cloud Storage</strong> for heavy Ortho, 3D Tiles &amp; LiDAR</li>
+                                                <li><strong>250 GiB Private Cloud Storage</strong> for heavy Ortho, 3D Tiles &amp; LiDAR</li>
                                                 <li><strong>1,000 Cloud GPU Images/month + 3 Gaussian Splats/month INCLUDED</strong> (extra images at discounted <code>0.02 &euro;/img</code>)</li>
                                                 <li><strong>Unlisted Secret Client Links</strong> for MyMosaics, Projects &amp; Surveys</li>
                                                 <li><strong>85% Creator Payout</strong> on Marketplace asset sales (&euro;)</li>
-                                                <li><strong>Priority Cloud Photogrammetry Queue</strong> &amp; High-Volume Batch Sync (WebODM, QGIS &amp; CLI)</li>
+                                                <li><strong>Cloud Photogrammetry</strong> &amp; Project Sync (WebODM, WebUI, QGIS &amp; CLI)</li>
                                             </ul>
                                         </div>
                                         {btn_pro}
@@ -6274,13 +6277,13 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
                                                 {('<span style="background:#99CC00;color:#0b110d;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;">CURRENT PLAN</span>' if active_plan == 'studio' else '')}
                                             </div>
                                             <div style="color:#fff;font-size:28px;font-weight:800;margin:6px 0;">59 &euro; <small style="font-size:13px;color:#9ca3af;">/ month</small></div>
-                                            <div style="color:#d9f99d;font-size:13px;font-weight:700;margin-bottom:12px;">1 TB Private Storage + 4,000 GPU Imgs/mo + Desktop App</div>
+                                            <div style="color:#d9f99d;font-size:13px;font-weight:700;margin-bottom:12px;">1,000 GiB Private Storage + 4,000 GPU Imgs/mo + Desktop App</div>
                                             <ul style="color:#d1d5db;font-size:12.5px;line-height:1.7;padding-left:18px;margin-bottom:18px;">
-                                                <li><strong>1 TB (1,024 GB) Private Cloud Storage</strong> &amp; White-Label Custom Embeds</li>
+                                                <li><strong>1,000 GiB Private Cloud Storage</strong> &amp; Unlisted Sharing Links</li>
                                                 <li><strong>4,000 Cloud GPU Images/month + 12 Gaussian Splats/month INCLUDED</strong> (extra images at <code>0.015 &euro;/img</code>)</li>
-                                                <li><strong>Includes MosaicEarth Desktop Turnkey License (29 &euro; value)</strong> for Windows, Linux &amp; macOS</li>
+                                                <li><strong>Includes MosaicEarth Desktop Turnkey License (29 &euro; value)</strong> for Windows &amp; Linux</li>
                                                 <li><strong>90% Creator Payout</strong> on Marketplace asset sales (&euro;)</li>
-                                                <li><strong>Dedicated Serverless GPU Concurrency</strong> &amp; Team API Access</li>
+                                                <li><strong>Local CPU / compatible NVIDIA GPU processing</strong> with Desktop</li>
                                             </ul>
                                         </div>
                                         {btn_studio}
@@ -6298,20 +6301,20 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
                                                     <i class="fas fa-hdd me-1"></i> Need More Private Cloud Storage? Add Extra Storage Packs Anytime
                                                 </div>
                                                 <div style="font-size:12.5px;color:#dce6dc;line-height:1.55;">
-                                                    Current Private Quota: <strong style="color:#fff;">{float(storage_info.get('used_gb') or 0.0):.2f} GB used of {float(storage_info.get('quota_gb') or 5.0):.0f} GB</strong>
-                                                    {f' <span style="color:#99CC00;font-weight:700;">(includes +{int(storage_info.get("extra_storage_gb") or 0)} GB Extra Storage)</span>' if float(storage_info.get("extra_storage_gb") or 0) > 0 else ''}.
+                                                    Current Private Quota: <strong style="color:#fff;">{float(storage_info.get('used_gb') or 0.0):.2f} GiB used of {float(storage_info.get('quota_gb') or 5.0):.0f} GiB</strong>
+                                                    {f' <span style="color:#99CC00;font-weight:700;">(includes +{int(storage_info.get("extra_storage_gb") or 0)} GiB Extra Storage)</span>' if float(storage_info.get("extra_storage_gb") or 0) > 0 else ''}.
                                                     Add extra dedicated Private Cloud Storage on top of any plan (Free, Pro, Studio, or Studio &middot; Legacy):
                                                 </div>
                                             </div>
                                             <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
                                                 <button type="button" class="btn btn-outline-light btn-sm" onclick="purchaseExtraStorage(250)" style="border-color:#99CC00;color:#99CC00;font-weight:700;font-size:12px;padding:8px 14px;">
-                                                    <i class="fas fa-plus-circle me-1"></i> +250 GB Extra &middot; 9 &euro;/mo
+                                                    <i class="fas fa-plus-circle me-1"></i> +250 GiB Extra &middot; 9 &euro;/mo
                                                 </button>
                                                 <button type="button" class="btn btn-primary btn-sm" onclick="purchaseExtraStorage(1000)" style="font-weight:700;font-size:12px;padding:8px 14px;">
-                                                    <i class="fas fa-plus-circle me-1"></i> +1 TB Extra &middot; 29 &euro;/mo
+                                                    <i class="fas fa-plus-circle me-1"></i> +1,000 GiB Extra &middot; 29 &euro;/mo
                                                 </button>
                                                 <button type="button" class="btn btn-outline-light btn-sm" onclick="purchaseExtraStorage(5000)" style="border-color:#99CC00;color:#99CC00;font-weight:700;font-size:12px;padding:8px 14px;">
-                                                    <i class="fas fa-plus-circle me-1"></i> +5 TB Extra &middot; 119 &euro;/mo
+                                                    <i class="fas fa-plus-circle me-1"></i> +5,000 GiB Extra &middot; 119 &euro;/mo
                                                 </button>
                                             </div>
                                         </div>
@@ -6330,24 +6333,24 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
                                             You never need to pre-load credits or keep idle money in a balance. Every transaction outside your monthly plan allowance is paid directly in Euros (&euro;):
                                         </p>
                                         <ul style="font-size:12.5px;color:#dce6dc;line-height:1.7;padding-left:18px;margin-bottom:0;">
-                                            <li><strong>Cloud Photogrammetry Task:</strong> <code>0.03 &euro;/image</code> on Free (min <code>2.00 &euro;</code>), <code>0.02 &euro;/image</code> on Pro (after 1,000 free images/mo), <code>0.015 &euro;/image</code> on Studio (after 4,000 free images/mo).</li>
-                                            <li><strong>3D Gaussian Splatting Task:</strong> <code>3.00 &euro;/task</code> on Free (3/mo included in Pro, 12/mo included in Studio).</li>
+                                            <li><strong>Cloud Photogrammetry:</strong> <code>0.030 &euro;</code> per effective image on Free, <code>0.020 &euro;</code> on Pro and <code>0.015 &euro;</code> on Studio after the included allowance. Minimum <code>2.00 &euro;</code> per billed task on every plan; the size multiplier described above applies.</li>
+                                            <li><strong>3D Gaussian Splatting:</strong> extra tasks cost <code>3.00 &euro;</code> on Free, <code>2.00 &euro;</code> on Pro and <code>1.50 &euro;</code> on Studio (3/mo included in Pro, 12/mo in Studio).</li>
                                             <li><strong>Local Workstation / Desktop Processing:</strong> <strong>0.00 &euro; forever</strong> using your own CPU/GPU via MosaicEarth Desktop or local NodeODM.</li>
-                                            <li><strong>Marketplace Commercial Licenses:</strong> Direct Euro (&euro;) checkout per asset (80%&ndash;90% instant payout to the asset creator).</li>
+                                            <li><strong>Marketplace Commercial Licenses:</strong> Direct Euro (&euro;) checkout per asset (80%&ndash;90% credited to the creator wallet; bank withdrawal after verification).</li>
                                         </ul>
                                     </div>
                                 </div>
                                 <div class="col-lg-6 col-12">
                                     <div class="me-rate-box">
                                         <div style="font-size:13px;font-family:OpenSansBold,Arial,sans-serif;color:#99CC00;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">
-                                            <i class="fas fa-shield-alt me-1"></i> Upfront Price Quote &amp; 100% Failure Refund Guarantee
+                                            <i class="fas fa-shield-alt me-1"></i> Upfront Quote &amp; Failed-Task Refunds
                                         </div>
                                         <p style="font-size:12.5px;color:#b8c6be;margin-bottom:12px;">
                                             Transparent pricing with zero surprises before launching any photogrammetry or 3D reconstruction task:
                                         </p>
                                         <ul style="font-size:12.5px;color:#dce6dc;line-height:1.7;padding-left:18px;margin-bottom:0;">
                                             <li><strong>Upfront Quote Before Processing:</strong> Every task displays the exact image count, dataset size, and final Euro (&euro;) price (or monthly plan quota coverage) before you confirm.</li>
-                                            <li><strong>100% Automatic Refund on Failure:</strong> If a processing task ever fails or is cancelled before completion, <strong>0.00 &euro; is charged</strong> (any upfront authorization or monthly plan quota is automatically refunded in full).</li>
+                                            <li><strong>Refund reconciliation:</strong> Failed processing starts automatic reconciliation of the paid amount. Your wallet is restored after confirmation; card refunds can take time to appear at your bank. Included allowance is restored only within the same quota month. A pending refund is shown as pending, not completed.</li>
                                             <li><strong>Versioned photogrammetry engines:</strong> Managed cloud processing uses tested engine releases. Local processing is available through Desktop or your own compatible NodeODM / NodeODX service.</li>
                                         </ul>
                                     </div>
@@ -6361,14 +6364,18 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
                                                 <i class="fas fa-wallet me-1"></i> Creator Marketplace Earnings Wallet ({storage_info.get('creator_payout_pct', 80)}% Revenue Share)
                                             </div>
                                             <div style="font-size:12.5px;color:#b8c6be;">
-                                                Available Creator Earnings: <strong style="color:#fff;font-size:15px;">{float(storage_info.get('creator_earnings_eur') or 0.0):.2f} &euro;</strong> &middot; Automatically applied to internal purchases/processing or withdrawable via Stripe Payout (min 10.00 &euro;).
+                                                Available Creator Earnings: <strong id="creatorAvailableBalance" style="color:#fff;font-size:15px;">{float(storage_info.get('creator_earnings_eur') or 0.0):.2f} &euro;</strong> &middot; Available for one-off purchases/processing. Bank withdrawals require Stripe verification (minimum 10.00 &euro;); bank processing times apply.
                                             </div>
                                         </div>
                                         <div class="d-flex flex-wrap gap-2 align-items-center">
-                                            <input type="text" id="payoutDestinationInput" class="form-control form-control-sm" placeholder="IBAN or Stripe Email" value="{html.escape(str(user.get('EMAIL') or ''))}" style="width:220px;background:#0e1511;border:1px solid #354a3d;color:#fff;font-size:12px;" />
-                                            <button type="button" class="btn btn-primary btn-sm" onclick="requestCreatorPayout()" style="font-size:12px;font-weight:700;">
-                                                <i class="fas fa-university me-1"></i> Withdraw via Stripe Payout
-                                            </button>
+                                            <label style="font-size:12px;color:#b8c6be;">Payout country (ISO code)
+                                                <input id="payoutCountryInput" type="text" maxlength="2" placeholder="ES" aria-label="Country of your Stripe payout account, two-letter ISO code" style="width:55px;background:#17221b;color:#fff;border:1px solid #637858;border-radius:4px;padding:5px;" />
+                                            </label>
+                                            <button id="setupPayoutButton" type="button" class="btn btn-secondary btn-sm" onclick="setupCreatorPayout()" disabled>Set up bank withdrawals</button>
+                                            <button id="requestPayoutButton" type="button" class="btn btn-primary btn-sm" onclick="requestCreatorPayout()" disabled>Request bank withdrawal</button>
+                                            <button type="button" class="btn btn-secondary btn-sm" onclick="loadCreatorPayouts()">Refresh status</button>
+                                            <div id="creatorPayoutStatus" role="status" style="width:100%;font-size:13px;color:#d1d5db;">Loading withdrawal status…</div>
+                                            <div id="creatorPayoutError" role="alert" style="width:100%;font-size:13px;color:#ffb7ac;"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -6410,29 +6417,94 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
                 if (data && data.requiresStripe && data.checkoutUrl) {
                     window.location.href = data.checkoutUrl;
                 } else if (data && data.ok) {
-                    alert(data.message || ('+' + extraGb + ' GB Extra Storage activated!'));
+                    alert(data.message || ('+' + extraGb + ' GiB Extra Storage activated!'));
                     window.location.reload();
                 } else {
                     alert((data && data.message) || 'Could not start Extra Storage checkout.');
                 }
             });
         }
-        function requestCreatorPayout() {
-            var destEl = document.getElementById('payoutDestinationInput');
-            var dest = destEl ? destEl.value.trim() : '';
-            fetch('/api/v2/wallet/request-payout', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({destination: dest})
-            }).then(function(r) { return r.json(); }).then(function(data) {
-                if (data && data.ok) {
-                    alert(data.message || 'Stripe payout requested!');
-                    window.location.reload();
-                } else {
-                    alert((data && data.message) || 'Could not request payout.');
-                }
-            });
+        async function payoutRequest(url, body) {
+            var response = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body || {})});
+            var data = await response.json();
+            if (!data.ok) throw new Error(data.message || 'Withdrawal action could not be confirmed. Please retry.');
+            return data;
         }
+        async function setupCreatorPayout() {
+            var button = document.getElementById('setupPayoutButton');
+            button.disabled = true;
+            document.getElementById('creatorPayoutError').textContent = '';
+            try {
+                var country = document.getElementById('payoutCountryInput').value.trim().toUpperCase();
+                if (window.creatorPayoutReady) {
+                    var dashboard = await payoutRequest('/api/v2/wallet/connect', {dashboard:true});
+                    window.location.href = dashboard.url;
+                    return;
+                }
+                if (!/^[A-Z]{2}$/.test(country)) throw new Error('Enter the two-letter country code for your payout account, for example ES.');
+                var data = await payoutRequest('/api/v2/wallet/connect', {country:country});
+                if (data.url) window.location.href = data.url;
+            } catch(e) { document.getElementById('creatorPayoutError').textContent = e.message; }
+            finally { await loadCreatorPayouts(); }
+        }
+        var payoutRefreshTimer;
+        async function loadCreatorPayouts() {
+            clearTimeout(payoutRefreshTimer);
+            var box = document.getElementById('creatorPayoutStatus');
+            if (!box) return;
+            try {
+                var response = await fetch('/api/v2/wallet/payouts');
+                if (!response.ok) throw new Error('Withdrawal status is temporarily unavailable.');
+                var data = await response.json();
+                window.creatorPayoutReady = !!data.ready;
+                document.getElementById('creatorAvailableBalance').textContent = data.availableEur.toFixed(2) + ' €';
+                if (data.country) document.getElementById('payoutCountryInput').value = data.country;
+                document.getElementById('payoutCountryInput').disabled = !!data.hasAccount || !data.enabled;
+                document.getElementById('setupPayoutButton').disabled = !data.enabled;
+                document.getElementById('setupPayoutButton').textContent = data.ready ? 'Manage payout account in Stripe' : 'Set up bank withdrawals';
+                box.textContent = 'Available: ' + data.availableEur.toFixed(2) + ' € · Pending bank withdrawal: ' + data.pendingEur.toFixed(2) + ' € · Reserved for processing checkout: ' + (data.processingHeldEur || 0).toFixed(2) + ' €.';
+                if (!data.enabled) box.appendChild(document.createTextNode(' Bank withdrawals are awaiting Stripe Connect activation; available earnings remain in your wallet.'));
+                else if (!data.ready) box.appendChild(document.createTextNode(' Complete Stripe account verification before withdrawing.'));
+                document.getElementById('requestPayoutButton').disabled = !data.enabled || !data.ready || data.availableEur < 10 || data.pendingEur > 0;
+                var labels = {RESERVED:'Reserved, awaiting transfer', REQUESTED_STRIPE_PAYOUT:'Legacy request: reconciliation required', TRANSFER_INTENT:'Transfer confirmation pending', TRANSFERRED:'In your Stripe balance, awaiting bank payout', PAYOUT_INTENT:'Bank payout confirmation pending', PENDING:'Bank payout pending', IN_TRANSIT:'In transit to your bank', PAID:'Paid to bank', FAILED:'Bank payout failed: update bank details in Stripe and retry', REVIEW_REQUIRED:'Awaiting reconciliation', CANCELED:'Canceled, returned to wallet'};
+                data.payouts.forEach(function(p) {
+                    var line = document.createElement('div');
+                    line.textContent = '#' + p.id + ' · ' + p.amountEur.toFixed(2) + ' € · ' + (labels[p.status] || p.status);
+                    if (p.canCancel || p.canRetry) {
+                        var button = document.createElement('button');
+                        button.className = 'btn btn-secondary btn-sm';
+                        button.textContent = p.canCancel ? 'Cancel withdrawal' : 'Retry bank payout';
+                        button.onclick = async function() {
+                            button.disabled = true;
+                            document.getElementById('creatorPayoutError').textContent = '';
+                            try { await payoutRequest('/api/v2/wallet/payouts/' + p.id + '/' + (p.canCancel ? 'cancel' : 'retry')); }
+                            catch(e) { document.getElementById('creatorPayoutError').textContent = e.message; }
+                            finally { await loadCreatorPayouts(); }
+                        };
+                        line.appendChild(button);
+                    }
+                    box.appendChild(line);
+                });
+                if (data.pendingEur > 0 && !document.hidden) payoutRefreshTimer = setTimeout(loadCreatorPayouts, 30000);
+            } catch(e) {
+                box.textContent = e.message + ' Use Refresh status to try again.';
+                document.getElementById('requestPayoutButton').disabled = true;
+            }
+        }
+        async function requestCreatorPayout() {
+            document.getElementById('requestPayoutButton').disabled = true;
+            document.getElementById('creatorPayoutError').textContent = '';
+            try { await payoutRequest('/api/v2/wallet/request-payout'); }
+            catch(e) { document.getElementById('creatorPayoutError').textContent = e.message; }
+            finally { await loadCreatorPayouts(); }
+        }
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) clearTimeout(payoutRefreshTimer);
+            else loadCreatorPayouts();
+        });
+        if (new URLSearchParams(location.search).get('connect') === 'return') {
+            payoutRequest('/api/v2/wallet/connect', {refresh:true}).catch(function() {}).finally(loadCreatorPayouts);
+        } else { loadCreatorPayouts(); }
     </script>"""
 
     return render_home_master(head_extra, seo_head, body_content, scripts_extra, user=user, lang=norm_lang)

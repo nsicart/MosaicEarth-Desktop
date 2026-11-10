@@ -13,14 +13,13 @@ ALLOWED_INTEROP_ORIGINS = {
     "https://app.4dtwinmaps.com",
     "https://mosaicearth.app",
     "https://app.mosaicearth.app",
-    "http://192.168.0.143:8090",
     "http://localhost:8090",
 }
 
 
 def resolve_cors_origin(request: Request) -> str:
     origin = (request.headers.get("origin") or "").strip()
-    if origin in ALLOWED_INTEROP_ORIGINS or origin.endswith(".4dtwinmaps.com") or origin.endswith(".mosaicearth.app") or origin.endswith(".trycloudflare.com"):
+    if origin in ALLOWED_INTEROP_ORIGINS or origin.endswith(".4dtwinmaps.com") or origin.endswith(".mosaicearth.app"):
         return origin
     return "https://4dtwinmaps.com"
 

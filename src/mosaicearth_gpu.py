@@ -4,8 +4,8 @@ import subprocess
 import uuid
 from pathlib import Path
 
-PLATFORM_CPU = 'mosaicearth-desktop/platform:0.4.3'
-PLATFORM_CUDA = 'mosaicearth-desktop/platform:0.4.3-cuda'
+PLATFORM_CPU = 'mosaicearth-desktop/platform:0.4.4'
+PLATFORM_CUDA = 'mosaicearth-desktop/platform:0.4.4-cuda'
 NODE_CPU = 'mosaicearth-desktop/nodeodx:0.1.0'
 NODE_CUDA = 'mosaicearth-desktop/nodeodx:0.4.0-cuda'
 

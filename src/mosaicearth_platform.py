@@ -1,7 +1,7 @@
 """Run the shared MosaicEarth platform against an isolated local workspace.
 
-This entry point is under integration. The processing workspace remains available
-while the platform storage and synchronization adapters are being completed.
+The shared interface serves local projects and complete workspace transfers.
+Cloud account and billing pages open on the canonical cloud service.
 """
 import argparse
 import os

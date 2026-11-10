@@ -19,11 +19,7 @@ from .db_store import (
     to_slug,
 )
 
-INDEXNOW_KEYS = {
-    "4d8f9a2e7c1b6053e9a4d2c8b7f16350",
-    "a8f4e2c9d1b647309e5a1c2b3d4e5f60",
-}
-DEFAULT_INDEXNOW_KEY = "4d8f9a2e7c1b6053e9a4d2c8b7f16350"
+DEFAULT_INDEXNOW_KEY = os.environ.get("MOSAICEARTH_INDEXNOW_KEY", "")
 
 SUPPORTED_REGIONS: List[Dict[str, Any]] = [
     {
@@ -1114,6 +1110,8 @@ def submit_indexnow_batches(custom_urls: Optional[List[str]] = None, dry_run: bo
     base_url = get_public_site_url()
     host = base_url.split("://")[-1].split("/")[0]
     key = DEFAULT_INDEXNOW_KEY
+    if not key or os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1":
+        return {"ok": False, "message": "IndexNow is not configured for this deployment.", "submitted": 0}
     key_location = f"{base_url}/{key}.txt"
     targets = custom_urls if custom_urls else get_all_platform_canonical_urls()
     filtered = list(dict.fromkeys([u.strip() for u in targets if u and u.strip()]))[:10000]

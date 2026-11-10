@@ -11,10 +11,10 @@ Photogrammetry, Gaussian splatting and a geospatial workspace for Windows and Li
 [Website](https://mosaicearth.app) · [Public map](https://app.mosaicearth.app/en/Map) · [Install from source](INSTALL_FROM_SOURCE.md) · [Official installers](https://app.mosaicearth.app/en/Desktop) · [Latest release](https://github.com/nsicart/MosaicEarth-Desktop/releases/latest)
 
 <p align="center">
-  <img src="docs/images/desktop-workspace.jpg" alt="MosaicEarth Desktop showing the public globe in a local, accountless installation" width="640">
+  <img src="docs/images/desktop-workspace.jpg" alt="MosaicEarth Desktop 0.4.3 showing a public asset on Esri imagery with the cloud account disconnected" width="640">
 </p>
 
-*An actual local source installation, without signing in. The public catalog and basemap use Internet. [Screenshot credits](docs/images/README.md).*
+*The actual Linux Desktop 0.4.3 interface with the cloud account disconnected. The public catalog and basemap use Internet. [Screenshot credits](docs/images/README.md).*
 
 ## What you can do
 
@@ -28,7 +28,7 @@ Photogrammetry, Gaussian splatting and a geospatial workspace for Windows and Li
 
 ![Fly View in MosaicEarth Desktop, with terrain and aerial imagery](docs/images/desktop-fly-view.jpg)
 
-*Fly View in the local Linux interface. Map credits remain visible: CesiumJS, PNOA/IGN imagery and Mapzen terrain. [Full attribution](https://app.mosaicearth.app/map-sources).*
+*Fly View in the Linux source edition 0.4.3: rear camera, Esri imagery and Re:Earth / Mapterhorn terrain with bundled NOAA fallback. Map credits remain visible. [Full attribution](https://app.mosaicearth.app/map-sources).*
 
 ## Choose how to get started
 
@@ -88,6 +88,6 @@ Dependency revisions and notices are included in [third-party licenses](THIRD_PA
 | Build packages or contribute | [Build](BUILD.md) · [Contributing and repository map](CONTRIBUTING.md) |
 | Report a problem | [GitHub issues](https://github.com/nsicart/MosaicEarth-Desktop/issues) · [Private security reports](SECURITY.md) |
 
-Current release: **0.4.2**, with connectors **0.2.2**. Windows and Linux x86-64 are the supported distribution targets; there is no macOS installer. The Windows trusted-publisher certificate is pending: OpenPGP signatures verify release artifacts but do not remove Windows SmartScreen/unknown-publisher warnings.
+Current release: **0.4.4**, with connectors **0.2.2**. Windows and Linux x86-64 are the supported distribution targets; there is no macOS installer. The Windows trusted-publisher certificate is pending: OpenPGP signatures verify release artifacts but do not remove Windows SmartScreen/unknown-publisher warnings.
 
 MosaicEarth Desktop is licensed under **[AGPL-3.0](LICENSE)**. See [NOTICE](NOTICE) and [third-party licenses](THIRD_PARTY_LICENSES.md) for bundled components. The software license is separate from licenses for user-uploaded data and map imagery.

@@ -31,6 +31,31 @@ class PlatformTest(unittest.TestCase):
         cls.client.close()
         cls.directory.cleanup()
 
+    def test_indexing_stays_disabled_even_with_operator_configuration(self):
+        from homelab import seo_engine
+        with patch.dict(os.environ, {'MOSAICEARTH_INDEXNOW_KEY': 'fixture-indexing-key'}), patch.object(
+                seo_engine, 'DEFAULT_INDEXNOW_KEY', 'fixture-indexing-key'):
+            self.assertEqual(self.client.get('/fixture-indexing-key.txt').status_code, 404)
+            result = self.client.post('/api/seo/ping-indexnow', json={'dryRun': False}).json()
+            self.assertFalse(result['ok'])
+            self.assertEqual(result['submitted'], 0)
+
+    def test_cloud_billing_opens_canonical_host_and_local_payouts_stay_disabled(self):
+        response = self.client.get('/en/CreditPacks', follow_redirects=False)
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers['location'], 'https://app.mosaicearth.app/en/CreditPacks')
+        with patch.dict(os.environ, {'MOSAICEARTH_CONNECT_ENABLED': '1'}):
+            response = self.client.post('/api/v2/wallet/request-payout', json={})
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json()['code'], 'connect_unavailable')
+
+    def test_development_origins_are_not_trusted_by_interoperability(self):
+        from homelab.interoperability import resolve_cors_origin
+        from starlette.requests import Request
+        for origin in ['http://192.168.0.143:8090', 'https://fixture.trycloudflare.com']:
+            request = Request({'type': 'http', 'headers': [(b'origin', origin.encode())]})
+            self.assertNotEqual(resolve_cors_origin(request), origin)
+
     def test_photogrammetry_finalization_keeps_status_reads_responsive(self):
         import concurrent.futures
         import threading

@@ -13,7 +13,7 @@ from .runpod_engines import RunPodEngineError
 MAX_RESULT_BYTES = 256 * 1024**2
 
 
-def train_on_runpod(jobs, job_key, frames, preset, destination, *, progress=None, ready_timeout=900):
+def train_on_runpod(jobs, job_key, frames, preset, destination, *, progress=None, ready_timeout=900, capacity_key=None):
     def ensure_active():
         if not jobs.find(job_key):
             raise RunPodEngineError("The OpenSplat Pod is no longer active.")
@@ -39,7 +39,7 @@ def train_on_runpod(jobs, job_key, frames, preset, destination, *, progress=None
     try:
         if progress:
             progress(35, "Provisioning GPU for COLMAP and OpenSplat")
-        pod = jobs.start(job_key, "opensplat")
+        pod = jobs.start(job_key, "opensplat", capacity_key=capacity_key)
         owns_cleanup = True
         if progress:
             progress(36, "Starting GPU processing")

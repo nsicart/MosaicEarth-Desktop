@@ -400,3 +400,56 @@ def settle(store, order, session, event_id, event_type, grant):
         if event_id:
             conn.execute("INSERT OR IGNORE INTO stripe_webhook_events VALUES (?, ?, ?)", (event_id, sid, event_type))
         return result
+
+
+def release_processing_capacity(store, metadata):
+    from .processing_checkout import release
+    release(store, metadata)
+    hold = metadata.get('mosaicearth_capacity_hold')
+    if not hold:
+        return
+    with store.stripe_transaction():
+        project = next((p for p in store.tables.get('dbo.WEB_PROJECTS', [])
+                        if str(p.get('ID')) == metadata.get('mosaicearth_project_id')), None)
+        if project and project.get('RUNPOD_CAPACITY_HOLD') == hold and project.get('PAYMENT_STATUS') not in {'COVERED_BY_PLAN', 'AUTHORIZED_PAID_UPFRONT'}:
+            store.runpod_engine_jobs().release_capacity(hold)
+            project.pop('RUNPOD_CAPACITY_HOLD', None)
+            project.pop('PENDING_PROCESSING_QUOTE', None)
+            store.persist_table('dbo.WEB_PROJECTS')
+
+
+async def reconcile_processing_checkouts(store):
+    """Release abandoned capacity only after Stripe confirms an unpaid expiration."""
+    secret = store.get_setting('StripeSecretKey', '')
+    if not secret:
+        return
+    async with httpx.AsyncClient(timeout=10, trust_env=False) as client:
+        account = await stripe_account(client, secret)
+        from .processing_checkout import recover
+        await recover(store, client, secret, account)
+    with store.stripe_transaction() as conn:
+        orders = [dict(zip([c[0] for c in cur.description], row)) for cur in [conn.execute(
+            "SELECT * FROM stripe_checkout_orders WHERE result IS NULL AND json_extract(metadata, '$.mosaicearth_kind')='processing_task' ORDER BY rowid LIMIT 100")]
+            for row in cur.fetchall()]
+    pending = orders
+    if not pending:
+        return
+    secret = store.get_setting('StripeSecretKey', '')
+    async with httpx.AsyncClient(timeout=10, trust_env=False) as client:
+        account = await stripe_account(client, secret)
+        for order in pending:
+            if bool(order['live']) != live_mode(secret) or order['stripe_account'] != account:
+                continue
+            response = await client.get('https://api.stripe.com/v1/checkout/sessions/' + order['session_id'], auth=(secret, ''))
+            response.raise_for_status()
+            session = response.json()
+            if session.get('id') != order['session_id'] or session.get('livemode') != bool(order['live']):
+                continue
+            if session.get('status') == 'expired' and session.get('payment_status') == 'unpaid':
+                release_processing_capacity(store, json.loads(order['metadata']))
+                with store.stripe_transaction() as conn:
+                    conn.execute("UPDATE stripe_checkout_orders SET result=? WHERE session_id=? AND result IS NULL",
+                                 (json.dumps({'ok': False, 'expired': True}), order['session_id']))
+            elif session.get('status') == 'complete' and session.get('payment_status') == 'paid':
+                from .app import _fulfill_stripe_checkout_session
+                await _fulfill_stripe_checkout_session(order['session_id'])

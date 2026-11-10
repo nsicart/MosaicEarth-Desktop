@@ -40,7 +40,6 @@ from .pages import (
 )
 from .seo_engine import (
     DEFAULT_INDEXNOW_KEY,
-    INDEXNOW_KEYS,
     build_breadcrumb_json_ld,
     build_external_asset_path,
     build_head_metadata_html,
@@ -605,14 +604,13 @@ async def route_llms_full_txt():
     return PlainTextResponse(render_llms_full_txt(), media_type="text/plain; charset=utf-8")
 
 
-@app.get("/4d8f9a2e7c1b6053e9a4d2c8b7f16350.txt")
-async def route_indexnow_key_1():
-    return PlainTextResponse("4d8f9a2e7c1b6053e9a4d2c8b7f16350", media_type="text/plain; charset=utf-8")
-
-
-@app.get("/a8f4e2c9d1b647309e5a1c2b3d4e5f60.txt")
-async def route_indexnow_key_2():
-    return PlainTextResponse("a8f4e2c9d1b647309e5a1c2b3d4e5f60", media_type="text/plain; charset=utf-8")
+@app.get("/{indexnow_key}.txt")
+async def route_indexnow_key(indexnow_key: str):
+    configured = os.environ.get("MOSAICEARTH_INDEXNOW_KEY", "")
+    if (os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1" or not configured
+            or not re.fullmatch(r"[a-zA-Z0-9-]{8,128}", indexnow_key) or indexnow_key != configured):
+        raise HTTPException(status_code=404)
+    return PlainTextResponse(configured, media_type="text/plain; charset=utf-8")
 
 
 @app.api_route("/api/seo/ping-indexnow", methods=["GET", "POST"])
@@ -1429,8 +1427,31 @@ async def _create_stripe_checkout_session(
     store = get_store()
     secret_key = store.get_setting("StripeSecretKey", "")
     if not secret_key:
-        return {"ok": False, "message": "Stripe secret key is not configured."}
+        return {"ok": False, "message": "Secure checkout is temporarily unavailable. No payment has been taken. Please try again later."}
     base_url = get_public_site_url().rstrip("/")
+    capacity_hold = None
+    if metadata.get('mosaicearth_kind') == 'processing_task':
+        from .runpod_engines import RunPodEngineError
+        from starlette.concurrency import run_in_threadpool
+        project = store.get_project(int(metadata.get('mosaicearth_project_id') or 0)) or {}
+        if int(project.get('CREATE_ID') or 0) != int(user['ID']):
+            return {'ok': False, 'message': 'Processing task ownership could not be verified.'}
+        engine = ('opensplat' if metadata.get('mosaicearth_task_kind') == 'gaussian' else 'nodeodx')
+        uses_runpod = (os.environ.get('MOSAICEARTH_GAUSSIAN_ENGINE') == 'runpod-opensplat' if engine == 'opensplat'
+                       else os.environ.get('MOSAICEARTH_RUNPOD_PHOTOGRAMMETRY') == 'nodeodx')
+        if uses_runpod:
+            hold = project.get('RUNPOD_CAPACITY_HOLD')
+            if not hold:
+                return {'ok': False, 'message': 'Request a processing quote before opening Checkout.'}
+            try:
+                jobs = store.runpod_engine_jobs()
+                jobs.reserve_capacity(hold, engine)
+                await run_in_threadpool(jobs._gpu_candidates, jobs.policy()[1], engine)
+            except RunPodEngineError as exc:
+                return {'ok': False, 'code': 'cloud_capacity_unavailable', 'message': str(exc)}
+            capacity_hold = hold
+            metadata = {**metadata, 'mosaicearth_capacity_hold': hold}
+            idempotency_key = idempotency_key or ('mosaicearth-processing-' + hold)
     unit_cents = max(50, int(round(float(amount_eur) * 100)))
     form_data: Dict[str, str] = {
         "mode": mode,
@@ -1465,6 +1486,13 @@ async def _create_stripe_checkout_session(
                 unit_cents = price_data.get("unit_amount")
                 if price_data.get("currency") != "eur" or type(unit_cents) is not int or unit_cents < 50:
                     raise stripe_payments.InvalidPayment("Invalid recurring price")
+            if metadata.get('mosaicearth_kind') == 'processing_task':
+                from . import processing_checkout
+                reservation = processing_checkout.prepare(store, int(user['ID']),
+                    int(metadata['mosaicearth_project_id']), form_data, metadata, unit_cents, account, live)
+                data = await processing_checkout.submit(store, client, secret_key, reservation)
+                return {'ok': True, 'requiresStripe': True, 'requires_stripe': True,
+                        'checkoutUrl': str(data['url']), 'sessionId': str(data['id'])}
             resp = await client.post(
                 "https://api.stripe.com/v1/checkout/sessions",
                 data=form_data,
@@ -1678,6 +1706,55 @@ async def route_stripe_webhook(request: Request):
     return JSONResponse({"ok": True, "received": True})
 
 
+@app.get("/api/v2/wallet/payouts")
+def route_wallet_payouts(request: Request):
+    from .creator_payouts import summary
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    return summary(get_store(), int(user['ID']))
+
+
+@app.post("/api/v2/wallet/connect")
+async def route_wallet_connect(request: Request):
+    from .creator_payouts import Connect, enabled
+    from starlette.concurrency import run_in_threadpool
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    if not enabled():
+        return JSONResponse({'ok': False, 'message': 'Bank withdrawals are awaiting Stripe Connect activation. Your earnings remain available.'}, status_code=503)
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return JSONResponse({'ok': False, 'message': 'Invalid payout account request.'}, status_code=400)
+    def onboard():
+        with httpx.Client(timeout=20, trust_env=False) as client:
+            service = Connect(get_store(), client)
+            if body.get('refresh'):
+                service.refresh(int(user['ID']))
+                return {'ok': True}
+            if body.get('dashboard'):
+                return {'ok': True, 'url': service.dashboard(int(user['ID']))}
+            return {'ok': True, 'url': service.onboarding(int(user['ID']), str(body.get('country') or '').upper(), get_public_site_url().rstrip('/'))}
+    try:
+        return await run_in_threadpool(onboard)
+    except (ValueError, KeyError, httpx.HTTPError, stripe_payments.RetryPayment):
+        return JSONResponse({'ok': False, 'message': 'Stripe account setup could not be confirmed. Please retry or contact support; your balance is unchanged.'}, status_code=503)
+
+
+@app.post("/api/v2/wallet/payouts/{payout_id}/{action}")
+def route_wallet_payout_action(request: Request, payout_id: int, action: str):
+    from .creator_payouts import change_request
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    result = change_request(get_store(), int(user['ID']), payout_id, action)
+    return JSONResponse(result, status_code=200 if result['ok'] else 409)
+
+
 @app.post("/api/v2/wallet/request-payout")
 async def route_wallet_request_payout(request: Request):
     user = get_current_user(request)
@@ -1687,8 +1764,7 @@ async def route_wallet_request_payout(request: Request):
         body = await request.json()
     except Exception:
         body = {}
-    dest = str(body.get("destination") or body.get("iban") or user.get("EMAIL") or "").strip()
-    res = get_store().request_creator_payout_eur(int(user["ID"]), destination_iban_or_email=dest)
+    res = get_store().request_creator_payout_eur(int(user["ID"]))
     return JSONResponse(res, status_code=200 if res.get("ok") else 400)
 
 
@@ -1769,21 +1845,10 @@ async def api_v2_upgrade_subscription_plan(request: Request):
         return JSONResponse({"ok": True, "planKey": "free", "message": "Subscription canceled. Future recurring charges have stopped."})
     if plan_key in ("pro", "studio"):
         price_eur = 59.0 if plan_key == "studio" else 19.0
-        u_row = store.get_user_by_id(uid) or {}
-        wallet_bal = float(u_row.get("CREATOR_EARNINGS_EUR") or 0.0)
-        if wallet_bal >= price_eur and body.get("useWallet", False):
-            with store.lock:
-                for u_item in store.tables.get("dbo.USERS", []):
-                    if int(u_item.get("ID") or 0) == uid:
-                        u_item["CREATOR_EARNINGS_EUR"] = round(wallet_bal - price_eur, 2)
-                        store.persist_table("dbo.USERS")
-                        break
-            res = store.upgrade_user_subscription_plan(uid, plan_key)
-            return JSONResponse(res, status_code=200 if res.get("ok") else 400)
         plan_title = (
-            "MosaicEarth Studio Plan (1 TB Private Quota + 4,000 Cloud GPU Images/mo + Desktop License)"
+            "MosaicEarth Studio Plan (1,000 GiB Private Quota + 4,000 Cloud GPU Images/mo + Desktop License)"
             if plan_key == "studio"
-            else "MosaicEarth Pro Plan (250 GB Private Quota + 1,000 Cloud GPU Images/mo)"
+            else "MosaicEarth Pro Plan (250 GiB Private Quota + 1,000 Cloud GPU Images/mo)"
         )
         s_res = await _create_stripe_checkout_session(
             user=user,
@@ -1815,26 +1880,14 @@ async def api_v2_upgrade_extra_storage(request: Request):
     extra_gb = int(body.get("extra_gb") or body.get("gb") or 250)
     packs = {
         250: (9.0, "+250 GB Extra Private Cloud Storage Add-on"),
-        1000: (29.0, "+1 TB (1,000 GB) Extra Private Cloud Storage Add-on"),
-        5000: (119.0, "+5 TB (5,000 GB) Extra Private Cloud Storage Add-on"),
+        1000: (29.0, "+1,000 GiB Extra Private Cloud Storage Add-on"),
+        5000: (119.0, "+5,000 GiB Extra Private Cloud Storage Add-on"),
     }
     if extra_gb not in packs:
         return JSONResponse({"ok": False, "message": "Choose +250 GB (9 €/mo), +1 TB (29 €/mo), or +5 TB (119 €/mo)."}, status_code=400)
     price_eur, pack_title = packs[extra_gb]
     store = get_store()
     uid = int(user["ID"])
-    u_row = store.get_user_by_id(uid) or {}
-    wallet_bal = float(u_row.get("CREATOR_EARNINGS_EUR") or 0.0)
-    if wallet_bal >= price_eur and body.get("useWallet", False):
-        with store.lock:
-            for u_item in store.tables.get("dbo.USERS", []):
-                if int(u_item.get("ID") or 0) == uid:
-                    u_item["CREATOR_EARNINGS_EUR"] = round(wallet_bal - price_eur, 2)
-                    store.persist_table("dbo.USERS")
-                    break
-        res = store.add_user_extra_storage_gb(uid, extra_gb)
-        return JSONResponse(res, status_code=200 if res.get("ok") else 400)
-
     s_res = await _create_stripe_checkout_session(
         user=user,
         mode="subscription",
@@ -3966,12 +4019,19 @@ def _asset_upload_checkout(upload, *, cancel=False):
                 return upload.public_status(upload.read())
             if session.get("status") == "open":
                 return result
-            if session.get("status") != "expired":
+            if session.get("status") != "expired" or session.get("payment_status") != "unpaid":
                 raise UploadError("Checkout is pending. Your upload is preserved.", 409)
+            stripe_payments.release_processing_capacity(upload.store, json.loads(order['metadata']))
             with cross_process_file_lock(upload.lock_file):
                 data = upload.read()
-                data.update(checkout_url=None, checkout_session=None, checkout_attempt=str(uuid.uuid4()))
+                data.update(status='UPLOADING', checkout_url=None, checkout_session=None, checkout_attempt=str(uuid.uuid4()))
+                data.pop('checkout_quote', None)
                 upload.write(data)
+            if not cancel:
+                result = upload.finish()
+                if result['status'] != 'AWAITING_PAYMENT':
+                    return result
+                data = upload.read()
         if cancel:
             return upload.cancel(checkout_canceled=True)
         quote = data["checkout_quote"]

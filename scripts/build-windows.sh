@@ -20,4 +20,4 @@ if [ -n "${ME_SIGNING_COMMAND:-}" ]; then
 else
     makensis -V3 packaging/windows.nsi
 fi
-(cd installers && sha256sum MosaicEarth-Desktop-0.4.3-x64-Setup.exe > SHA256SUMS.windows)
+(cd installers && sha256sum MosaicEarth-Desktop-0.4.4-x64-Setup.exe > SHA256SUMS.windows)

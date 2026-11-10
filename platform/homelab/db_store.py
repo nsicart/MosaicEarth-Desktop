@@ -15,6 +15,7 @@ import time
 import urllib.request
 import uuid
 from contextlib import contextmanager
+from .pricing import PLANS, image_quote
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -2743,7 +2744,7 @@ class MosaicEarthDataStore:
             return {"ok": True, "already_licensed": True, **info}
         price_eur = 29.0
         now_iso = _fmt_iso_utc(datetime.datetime.now(datetime.timezone.utc))
-        with self.lock:
+        with self.stripe_transaction():
             user_row = None
             for u in self.tables.get("dbo.USERS", []):
                 if int(u.get("ID") or 0) == int(user_id):
@@ -2782,7 +2783,7 @@ class MosaicEarthDataStore:
                 "USER_ID": int(user_id),
                 "AMOUNT": price_eur,
                 "CURRENCY": "EUR",
-                "CONCEPT": "MosaicEarth Desktop License (Windows / Linux / macOS · Session-Bound)",
+                "CONCEPT": "MosaicEarth Desktop License (Windows / Linux · Account-associated)",
                 "PAYMENT_METHOD": paid_via,
                 "STRIPE_SESSION_ID": stripe_session_id,
                 "STATUS": "COMPLETED",
@@ -2793,35 +2794,10 @@ class MosaicEarthDataStore:
         return {"ok": True, "paid_eur": price_eur, "paid_via": paid_via, **new_info}
 
     def request_creator_payout_eur(self, user_id: int, destination_iban_or_email: str = "") -> Dict[str, Any]:
-        now_iso = _fmt_iso_utc(datetime.datetime.now(datetime.timezone.utc))
-        with self.lock:
-            user_row = next((u for u in self.tables.get("dbo.USERS", []) if int(u.get("ID") or 0) == int(user_id)), None)
-            if not user_row:
-                return {"ok": False, "message": "User not found."}
-            bal = round(float(user_row.get("CREATOR_EARNINGS_EUR") or 0.0), 2)
-            if bal < 10.0:
-                return {"ok": False, "message": f"Minimum Stripe payout is 10.00 € (current Creator Wallet balance: {bal:.2f} €). You can use any balance immediately for internal purchases or processing."}
-            dest = (destination_iban_or_email or str(user_row.get("EMAIL") or "")).strip()
-            user_row["CREATOR_EARNINGS_EUR"] = 0.0
-            self.persist_table("dbo.USERS")
-            payouts = self.tables.setdefault("dbo.MOSAICEARTH_CREATOR_PAYOUTS", [])
-            next_pid = next_record_id(payouts, "ID", 1)
-            payouts.append({
-                "ID": next_pid,
-                "USER_ID": int(user_id),
-                "AMOUNT_EUR": bal,
-                "DESTINATION": dest,
-                "STATUS": "REQUESTED_STRIPE_PAYOUT",
-                "CREATED_AT": now_iso,
-            })
-            self.persist_table("dbo.MOSAICEARTH_CREATOR_PAYOUTS")
-            return {
-                "ok": True,
-                "payoutId": next_pid,
-                "amountEur": bal,
-                "destination": dest,
-                "message": f"Stripe payout of {bal:.2f} € requested for {dest}.",
-            }
+        # Bank details belong exclusively to Stripe hosted onboarding.
+        from .creator_payouts import reserve_payout
+        return reserve_payout(self, user_id)
+
 
     def save_project_info(
         self,
@@ -3094,19 +3070,36 @@ class MosaicEarthDataStore:
 
             return {"ok": True, "badge": badge, "isPublic": mode != "private"}
 
+    def ensure_processing_quota_period(self, user_id: int) -> str:
+        period = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m')
+        user = self.get_user_by_id(user_id) or {}
+        if user.get('PROCESSING_QUOTA_PERIOD') != period:
+            with self.stripe_transaction():
+                row = next((u for u in self.tables.get('dbo.USERS', []) if int(u.get('ID') or 0) == int(user_id)), None)
+                if row and row.get('PROCESSING_QUOTA_PERIOD') != period:
+                    previous = row.get('PROCESSING_QUOTA_PERIOD')
+                    # First migration keeps usage; only a recorded previous month resets it.
+                    if previous and previous < period:
+                        row.update(MONTHLY_IMAGES_USED=0, MONTHLY_SPLATS_USED=0)
+                    row['PROCESSING_QUOTA_PERIOD'] = period
+                    self.persist_table('dbo.USERS')
+        return period
+
     def get_user_storage_summary(self, user_id: int) -> Dict[str, Any]:
         """Computes user's Private Storage Quota used vs limit (5 GB Free / 250 GB Pro / 1 TB Studio + Extra Storage GB), monthly GPU processing allowance, and Creator Earnings (€)."""
+        quota_period = self.ensure_processing_quota_period(user_id)
         with self.lock:
             u = self.get_user_by_id(user_id) or {}
             plan_key = str(u.get("PLAN_KEY") or "free").lower()
             if plan_key not in ("free", "pro", "studio"):
                 plan_key = "free"
-            base_quota_gb = 1000.0 if plan_key == "studio" else (250.0 if plan_key == "pro" else 5.0)
+            tariff = PLANS.get(plan_key, PLANS["free"])
+            base_quota_gb = float(tariff["storage_gib"])
             extra_gb = round(max(0.0, float(u.get("EXTRA_STORAGE_GB") or 0.0)), 2)
             quota_gb = round(base_quota_gb + extra_gb, 2)
             is_legacy_studio = bool(u.get("IS_LEGACY_STUDIO")) and plan_key == "studio"
-            cap_str = f"{round(quota_gb / 1000.0, 2):g} TB" if quota_gb >= 1000.0 else f"{int(quota_gb)} GB"
-            extra_suffix = f" · +{int(extra_gb)} GB Extra" if extra_gb > 0 else ""
+            cap_str = f"{quota_gb:g} GiB"
+            extra_suffix = f" · +{int(extra_gb)} GiB Extra" if extra_gb > 0 else ""
             if plan_key == "studio":
                 plan_label = f"Studio · Legacy ({cap_str}{extra_suffix})" if is_legacy_studio else f"Studio ({cap_str}{extra_suffix})"
             elif plan_key == "pro":
@@ -3114,13 +3107,13 @@ class MosaicEarthDataStore:
             else:
                 plan_label = f"Free ({cap_str}{extra_suffix})"
             can_share_private = plan_key in ("pro", "studio")
-            can_whitelabel = plan_key == "studio"
+            can_whitelabel = False
             creator_payout_pct = 90 if plan_key == "studio" else (85 if plan_key == "pro" else 80)
-            monthly_images_limit = 4000 if plan_key == "studio" else (1000 if plan_key == "pro" else 0)
-            monthly_splats_limit = 12 if plan_key == "studio" else (3 if plan_key == "pro" else 0)
-            price_per_extra_image_eur = 0.015 if plan_key == "studio" else (0.02 if plan_key == "pro" else 0.03)
+            monthly_images_limit = tariff["images"]
+            monthly_splats_limit = tariff["splats"]
+            price_per_extra_image_eur = float(tariff["image_eur"])
             wholesale_cost_per_image_eur = 0.006  # RunPod Serverless / Modal / Hetzner GPU wholesale cost
-            price_per_extra_splat_eur = 1.50 if plan_key == "studio" else (2.00 if plan_key == "pro" else 3.00)
+            price_per_extra_splat_eur = float(tariff["splat_eur"])
             wholesale_cost_per_splat_eur = 0.60
             creator_earnings_eur = round(float(u.get("CREATOR_EARNINGS_EUR") or 0.0), 2)
             monthly_images_used = int(u.get("MONTHLY_IMAGES_USED") or 0)
@@ -3206,6 +3199,8 @@ class MosaicEarthDataStore:
                 "creator_payout_pct": creator_payout_pct,
                 "creatorEarningsEur": creator_earnings_eur,
                 "creator_earnings_eur": creator_earnings_eur,
+                "processingQuotaPeriod": quota_period,
+                "storageUnit": "GiB",
                 "monthlyImagesLimit": monthly_images_limit,
                 "monthly_images_limit": monthly_images_limit,
                 "monthlyImagesUsed": monthly_images_used,
@@ -3259,7 +3254,7 @@ class MosaicEarthDataStore:
                     "monthly_splats_limit": 0,
                     "monthly_splats_used": 0,
                     "pricePerExtraImageEur": 0.030,
-                    "pricePerExtraSplatEur": 4.50,
+                    "pricePerExtraSplatEur": 3.00,
                 }
 
         is_gauss = (task_kind or "").strip().lower() == "gaussian"
@@ -3312,22 +3307,18 @@ class MosaicEarthDataStore:
                 "summary_label": (
                     f"0.00 € (Included in your {summary['plan_name']} monthly quota · {rem_splats} Splats remaining)"
                     if rem_splats > 0
-                    else f"{retail:.2f} € Upfront Pay-Per-Task (100% automatic refund if processing fails)"
+                    else f"{retail:.2f} € Upfront Pay-Per-Task (Automatic refund initiated if processing fails; bank processing time applies)"
                 ),
             }
-        n_img = max(5, int(num_images or 0))
-        avg_mb = (float(total_megabytes) / float(n_img)) if (total_megabytes and n_img > 0) else 8.0
-        res_mult = round(max(1.0, avg_mb / 12.0), 2) if avg_mb > 12.0 else 1.0
-        effective_imgs = int(round(n_img * res_mult))
+        n_img = max(1, int(num_images or 0))
         rem_imgs = max(0, int(summary["monthly_images_limit"]) - int(summary["monthly_images_used"]))
-        billable_imgs = max(0, effective_imgs - rem_imgs)
-        _internal_floor = round(effective_imgs * 0.021, 2)
-        if billable_imgs == 0:
-            retail = 0.0
-        else:
-            raw_retail = round(billable_imgs * float(summary["pricePerExtraImageEur"]), 2)
-            retail = max(2.00, raw_retail, _internal_floor)
+        breakdown = image_quote(n_img, total_megabytes, rem_imgs, summary["pricePerExtraImageEur"])
+        effective_imgs = breakdown["effective_images"]
+        billable_imgs = breakdown["billable_images"]
+        res_mult = breakdown["resolution_multiplier"]
+        retail = breakdown["retail_price_eur"]
         return {
+            **breakdown,
             "mode": "cloud_gpu",
             "backend": "MOSAICEARTH_CLOUD",
             "engine": str(route.get("engine_label") or "OpenDroneMap (NodeODM)"),
@@ -3346,7 +3337,7 @@ class MosaicEarthDataStore:
             "summary_label": (
                 f"0.00 € (Covered by your {summary['plan_name']} quota · {rem_imgs} images remaining this month)"
                 if billable_imgs == 0
-                else f"{retail:.2f} € Upfront Pay-Per-Task ({billable_imgs} billable images × {summary['pricePerExtraImageEur']:.3f} €/img · refund review if failed)"
+                else f"{retail:.2f} € Upfront Pay-Per-Task ({billable_imgs} billable images × {summary['pricePerExtraImageEur']:.3f} €/effective image · minimum 2.00 € per billed task · size factor {res_mult:.2f}× above 12 MiB/photo)"
             ),
         }
 
@@ -3378,10 +3369,27 @@ class MosaicEarthDataStore:
                     return {"ok": False, "message": "This task already has a different processing authorization."}
                 return {"ok": True, "already_authorized": True, "paymentStatus": proj["PAYMENT_STATUS"],
                         "payment_status": proj["PAYMENT_STATUS"], "charged_eur": float(proj.get("UPFRONT_AMOUNT_EUR") or 0)}
-            if num_images <= 0:
-                files = self.get_project_files(project_id)
+            files = self.get_project_files(project_id) if task_kind != 'gaussian' else []
+            if files or num_images <= 0:
                 num_images = len(files)
                 total_megabytes = sum(float(f.get("SIZE") or 0) for f in files) / (1024.0 * 1024.0)
+            reservation = proj.get('PROCESSING_CHECKOUT_RESERVATION') or {}
+            reserved = reservation.get('state') in {'INTENT', 'OPEN', 'REVIEW_REQUIRED'}
+            if reserved:
+                if task_kind != reservation['metadata']['mosaicearth_task_kind']:
+                    return {'ok': False, 'message': 'Another processing payment is pending for this project.'}
+                if force_stripe_paid:
+                    if reservation.get('session_id') != stripe_session_id or reservation['cents'] != stripe_cents:
+                        return {'ok': False, 'message': 'The reserved payment requires reconciliation.'}
+                    processing_quote = reservation['quote']
+                else:
+                    return {'ok': True, 'requires_stripe': True, 'amount_eur': reservation['cents'] / 100,
+                            'retail_price_eur': reservation['quote']['retail_price_eur'],
+                            'wallet_applied_eur': reservation['wallet'], 'project_id': project_id,
+                            'num_images': reservation['quote']['num_images'], 'task_kind': task_kind,
+                            'quote': reservation['quote']}
+            if force_stripe_paid and not processing_quote:
+                processing_quote = proj.get('PENDING_PROCESSING_QUOTE')
             quote = processing_quote or self.calculate_task_processing_quote(
                 user_id,
                 num_images=num_images,
@@ -3394,6 +3402,23 @@ class MosaicEarthDataStore:
             retail_eur = float(quote.get("retail_price_eur") or 0.0)
             is_gauss = (task_kind or "").strip().lower() == "gaussian"
             is_non_billable = quote.get("mode") in ("local_nodeodm", "custom_nodeodm")
+            if not force_stripe_paid:
+                proj['PENDING_PROCESSING_QUOTE'] = quote
+                self.persist_table('dbo.WEB_PROJECTS')
+
+            capacity_key = None
+            engine = ('opensplat' if is_gauss and os.environ.get('MOSAICEARTH_GAUSSIAN_ENGINE') == 'runpod-opensplat'
+                      else 'nodeodx' if not is_gauss and os.environ.get('MOSAICEARTH_RUNPOD_PHOTOGRAMMETRY') == 'nodeodx' else None)
+            if engine and not is_non_billable and os.environ.get('MOSAICEARTH_DESKTOP_LOCAL') != '1':
+                from .runpod_engines import RunPodEngineError
+                capacity_key = proj.get('RUNPOD_CAPACITY_HOLD') or ('processing-' + uuid.uuid4().hex)
+                try:
+                    self.runpod_engine_jobs().reserve_capacity(capacity_key, engine)
+                except RunPodEngineError as exc:
+                    return {'ok': False, 'code': 'cloud_capacity_unavailable', 'message': str(exc)}
+                proj['RUNPOD_CAPACITY_HOLD'] = capacity_key
+                proj['PENDING_PROCESSING_QUOTE'] = quote
+                self.persist_table('dbo.WEB_PROJECTS')
 
             if retail_eur > 0.0 and not is_non_billable:
                 u_row = next((u for u in self.tables.get("dbo.USERS", []) if int(u.get("ID") or 0) == int(user_id)), None)
@@ -3404,24 +3429,29 @@ class MosaicEarthDataStore:
                         "requires_stripe": True,
                         "amount_eur": max(0.50, round(retail_eur - wallet_bal, 2)),
                         "retail_price_eur": retail_eur,
-                        "wallet_applied_eur": round(wallet_bal, 2),
+                        "wallet_applied_eur": max(0.0, round(retail_eur - max(0.50, round(retail_eur - wallet_bal, 2)), 2)),
                         "project_id": int(project_id),
                         "num_images": int(num_images),
                         "task_kind": task_kind,
                         "quote": quote,
                     }
+                if capacity_key:
+                    self.runpod_engine_jobs().commit_capacity(capacity_key)
                 if u_row:
                     if not force_stripe_paid and wallet_bal >= retail_eur:
                         u_row["CREATOR_EARNINGS_EUR"] = round(wallet_bal - retail_eur, 2)
-                    elif force_stripe_paid and stripe_cents is not None:
+                    elif force_stripe_paid and stripe_cents is not None and not reserved:
                         deduct = self._stripe_wallet_due(wallet_bal, retail_eur, stripe_cents)
                         if deduct is None:
                             return {"ok": False, "message": "The wallet portion requires reconciliation."}
                         u_row["CREATOR_EARNINGS_EUR"] = round(wallet_bal - deduct, 2)
                     self.persist_table("dbo.USERS")
 
+            if capacity_key:
+                self.runpod_engine_jobs().commit_capacity(capacity_key)
+
             # Update user's monthly quota usage if covered by Pro/Studio plan
-            if not is_non_billable:
+            if not is_non_billable and not reserved:
                 for u in self.tables.get("dbo.USERS", []):
                     if int(u.get("ID") or 0) == int(user_id):
                         if is_gauss and quote.get("covered_by_plan"):
@@ -3442,6 +3472,7 @@ class MosaicEarthDataStore:
             )
             proj["PAYMENT_STATUS"] = pay_status
             proj["UPFRONT_AMOUNT_EUR"] = retail_eur
+            proj["PROCESSING_QUOTA_PERIOD"] = reservation['period'] if reserved else self.ensure_processing_quota_period(user_id)
             proj["COVERED_PLAN_IMAGES"] = covered_imgs
             proj["COVERED_PLAN_SPLATS"] = 1 if (is_gauss and quote.get("covered_by_plan")) else 0
             proj["WHOLESALE_COST_EUR"] = float(quote.get("wholesale_cost_eur") or 0.0)
@@ -3452,6 +3483,8 @@ class MosaicEarthDataStore:
             proj["UPFRONT_STRIPE_CENTS"] = int(stripe_cents or 0) if force_stripe_paid else 0
             proj["UPFRONT_WALLET_EUR"] = max(0.0, round(retail_eur - (int(stripe_cents or 0) / 100 if force_stripe_paid else 0), 2))
             proj["UPFRONT_REFUND_CHECKED"] = 0
+            if reserved:
+                reservation['state'] = 'CONSUMED'
             proj.pop("REFUND_PENDING_EUR", None)
             proj.pop("STRIPE_REFUND_ID", None)
             proj.pop("REFUNDED_EUR", None)
@@ -3511,6 +3544,9 @@ class MosaicEarthDataStore:
             restore_imgs = int(target_proj.get("COVERED_PLAN_IMAGES") or 0)
             restore_splats = int(target_proj.get("COVERED_PLAN_SPLATS") or 0)
             now_iso = _fmt_iso_utc(datetime.datetime.now(datetime.timezone.utc))
+            current_period = self.ensure_processing_quota_period(uid) if uid > 0 else ''
+            if target_proj.get('PROCESSING_QUOTA_PERIOD') != current_period:
+                restore_imgs = restore_splats = 0  # A prior month's refund cannot credit this month's quota.
 
             if uid > 0 and (restore_imgs > 0 or restore_splats > 0):
                 for u in self.tables.get("dbo.USERS", []):
@@ -3522,6 +3558,10 @@ class MosaicEarthDataStore:
                         self.persist_table("dbo.USERS")
                         break
 
+            capacity_key = target_proj.pop('RUNPOD_CAPACITY_HOLD', None)
+            if capacity_key:
+                self.runpod_engine_jobs().release_capacity(capacity_key)
+            target_proj.pop('PENDING_PROCESSING_QUOTE', None)
             target_proj["PAYMENT_STATUS"] = refund_status
             target_proj["REFUNDED_EUR"] = 0.0
             if refund_eur > 0:
@@ -4636,7 +4676,7 @@ class MosaicEarthDataStore:
             if owned_job_key:
                 jobs = self.runpod_engine_jobs()
                 _set_prog(5, "Provisioning NodeODX compute")
-                owned_pod = jobs.start(owned_job_key, "nodeodx")
+                owned_pod = jobs.start(owned_job_key, "nodeodx", capacity_key=proj.get("RUNPOD_CAPACITY_HOLD"))
                 _set_prog(8, "Starting NodeODX container and waiting for its API")
                 nodeodm_url, nodeodm_token = owned_pod.endpoint, owned_pod.token
                 # Node reports the host's cores, not necessarily the pod CPU
@@ -5444,7 +5484,7 @@ class MosaicEarthDataStore:
         if buyer_user_id <= 0:
             return {"ok": False, "message": "Sign in required."}
         now_iso = _fmt_iso_utc(datetime.datetime.now(datetime.timezone.utc))
-        with self.lock:
+        with self.stripe_transaction():
             buyer_u = next((u for u in self.tables.get("dbo.USERS", []) if int(u.get("ID") or 0) == int(buyer_user_id)), None)
             wallet_bal = float((buyer_u or {}).get("CREATOR_EARNINGS_EUR") or 0.0)
 

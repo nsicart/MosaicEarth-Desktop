@@ -1671,6 +1671,7 @@ def _run_sfm_and_gaussian_splat_optimization(
             ply = Path(work_d) / "model.ply"
             cameras, benchmark = train_on_runpod(
                 get_store().runpod_engine_jobs(), cloud_job_key, frames_rgb, preset, ply, progress=stage_cb,
+                capacity_key=(get_store().get_project(int(cloud_job_key.split(":")[1])) or {}).get("RUNPOD_CAPACITY_HOLD"),
             )
             return _persist_opensplat_result(ply, cameras, benchmark, out_dir, frame_gps_map, manual_anchor_wgs84)
 
