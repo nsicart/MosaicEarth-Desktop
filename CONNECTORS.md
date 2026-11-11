@@ -6,6 +6,12 @@ The connectors sign in with a MosaicEarth email and password. If you normally us
 
 Transfers include actual original bytes, finished products, textures and metadata. A checksum manifest and 4 MiB chunks support safe retries. Downloads verify every file. Changed local files are preserved: download a different revision into a new folder to resolve conflicts. This is explicit revision synchronization, not simultaneous editing or automatic deletion propagation. Very large transfers need adequate local disk space and cloud account storage. A revision supports up to 100,000 files; split larger projects into tasks.
 
+## MosaicEarth Capture (Android)
+
+Download the signed 64-bit ARM64 APK (`MosaicEarth-Capture-0.4.1-arm64.apk`) from [Desktop & Connectors](https://app.mosaicearth.app/en/Desktop) or from [GitHub Releases](https://github.com/nsicart/MosaicEarth-Capture-Android/releases), or build from source at [nsicart/MosaicEarth-Capture-Android](https://github.com/nsicart/MosaicEarth-Capture-Android).
+
+Capture overlapping photographs with the live overlap assistant, record continuous video for Gaussian splatting, pick media from your gallery, or import a drone microSD (`DCIM`) folder with EXIF GPS. Reconstruct Photogrammetry (colored point cloud, textured `.glb` mesh, DSM and GeoTIFF orthophoto) and 3D Gaussian Splats (Brush Vulkan compute) locally on your phone for €0, inspect results offline in the built-in 3D & GeoTIFF viewer, and upload finished models to MyEarth within your storage quota — or send raw captures to MosaicEarth Cloud.
+
 ## WebODM and OpenDroneMap WebUI
 
 Download the matching `MosaicEarth-webodm-0.2.2.zip` or `MosaicEarth-webui-0.2.2.zip`. Install it through the host's Administration → Plugins screen, enable it and restart the host web and worker services if requested. WebODM requires 2.9.4 or later; OpenDroneMap WebUI requires 3.2.5 or later. The two ZIPs have different native manifests and must not be interchanged.
