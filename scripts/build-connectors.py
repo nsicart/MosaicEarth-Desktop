@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build three installable plugins from one versioned synchronization client."""
+"""Build all seven installable open-source connectors from one versioned synchronization client."""
 import hashlib
 import json
 import shutil
@@ -10,6 +10,21 @@ root = Path(__file__).resolve().parents[1]
 out = root / 'installers'
 out.mkdir(exist_ok=True)
 sums = []
+
+
+def write_deterministic_zip(staging: Path, archive: Path, timestamp: tuple[int, int, int, int, int, int]):
+    with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as target_zip:
+        for file in sorted(staging.rglob('*')):
+            if file.is_file():
+                rel = file.relative_to(staging).as_posix()
+                info = zipfile.ZipInfo(rel, timestamp)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                mode = 0o755 if file.suffix == '.sh' else 0o644
+                info.external_attr = mode << 16
+                target_zip.writestr(info, file.read_bytes())
+
+
+# 1. Existing 0.2.2 GIS & ODM plugins (deterministic byte-identical build)
 for target in ('webodm', 'webui', 'qgis'):
     staging = root / 'build' / ('connector-' + target)
     if staging.exists():
@@ -29,13 +44,29 @@ for target in ('webodm', 'webui', 'qgis'):
                     ('webodmMinVersion' if target == 'webodm' else 'webuiMinVersion'): ('2.9.4' if target == 'webodm' else '3.2.5')}
         (package / 'manifest.json').write_text(json.dumps(manifest, indent=2))
     archive = out / f'MosaicEarth-{target}-0.2.2.zip'
-    with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as target_zip:
-        for file in sorted(package.rglob('*')):
-            if file.is_file():
-                info = zipfile.ZipInfo(file.relative_to(staging).as_posix(), (2026, 11, 7, 0, 0, 0))
-                info.compress_type = zipfile.ZIP_DEFLATED
-                info.external_attr = 0o644 << 16
-                target_zip.writestr(info, file.read_bytes())
+    write_deterministic_zip(staging, archive, (2026, 11, 7, 0, 0, 0))
     sums.append(hashlib.sha256(archive.read_bytes()).hexdigest() + '  ' + archive.name)
+
+# 2. 3D, Photogrammetry & Lidar Connectors 0.3.0 (Blender, Metashape, CloudCompare, RealityCapture)
+NEW_TARGETS = (
+    ('blender', 'connectors/blender', 'mosaicearth_blender', True),
+    ('metashape', 'connectors/metashape', 'mosaicearth_metashape', False),
+    ('cloudcompare', 'connectors/cloudcompare', 'mosaicearth_cloudcompare', False),
+    ('realitycapture', 'connectors/realitycapture', 'mosaicearth_realitycapture', False),
+)
+
+for target, src_rel, pkg_module, wrap_single_folder in NEW_TARGETS:
+    staging = root / 'build' / ('connector-' + target)
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(root / src_rel, staging, dirs_exist_ok=True, ignore=shutil.ignore_patterns('__pycache__'))
+    mod_dir = staging / pkg_module
+    shutil.copyfile(root / 'src/mosaicearth_sync.py', mod_dir / 'mosaicearth_sync.py')
+    shutil.copyfile(root / 'LICENSE', (mod_dir if wrap_single_folder else staging) / 'LICENSE')
+    archive = out / f'MosaicEarth-{target}-0.3.0.zip'
+    write_deterministic_zip(staging, archive, (2026, 11, 12, 0, 0, 0))
+    sums.append(hashlib.sha256(archive.read_bytes()).hexdigest() + '  ' + archive.name)
+
 (out / 'SHA256SUMS.connectors').write_text('\n'.join(sums) + '\n')
-print('Built WebODM, WebUI and QGIS connector ZIPs')
+print('Built WebODM, WebUI, QGIS, Blender, Metashape, CloudCompare and RealityCapture connector ZIPs')

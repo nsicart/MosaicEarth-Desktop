@@ -6,11 +6,76 @@ The connectors sign in with a MosaicEarth email and password. If you normally us
 
 Transfers include actual original bytes, finished products, textures and metadata. A checksum manifest and 4 MiB chunks support safe retries. Downloads verify every file. Changed local files are preserved: download a different revision into a new folder to resolve conflicts. This is explicit revision synchronization, not simultaneous editing or automatic deletion propagation. Very large transfers need adequate local disk space and cloud account storage. A revision supports up to 100,000 files; split larger projects into tasks.
 
+Connectors can also target an existing **MyEarth Cloud Project** and specify a **4D Survey Name & Capture Date (`YYYY-MM-DD`)**, routing multi-epoch flights directly into chronological Surveys ready for 1-click **4D Split-Screen (`A | B`) Comparison**, **Cut/Fill Volume ($\Delta V$)** and **Client Delivery Portals**.
+
 ## MosaicEarth Capture (Android)
 
 Download the signed 64-bit ARM64 APK (`MosaicEarth-Capture-0.4.1-arm64.apk`) from [Desktop & Connectors](https://app.mosaicearth.app/en/Desktop) or from [GitHub Releases](https://github.com/nsicart/MosaicEarth-Capture-Android/releases), or build from source at [nsicart/MosaicEarth-Capture-Android](https://github.com/nsicart/MosaicEarth-Capture-Android).
 
 Capture overlapping photographs with the live overlap assistant, record continuous video for Gaussian splatting, pick media from your gallery, or import a drone microSD (`DCIM`) folder with EXIF GPS. Reconstruct Photogrammetry (colored point cloud, textured `.glb` mesh, DSM and GeoTIFF orthophoto) and 3D Gaussian Splats (Brush Vulkan compute) locally on your phone for €0, inspect results offline in the built-in 3D & GeoTIFF viewer, and upload finished models to MyEarth within your storage quota — or send raw captures to MosaicEarth Cloud.
+
+## Blender
+
+Download `MosaicEarth-blender-0.3.0.zip` from [Desktop & Connectors](https://app.mosaicearth.app/en/Desktop).
+
+- **Blender 4.2 and later**: open **Edit → Preferences → Get Extensions → ⌄ (top-right) → Install from Disk…**, choose `MosaicEarth-blender-0.3.0.zip`, and enable **MosaicEarth Cloud & 3DGS Connector**.
+- **Blender 3.6 – 4.1**: open **Edit → Preferences → Add-ons → Install…**, choose `MosaicEarth-blender-0.3.0.zip`, and enable the add-on.
+
+Open the 3D Viewport sidebar (**N** → **MosaicEarth**):
+
+1. Sign in with your MosaicEarth email and password (session tokens remain in memory only and are never saved inside `.blend` files).
+2. Choose whether to export the visible scene or selected objects as binary glTF 2.0 (`.glb`), and/or attach an external **3D Gaussian Splat** (`.ply` with spherical harmonics, `.spz`, `.splat` or `.ksplat`).
+3. Optionally enable **Attach WGS84 Georeference Anchor** (`Latitude`, `Longitude`, `Altitude`, `Heading`, `Pitch`, `Roll`, `Scale`) and select a target **MyEarth Project** + **4D Capture Date (`YYYY-MM-DD`)**.
+4. Use **Pull & Import into Blender** to download any verified Cloud project or snapshot into a local directory and automatically import `.glb`, `.obj` or `.ply` models into a dedicated `MosaicEarth_<Name>` Collection.
+
+Headless CLI usage is also included:
+
+```bash
+python3 -m mosaicearth_blender.core push --name "Quarry Mesh" --glb scene.glb --splat scene_3dgs.ply --lat 41.3874 --lon 2.1686 --survey-date 2026-11-12
+```
+
+## Agisoft Metashape
+
+Download `MosaicEarth-metashape-0.3.0.zip` and extract its contents (`mosaicearth_metashape_startup.py` and the `mosaicearth_metashape/` folder) into your Agisoft Metashape Professional `scripts/` directory:
+
+- **Windows**: `%LOCALAPPDATA%\Agisoft\Metashape Pro\scripts`
+- **Linux**: `~/.local/share/Agisoft/Metashape Pro/scripts`
+- **macOS**: `~/Library/Application Support/Agisoft/Metashape Pro/scripts`
+
+Restart Metashape Professional (2.0 / 2.1 / 2.2+) and open **MosaicEarth → Synchronize Chunk or 4D Survey…**:
+
+- Exports **Orthomosaic** (BigTIFF/LZW GeoTIFF), **DEM / DSM** (GeoTIFF tagged as `elevation` so MosaicEarth's Cut/Fill Stockpile Volume and 4D $\Delta V$ engine work immediately), **Dense Point Cloud** (`.laz`), **3D Textured Model** (`.glb` or bundled `.obj.zip`), **Processing Report** (`.pdf`) and optional source photographs.
+- Pre-fills the **4D Capture Date (`YYYY-MM-DD`)** from aligned camera EXIF timestamps and lets you route the chunk directly into an existing MyEarth Project or create a new one.
+- **Pull Selected Project into New Chunk…** downloads verified Cloud assets and creates a new Metashape chunk with restored photographs, point clouds and meshes.
+- Supports batch headless execution via `metashape -r`:
+
+```bash
+metashape -r -c "from mosaicearth_metashape.plugin import run_headless_metashape; run_headless_metashape(['--psx', 'site.psx', '--email', 'you@example.com', '--password', '***', '--survey-date', '2026-11-12'])"
+```
+
+## CloudCompare
+
+Download and extract `MosaicEarth-cloudcompare-0.3.0.zip`.
+
+- **Desktop GUI**: run `MosaicEarth-CloudCompare.bat` (Windows) or `./MosaicEarth-CloudCompare.sh` (Linux). Sign in, add `.laz`, `.las`, `.ply` (both Lidar/photogrammetry point clouds, M3C2 distance scalar clouds and 3D Gaussian Splats), `.spz`, `.e57`, `.bin`, `.glb`, `.obj` or `.tif` files, choose a MyEarth Project and optional **4D Capture Date (`YYYY-MM-DD`)**, and click **Push Selected Clouds to MyEarth**.
+- **Automatic `-SILENT` Conversion & DSM Rasterization**: for native `.bin` / `.e57` clouds or when a grid step (`--rasterize-dsm-step 0.25`) is specified, the bridge invokes `CloudCompare -SILENT` to export `.laz` and/or rasterize a GeoTIFF DSM (`-RASTERIZE -PROJ MAX -OUTPUT_RASTER_Z`) while preserving the original file as a private attachment.
+- **Pull & Open in CloudCompare**: downloads verified Cloud revisions locally and launches CloudCompare with the restored point clouds and meshes.
+- **CloudCompare-PythonRuntime (`pycc`)**: users with the embedded Python plugin can also invoke `mosaicearth_cloudcompare.pycc_plugin.push_selected_pycc_entities(...)` to synchronize entities selected in CloudCompare's DB tree.
+
+## RealityCapture
+
+Download and extract `MosaicEarth-realitycapture-0.3.0.zip`.
+
+- **Interactive Desktop Window**: launch `rc_post_export_mosaicearth.bat` with no arguments (or `python -m mosaicearth_realitycapture.connector --gui`) to sign in, pick a RealityCapture export directory or delegate directly to a running RealityCapture instance (`RealityCapture.exe -delegateTo *`), and synchronize deliverables into a MyEarth Project & dated **4D Survey**.
+- **Post-Export Automation Script**: wire `rc_post_export_mosaicearth.bat` (Windows) or `rc_post_export_mosaicearth.sh` (Linux/WSL) into RealityCapture's post-export / CLI workflow:
+
+```bat
+set MOSAICEARTH_EMAIL=you@example.com
+set MOSAICEARTH_PASSWORD=your-mosaicearth-password
+rc_post_export_mosaicearth.bat "D:\RC_Exports\Quarry_Nov" "Quarry Survey" "2026-11-12" 42
+```
+
+Textured `.obj` exports (`.obj` + `.mtl` + multi-UDIM textures + `.rcInfo`) are automatically bundled into `.obj.zip`, GeoTIFF DSMs (`*dsm*.tif`, `*dem*.tif`) are tagged as `elevation` layers alongside GeoTIFF orthomosaics, and `.laz` / `.ply` / 3DGS `.ply` models are uploaded with verified 4 MiB chunks.
 
 ## WebODM and OpenDroneMap WebUI
 

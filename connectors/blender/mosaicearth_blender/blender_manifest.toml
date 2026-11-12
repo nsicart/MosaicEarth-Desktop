@@ -1,0 +1,19 @@
+schema_version = "1.0.0"
+
+id = "mosaicearth_blender"
+version = "0.3.0"
+name = "MosaicEarth Cloud & 3DGS Connector"
+tagline = "Synchronize georeferenced .glb meshes and 3D Gaussian Splats with MyEarth"
+maintainer = "MosaicEarth <support@mosaicearth.app>"
+type = "add-on"
+website = "https://app.mosaicearth.app/en/Desktop"
+tags = ["Import-Export", "3D View", "Pipeline"]
+
+blender_version_min = "3.6.0"
+license = [
+  "SPDX:AGPL-3.0-or-later",
+]
+
+[permissions]
+network = "Synchronize private 3D models, Gaussian splats and georeferenced scenes with MosaicEarth Cloud"
+files = "Export local .glb / 3DGS files and import verified cloud revisions"
