@@ -68,5 +68,43 @@ for target, src_rel, pkg_module, wrap_single_folder in NEW_TARGETS:
     write_deterministic_zip(staging, archive, (2026, 11, 12, 0, 0, 0))
     sums.append(hashlib.sha256(archive.read_bytes()).hexdigest() + '  ' + archive.name)
 
+# 3. Wave 2 (0.4.0) — MosaicEarth Bridge for iOS (Apple Shortcut + SwiftUI + ShareExtension)
+import subprocess
+import sys
+
+ios_src = root / 'connectors' / 'ios-bridge'
+if (ios_src / 'scripts' / 'generate_apple_shortcut.py').is_file():
+    subprocess.run([sys.executable, str(ios_src / 'scripts' / 'generate_apple_shortcut.py')], check=True)
+    ios_staging = root / 'build' / 'connector-ios-bridge'
+    if ios_staging.exists():
+        shutil.rmtree(ios_staging)
+    pkg_dir = ios_staging / 'mosaicearth_ios_bridge'
+    shutil.copytree(ios_src, pkg_dir, ignore=shutil.ignore_patterns('__pycache__', '.build', '*.xcodeproj'))
+    shutil.copyfile(root / 'LICENSE', pkg_dir / 'LICENSE')
+    ios_archive = out / 'MosaicEarth-ios-bridge-0.4.0.zip'
+    write_deterministic_zip(ios_staging, ios_archive, (2026, 11, 12, 12, 0, 0))
+    sums.append(hashlib.sha256(ios_archive.read_bytes()).hexdigest() + '  ' + ios_archive.name)
+
+# 4. Wave 2 (0.4.0) — DJI Terra, PIX4D, ArcGIS Pro (.pyt Toolbox) & Jawset Postshot / LichtFeld 3DGS
+WAVE2_TARGETS = (
+    ('djiterra', 'connectors/djiterra', 'mosaicearth_djiterra'),
+    ('pix4d', 'connectors/pix4d', 'mosaicearth_pix4d'),
+    ('arcgispro', 'connectors/arcgispro', 'mosaicearth_arcgispro'),
+    ('postshot', 'connectors/postshot', 'mosaicearth_postshot'),
+)
+
+for target, src_rel, pkg_module in WAVE2_TARGETS:
+    staging = root / 'build' / ('connector-' + target)
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(root / src_rel, staging, dirs_exist_ok=True, ignore=shutil.ignore_patterns('__pycache__'))
+    mod_dir = staging / pkg_module
+    shutil.copyfile(root / 'src/mosaicearth_sync.py', mod_dir / 'mosaicearth_sync.py')
+    shutil.copyfile(root / 'LICENSE', staging / 'LICENSE')
+    archive = out / f'MosaicEarth-{target}-0.4.0.zip'
+    write_deterministic_zip(staging, archive, (2026, 11, 12, 18, 0, 0))
+    sums.append(hashlib.sha256(archive.read_bytes()).hexdigest() + '  ' + archive.name)
+
 (out / 'SHA256SUMS.connectors').write_text('\n'.join(sums) + '\n')
-print('Built WebODM, WebUI, QGIS, Blender, Metashape, CloudCompare and RealityCapture connector ZIPs')
+print('Built all 12 open-source connector ZIPs (WebODM, WebUI, QGIS, Blender, Metashape, CloudCompare, RealityCapture, iOS Bridge, DJI Terra, PIX4D, ArcGIS Pro, Postshot/LichtFeld)')

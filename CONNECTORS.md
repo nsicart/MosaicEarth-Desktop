@@ -14,6 +14,68 @@ Download the signed 64-bit ARM64 APK (`MosaicEarth-Capture-0.4.1-arm64.apk`) fro
 
 Capture overlapping photographs with the live overlap assistant, record continuous video for Gaussian splatting, pick media from your gallery, or import a drone microSD (`DCIM`) folder with EXIF GPS. Reconstruct Photogrammetry (colored point cloud, textured `.glb` mesh, DSM and GeoTIFF orthophoto) and 3D Gaussian Splats (Brush Vulkan compute) locally on your phone for €0, inspect results offline in the built-in 3D & GeoTIFF viewer, and upload finished models to MyEarth within your storage quota — or send raw captures to MosaicEarth Cloud.
 
+## MosaicEarth Bridge for iOS
+
+Open [`https://app.mosaicearth.app/bridge`](https://app.mosaicearth.app/bridge) in Safari on iPhone or iPad Pro and tap **Share → Add to Home Screen**, or download `MosaicEarth-ios-bridge-0.4.0.zip` from [Desktop & Connectors](https://app.mosaicearth.app/en/Desktop) for the signed Apple Shortcut (`Send_to_MosaicEarth.shortcut`) and open-source SwiftUI + ShareExtension package (`Package.swift`, `project.yml`).
+
+- **Zero-App-Store LiDAR `.USDZ` & Field Media Publishing**: share `.usdz` scans directly from **Scaniverse, Polycam, Apple RoomPlan or Files**, plus 360° equirectangular panoramas, EXIF geo-photos, drone Geo-Videos (`.mp4`/`.mov` + `.srt`/`.gpx`), `.glb`, `.ply`/`.spz` Gaussian Splats and GeoTIFFs.
+- **Native Server Conversion & Instant Delivery**: `.usdz` archives are converted server-side into PBR `.glb` + 3D Tiles (and watertight `.3MF`/`.STL` in 3D Print Studio), returning an unlisted Client Share URL and responsive `<iframe>` embed immediately.
+
+## DJI Terra
+
+Download and extract `MosaicEarth-djiterra-0.4.0.zip` from [Desktop & Connectors](https://app.mosaicearth.app/en/Desktop).
+
+- **Desktop GUI**: launch `djiterra_sync_mosaicearth.bat` (Windows) or `./djiterra_sync_mosaicearth.sh` (Linux), sign in, browse to your DJI Terra mission folder (or `PCGSPRO` workspace), and click **Synchronize Mission to MyEarth**.
+- **Automatic Deliverable Classification**: discovers `map/result.tif` (`orthophoto`), `map/dsm.tif` (`elevation`), `models/pc/*/terra_b3dm/tileset.json` (bundled into `*_3dtiles.zip` with `metadata.xml`), `terra_las/*.las|*.laz` (`pointcloud`), `terra_obj/*.obj` (`.obj.zip` textured mesh), and `report/*.pdf` quality reports.
+- **Watch Folder Daemon & CLI**:
+
+```bash
+python3 -m mosaicearth_djiterra.connector watch "D:/DJI_Terra/PCGSPRO" --project-id 42 --survey-name "Weekly Earthworks"
+python3 -m mosaicearth_djiterra.connector push-folder "D:/DJI_Terra/PCGSPRO/Mission_20261112" --survey-date 2026-11-12
+```
+
+## PIX4Dmapper and PIX4Dmatic
+
+Download and extract `MosaicEarth-pix4d-0.4.0.zip` from [Desktop & Connectors](https://app.mosaicearth.app/en/Desktop).
+
+- **Dual-Edition Auto-Detection**:
+  - **PIX4Dmapper**: automatically picks up `1_initial/report/*.pdf`, `2_densification/point_cloud/*.laz|*.las`, `2_densification/3d_mesh/*.obj|*.fbx`, `3_dsm_ortho/1_dsm/*.tif` (`elevation`), `3_dsm_ortho/2_mosaic/*.tif` (`orthophoto`), and contour Shapefiles/DXF while skipping internal temporary tile pyramids.
+  - **PIX4Dmatic**: detects `exports/` COPC point clouds, `.spz`/`.ply` 3D Gaussian Splats, `tileset.json` 3D Tiles, meshes, ortho/DSM GeoTIFFs and PDF quality reports.
+- **Desktop GUI & Watch Folder CLI**: run `pix4d_sync_mosaicearth.bat` / `.sh` or invoke:
+
+```bash
+python3 -m mosaicearth_pix4d.connector push-folder "D:/PIX4D/Quarry_2026_11" --project-id 42 --survey-date 2026-11-12
+python3 -m mosaicearth_pix4d.connector watch "D:/PIX4D/Active_Missions" --project-id 42
+```
+
+## ArcGIS Pro
+
+Download and extract `MosaicEarth-arcgispro-0.4.0.zip` from [Desktop & Connectors](https://app.mosaicearth.app/en/Desktop).
+
+- **Native ArcGIS Pro Python Toolbox (`MosaicEarth.pyt`)**: in ArcGIS Pro 3.x, open **Catalog Pane → Toolboxes → Right-click → Add Toolbox…** and select `MosaicEarth.pyt`. Three geoprocessing tools become available immediately:
+  1. **Publish Layer or Deliverable to MosaicEarth**: exports & uploads Rasters (Ortho/DSM), Feature Classes / Shapefiles (`.shp.zip` / GeoJSON / `.gpkg`), CAD `.DXF` 3D breaklines/contours, `.las`/`.laz` point clouds and 3D models into dated MyEarth 4D Surveys.
+  2. **Stream Live MosaicEarth OGC WMTS / KML into Map**: mints a read-only authenticated `WMTS 1.0.0` `WMTSCapabilities.xml` endpoint and `NetworkLink .KML` for any Cloud orthomosaic and adds it straight to `ArcGISProject("CURRENT").activeMap`.
+  3. **Pull MosaicEarth Cloud Survey Locally**: downloads verified Cloud deliverables and adds compatible layers to the active map.
+- **Standalone CLI & GUI (no `arcpy` license required)**:
+
+```bash
+python3 -m mosaicearth_arcgispro.connector push parcel_contours.dxf site_ortho.tif --project-id 42 --survey-date 2026-11-12
+python3 -m mosaicearth_arcgispro.connector ogc-links --project-id 42 --save-kml site_live.kml
+```
+
+## Jawset Postshot and LichtFeld Studio
+
+Download and extract `MosaicEarth-postshot-0.4.0.zip` from [Desktop & Connectors](https://app.mosaicearth.app/en/Desktop).
+
+- **3D Gaussian Splatting Publishing (`.ply`, `.splat`, `.spz`, `.ksplat`)**: validates spherical harmonics (`f_dc_0`) on `.ply` radiance fields exported from **Jawset Postshot** or **LichtFeld Studio**.
+- **Automatic EXIF / COLMAP WGS84 Georeferencing**: reads companion drone photo folders (DJI XMP `GpsLatitude`/`GpsLongitude`/`AbsoluteAltitude`/`FlightYawDegree` and standard EXIF GPS IFD), COLMAP `geo.txt`, or `transforms.json`/`gps.json` so your Gaussian Splat lands at its exact real-world coordinates on the Cesium 3D globe.
+- **Instant Share & `oEmbed` Clipboard Copy**: upon upload completion, automatically generates an unlisted Client Share URL, responsive `<iframe>` snippet, and `oEmbed` 1.0 discovery URL and copies the Share link directly to your clipboard.
+
+```bash
+python3 -m mosaicearth_postshot.connector push scene_postshot.ply --photos ./drone_images --survey-date 2026-11-12
+python3 -m mosaicearth_postshot.connector watch ./Postshot_Exports --photos ./drone_images
+```
+
 ## Blender
 
 Download `MosaicEarth-blender-0.3.0.zip` from [Desktop & Connectors](https://app.mosaicearth.app/en/Desktop).

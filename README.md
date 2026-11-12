@@ -24,7 +24,7 @@ Photogrammetry, Gaussian splatting and a geospatial workspace for Windows and Li
 - **Compose scenes in MyMosaics.** Combine georeferenced layers and models, inspect them in 3D and explore with Fly View.
 - **Use your GPU when compatible.** Automatic mode checks NVIDIA CUDA access inside Docker and selects GPU or CPU for each engine. CPU-only operation remains available; not every processing stage uses the GPU.
 - **Synchronize complete projects.** Explicit uploads and downloads include original files, finished products, attachments and metadata, with resumable transfers and SHA-256 verification.
-- **Connect your existing tools.** Native open-source connectors support Android Capture, Blender (`.glb` & 3DGS), Agisoft Metashape, CloudCompare, RealityCapture, WebODM, OpenDroneMap WebUI and QGIS. Browse Public Map and Public Mosaics through the online catalog.
+- **Connect your existing tools.** Native open-source connectors support Android Capture, MosaicEarth Bridge for iOS (`.USDZ` LiDAR & Share Sheet), DJI Terra, PIX4Dmapper & PIX4Dmatic, ArcGIS Pro (`.pyt` Toolbox & Live OGC WMTS), QGIS, Jawset Postshot & LichtFeld Studio (3DGS), Blender (`.glb` & 3DGS), Agisoft Metashape, CloudCompare, RealityCapture, WebODM and OpenDroneMap WebUI. Browse Public Map and Public Mosaics through the online catalog.
 
 ![Fly View in MosaicEarth Desktop, with terrain and aerial imagery](docs/images/desktop-fly-view.jpg)
 
@@ -82,12 +82,12 @@ Dependency revisions and notices are included in [third-party licenses](THIRD_PA
 | Run the free source edition | [Install from source](INSTALL_FROM_SOURCE.md) |
 | Install an official package | [Windows](INSTALL_WINDOWS.md) · [Linux](INSTALL_LINUX.md) |
 | Check GPU compatibility | [GPU requirements and CPU fallback](GPU.md) |
-| Connect Blender, Metashape, CloudCompare, RealityCapture, WebODM, WebUI or QGIS | [Connector installation and synchronization](CONNECTORS.md) |
+| Connect iOS Bridge, DJI Terra, PIX4D, ArcGIS Pro, QGIS, Postshot/LichtFeld, Blender, Metashape, CloudCompare, RealityCapture, WebODM or WebUI | [Connector installation and synchronization](CONNECTORS.md) |
 | Verify a download | [Checksums and signatures](SIGNING.md) |
 | See what was tested | [Release notes and validation scope](RELEASE_NOTES.md) |
 | Build packages or contribute | [Build](BUILD.md) · [Contributing and repository map](CONTRIBUTING.md) |
 | Report a problem | [GitHub issues](https://github.com/nsicart/MosaicEarth-Desktop/issues) · [Private security reports](SECURITY.md) |
 
-Current source version: **0.4.4**, with connectors **0.2.2**. Download published, verified installers from the [releases page](https://github.com/nsicart/MosaicEarth-Desktop/releases). Windows and Linux x86-64 are the supported distribution targets; there is no macOS installer. The Windows trusted-publisher certificate is pending: OpenPGP signatures verify release artifacts but do not remove Windows SmartScreen/unknown-publisher warnings.
+Current source version: **0.4.4**, with open-source connectors **0.4.0** (`connectors-v0.4.0`). Download published, verified installers from the [releases page](https://github.com/nsicart/MosaicEarth-Desktop/releases). Windows and Linux x86-64 are the supported distribution targets; there is no macOS installer. The Windows trusted-publisher certificate is pending: OpenPGP signatures verify release artifacts but do not remove Windows SmartScreen/unknown-publisher warnings.
 
 MosaicEarth Desktop is licensed under **[AGPL-3.0](LICENSE)**. See [NOTICE](NOTICE) and [third-party licenses](THIRD_PARTY_LICENSES.md) for bundled components. The software license is separate from licenses for user-uploaded data and map imagery.
