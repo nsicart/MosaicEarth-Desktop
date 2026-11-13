@@ -99,6 +99,10 @@
       "sha256": "7be8b7068ea06e03e403b9573932d0faf0377398d9d9d2dbf680c4e0a9be5f92"
     },
     {
+      "path": "homelab/geo_video.py",
+      "sha256": "3b282bd6932527b1e2277f599631bee3515fd2119312a26389e035c1d19dad95"
+    },
+    {
       "path": "homelab/geospatial_pipeline.py",
       "sha256": "ffe2b35f933e8a7578a0311b899e79ff4a43cddd9d0ea60e933fca00590ba435"
     },
@@ -219,6 +223,10 @@
       "sha256": "e25c9f5088dc85b9bcc34db66bc12dd0f8e410bd2a06d3a2c70936250cf77c0a"
     },
     {
+      "path": "homelab/usdz_converter.py",
+      "sha256": "61224f7f2ebb07eec6cd0fdf4f80e438983bdd4d320903bb32c692219d7315a3"
+    },
+    {
       "path": "homelab/vector_preview.py",
       "sha256": "8709dd2b7651faad94b028248cd6526cf1f61d8835d55af994c24b3bc5031a47"
     },
@@ -241,6 +249,10 @@
     {
       "path": "homelab/workspace_pages.py",
       "sha256": "e35bafb1db540be112c9bc9ddebb014a34e8891abadd3e147a85f1f07d854e0b"
+    },
+    {
+      "path": "homelab/zip_migrator.py",
+      "sha256": "568aacef3d646f4490058c58580d80bdb7d1aece7a6005ba8bcec3e1e9c20b1b"
     }
   ]
 }
