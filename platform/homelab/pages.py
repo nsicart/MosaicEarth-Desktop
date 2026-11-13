@@ -422,6 +422,10 @@ def render_home_master(
         .me-custom-select-wrap.is-open .me-custom-select-menu {{
             display: block;
         }}
+        .me-custom-select-wrap.open-up .me-custom-select-menu {{
+            top: auto;
+            bottom: calc(100% + 5px);
+        }}
         .me-custom-select-opt {{
             width: 100%;
             border: 0;
@@ -1122,6 +1126,9 @@ def render_home_master(
                         for (var k = 0; k < allOpen.length; k++) {{ allOpen[k].classList.remove('is-open'); var trigger = allOpen[k].querySelector('.me-custom-select-btn'); if (trigger) trigger.setAttribute('aria-expanded', 'false'); }}
                         if (!wasOpen) {{
                             syncMenu();
+                            var rect = btn.getBoundingClientRect ? btn.getBoundingClientRect() : null;
+                            var openUp = !!(rect && (window.innerHeight - rect.bottom) < 230 && rect.top > 230);
+                            wrap.classList.toggle('open-up', openUp);
                             wrap.classList.add('is-open');
                         }}
                         btn.setAttribute('aria-expanded', String(!wasOpen));

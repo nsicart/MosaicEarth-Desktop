@@ -1269,7 +1269,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                 elif t_status == "failed":
                     task_status_chip_html = '<span class="myearth-vis-chip" style="background:rgba(239,68,68,0.16);border:1px solid #ef4444;color:#fca5a5;"><i class="fas fa-exclamation-triangle me-1"></i> NEEDS ATTENTION</span>'
                     task_extra_btn = f'<a href="{t_upload_url}" class="myearth-action-btn myearth-action-btn--primary" title="Open Task &amp; Retry Processing"><i class="fas fa-redo"></i> Open &amp; Process ({t_files_cnt} photos)</a>'
-                elif t_kind in ("external", "gaussian") or t_status != "completed":
+                elif t_kind in ("external", "media", "gaussian") or (t_status != "completed" and not t_report_url):
                     if t_files_cnt > 0 and len(tf_assets) == 0:
                         task_status_chip_html = f'<span class="myearth-meta-chip" style="border-color:#99CC00;color:#b5d979;"><i class="fas fa-images"></i> {t_files_cnt} photos ready</span>'
                         btn_lbl = f"Start Processing ({t_files_cnt} photos)"
@@ -1998,8 +1998,8 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                                 <input type="radio" name="projectKind" value="processing" />
                                 <span class="project-kind-icon" aria-hidden="true">{ICON_CLOUD}</span>
                                 <span class="project-kind-copy">
-                                    <strong>Create maps and 3D models from photos</strong>
-                                    <small>Upload overlapping aerial photos to create an orthophoto. Choose the Complete preset to also generate elevation models, a point cloud and a textured mesh.</small>
+                                    <strong>Create maps and 3D models from photos or video</strong>
+                                    <small>Upload overlapping aerial/ground photos or video (with optional GCPs) at Maximum Quality to generate an Orthophoto, DSM, DTM, Point Cloud and Textured 3D Mesh.</small>
                                     <em>Photogrammetry</em>
                                 </span>
                             </label>
@@ -2970,13 +2970,23 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
 
     pid = int(proj["ID"])
     uid = int(user["ID"])
-    # Check if this is an external or gaussian project
-    ext_meta = store.get_external_project_meta(pid)
-    gauss_meta = store.get_gaussian_project(pid)
-    if gauss_meta or (ext_meta and str(ext_meta.get("PROJECT_KIND") or "").lower() == "gaussian"):
-        return render_gaussian_project_page(user, pid, lang=norm_lang)
-    if ext_meta and str(ext_meta.get("PROJECT_KIND") or "").lower() == "external":
-        return render_external_asset_import_page(user, pid, lang=norm_lang)
+    proj_owner_uid = int(proj.get("CREATE_ID") or proj.get("USER_ID") or 0)
+    explicit_tk = str(proj.get("TASK_KIND") or "").strip().lower()
+    # Check if this is an external, media, or gaussian project (never misroute an explicit Photogrammetry task!)
+    if explicit_tk not in ("processing", "photogrammetry"):
+        ext_meta = store.get_external_project_meta(pid)
+        if ext_meta and int(ext_meta.get("USER_ID") or 0) not in (0, proj_owner_uid):
+            ext_meta = None
+        gauss_meta = store.get_gaussian_project(pid)
+        if gauss_meta and int(gauss_meta.get("USER_ID") or 0) not in (0, proj_owner_uid):
+            gauss_meta = None
+        ep_kind = explicit_tk or str((ext_meta or {}).get("PROJECT_KIND") or "").strip().lower()
+        if ep_kind == "gaussian" or gauss_meta:
+            return render_gaussian_project_page(user, pid, lang=norm_lang)
+        if ep_kind == "media":
+            return render_external_asset_import_page(user, pid, lang=norm_lang, kind_override="media")
+        if ep_kind == "external":
+            return render_external_asset_import_page(user, pid, lang=norm_lang, kind_override="external")
 
     import datetime
     import math
@@ -3048,19 +3058,32 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
     root_pid, subprojects_family = store.get_subprojects_family(pid)
     root_proj = store.get_project(root_pid) or proj
     root_pname = str(root_proj.get("NAME") or pname)
+    survey_pid = int(proj.get("SURVEY_ID") or proj.get("SURVEY_PROJECT_ID") or proj.get("PARENT_PROJECT_ID") or root_pid)
+    survey_proj = store.get_project(survey_pid) or root_proj
+    survey_pname = str(survey_proj.get("NAME") or f"Survey #{survey_pid}")
     subproj_tabs = []
     for idx_sp, sp in enumerate(subprojects_family, start=1):
         sp_id = int(sp.get("ID") or 0)
         sp_name = html.escape(str(sp.get("NAME") or f"Subproject #{idx_sp}"))
         sp_active = sp_id == pid
-        sp_ep = store.get_external_project_meta(sp_id)
-        sp_gp = store.get_gaussian_project(sp_id)
-        if sp_gp or (sp_ep and str(sp_ep.get("PROJECT_KIND") or "").lower() == "gaussian"):
+        sp_owner = int(sp.get("CREATE_ID") or sp.get("USER_ID") or 0)
+        sp_tk = str(sp.get("TASK_KIND") or "").strip().lower()
+        sp_ep = store.get_external_project_meta(sp_id) if sp_tk not in ("processing", "photogrammetry") else None
+        if sp_ep and int(sp_ep.get("USER_ID") or 0) not in (0, sp_owner):
+            sp_ep = None
+        sp_gp = store.get_gaussian_project(sp_id) if sp_tk not in ("processing", "photogrammetry") else None
+        if sp_gp and int(sp_gp.get("USER_ID") or 0) not in (0, sp_owner):
+            sp_gp = None
+        sp_eff_kind = sp_tk or str((sp_ep or {}).get("PROJECT_KIND") or "").strip().lower()
+        if sp_eff_kind == "gaussian" or sp_gp:
             sp_href = f"/Client/GaussianProject.aspx?id={sp_id}"
             sp_badge = "3D Splat"
-        elif sp_ep and str(sp_ep.get("PROJECT_KIND") or "").lower() == "external":
+        elif sp_eff_kind == "media":
+            sp_href = f"/Client/ExternalAssetImport.aspx?project_id={sp_id}&kind=media"
+            sp_badge = "360° & Media"
+        elif sp_eff_kind == "external":
             sp_href = f"/Client/ExternalAssetImport.aspx?project_id={sp_id}"
-            sp_badge = "Imported"
+            sp_badge = "GIS & 3D Import"
         else:
             sp_href = f"/Client/Project.aspx?id={sp_id}"
             sp_badge = "Photogrammetry"
@@ -3400,16 +3423,18 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
         </div>
 
         <div class="container">
-            <div class="row" style="margin-bottom: 12px;">
+            <div class="row mb-3">
                 <div class="col-12">
-                    <div class="box-4d" style="padding:14px 20px;background:#111111;border:1px solid rgba(153,204,0,0.35);border-radius:10px;">
+                    <div class="box-4d" style="padding:14px 20px;background:#111512;border:1px solid rgba(153,204,0,0.35);border-radius:10px;">
                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
                             <div>
                                 <span style="font-size:10.5px;font-weight:700;color:#99CC00;text-transform:uppercase;letter-spacing:0.06em;">MYEARTH TASK WORKSPACE (PROJECT &rarr; SURVEY &rarr; TASK &rarr; ASSETS)</span>
-                                <div style="font-size:16px;font-weight:800;color:#fff;">Project: {html.escape(root_pname)} <span style="font-size:12px;color:#9ca3af;font-weight:400;">&middot; Task: {html.escape(pname)}</span></div>
+                                <div style="font-size:15.5px;font-weight:700;color:#fff;margin-top:2px;">
+                                    {html.escape(root_pname)} <span style="color:#8fa099;font-weight:400;">/</span> {html.escape(survey_pname)} <span style="color:#8fa099;font-weight:400;">/</span> <span style="color:#99CC00;">{html.escape(pname)}</span>
+                                </div>
                             </div>
                             <div class="d-flex flex-wrap align-items-center gap-2">
-                                <a href="/{norm_lang}/Projects?open_project={root_pid}" class="btn btn-primary btn-sm" style="font-weight:700;text-decoration:none;">
+                                <a href="/{norm_lang}/Projects?open_project={root_pid}#taskNode_{pid}" class="btn btn-primary btn-sm" style="font-weight:700;text-decoration:none;">
                                     &larr; BACK TO MYEARTH TREE
                                 </a>
                             </div>
@@ -3421,20 +3446,16 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                 <div class="col-12">
                     <div class="box-4d">
                         <div class="titulo-box">
-                            <div class="row">
-                                <div class="col-6 text-start">
-                                    <a class="subpage-nav" href="/{norm_lang}/Projects?open_project={root_pid}">MyEarth</a> / <span style="color:#9ca3af;font-size:14px;">{html.escape(root_pname)}</span>
-                                    <span class="subpage-current"><label id="nameProject">{html.escape(pname)}</label></span>
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div>
+                                    <span id="nameProject">{html.escape(pname)}</span> &middot; <span style="color:#99CC00;">Photogrammetry Task</span>
                                 </div>
-                                <div class="col-6 text-end">
-                                    <button type="button" id="botonAdd" class="btn btn-secondary" style="{'display:none;' if (show_processed or is_processing_now) else 'display:inline-block;'}" data-bs-toggle="modal" data-bs-target="#staticBackdrop2">+ ADD PHOTOS</button>
-                                    <button type="button" id="btnOpenVideoStageModal" class="btn btn-secondary" style="{'display:none;' if (show_processed or is_processing_now) else 'display:inline-block;'}border-color:#99CC00;color:#d9f99d;" data-bs-toggle="modal" data-bs-target="#modalVideoPhotogrammetry">&#127916; + VIDEO FRAMES</button>
-                                    <button type="button" id="btnOpenPhotoGcpStudio" class="btn btn-secondary" style="{'display:none;' if (show_processed or is_processing_now) else 'display:inline-block;'}border-color:#38bdf8;color:#bae6fd;" onclick="openPhotogrammetryGcpStudio({pid})">&#8982; GCP STUDIO</button>
-                                    <button type="button" class="btn btn-primary" id="botonProcess" style="{'display:none;' if (show_processed or is_processing_now or num_files < 1) else 'display:inline-block;'}" data-bs-toggle="modal" data-bs-target="#staticBackdrop3">PROCESS ({upfront_eur_val:.2f} &euro;)</button>
-                                    <div style="margin-bottom: 5px; display: {'inline-block' if show_processed else 'none'};">
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <span style="font-size:11.5px;color:#b7c4bc;">Task ID #{pid}</span>
+                                    <div style="display: {'inline-block' if show_processed else 'none'};">
                                         <a href="{report_dl}" target="_blank" class="btn-secondary" id="enlaceReport">DOWNLOAD REPORT</a>
                                     </div>
-                                    <div style="margin-bottom: 5px; display: {'inline-block' if show_processed else 'none'};">
+                                    <div style="display: {'inline-block' if show_processed else 'none'};">
                                         <button type="button" class="btn-primary" id="btnSaveChanges" onclick="saveChangesProject()">SAVE CHANGES</button>
                                     </div>
                                 </div>
@@ -3447,7 +3468,7 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                             <div class="processing-stage-copy background-process-copy" style="flex:1;min-width:280px;">
                                 <small id="processingStageEyebrow">{'LOCAL PHOTOGRAMMETRY' if is_desktop_local_mode else ('ODX (NODEODX) PHOTOGRAMMETRY' if os.environ.get('MOSAICEARTH_RUNPOD_PHOTOGRAMMETRY') == 'nodeodx' else 'OPENDRONEMAP (NODEODM) PHOTOGRAMMETRY')}</small>
                                 <h2 id="processingStageTitle">Processing your images</h2>
-                                <p id="processingStageMessage">Your source images are preserved. Follow the current stage below or return to MyEarth at any time. Results appear after the products required by your preset have been verified.</p>
+                                <p id="processingStageMessage">Your source images are preserved. Follow the current stage below or return to MyEarth at any time. Once reconstruction finishes at 100%, you will be redirected automatically to MyEarth.</p>
                                 <div class="source-transfer-meter">
                                     <div class="source-transfer-meter-head"><strong id="processingStagePercent">{initial_progress}%</strong><span id="processingStageStep">{html.escape(str(proj.get('PROCESSING_STAGE') or 'Preparing processing'))}</span></div>
                                     <div class="progress processing-stage-progress"><div id="processingBar" class="progress-bar progress-bar-striped bg-success progress-bar-animated" role="progressbar" style="width: {initial_progress}%; background-color: #99CC00 !important;"></div></div>
@@ -3462,65 +3483,128 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                                 </div>
                             </div>
                             <div class="processing-stage-actions background-process-actions">
-                                <a href="/{norm_lang}/Projects?open_project={root_pid}" class="btn btn-primary">BACK TO MYEARTH</a>
+                                <a href="/{norm_lang}/Projects?open_project={root_pid}#taskNode_{pid}" class="btn btn-primary">BACK TO MYEARTH</a>
                                 <button id="btnCancel" type="button" class="btn-cancel" style="{'display:inline-block;' if is_processing_now else 'display:none;'}" onclick="btnCancelTask();">CANCEL PROCESSING</button>
                             </div>
                         </div>
 
-                        <div id="photogrammetryUnifiedHub" style="{'display:none;' if (show_processed or is_processing_now) else 'display:block;'}padding:16px 20px;border-bottom:1px solid #243029;background:#0e1511;">
-                            <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;padding:11px 14px;background:rgba(153,204,0,0.08);border:1px solid rgba(153,204,0,0.34);border-radius:10px;">
+                        <div id="photogrammetryUnifiedHub" style="{'display:none;' if (show_processed or is_processing_now) else 'display:block;'}padding:22px 26px;background:#0e1410;">
+                            <div style="margin-bottom:14px;">
+                                <span style="color:#dce6dc;background:#19251d;border:1px solid #48614f;border-radius:6px;display:inline-block;padding:6px 10px;margin:3px 4px 3px 0;font-size:12px;">Photogrammetry Reconstruction &middot; Maximum Quality</span>
+                                <span style="color:#dce6dc;background:#19251d;border:1px solid #48614f;border-radius:6px;display:inline-block;padding:6px 10px;margin:3px 4px 3px 0;font-size:12px;">Overlapping Photos (<code>.JPG / .PNG / .WEBP / .TIF</code>) or Drone Video (<code>.MP4 / .MOV / .WEBM + .SRT / .GPX</code>)</span>
+                                <span style="color:#dce6dc;background:#19251d;border:1px solid #48614f;border-radius:6px;display:inline-block;padding:6px 10px;margin:3px 0;font-size:12px;">Outputs: Orthophoto + DSM + DTM + Dense Point Cloud + 3D Textured Mesh</span>
+                            </div>
+
+                            <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;padding:13px 16px;background:rgba(153,204,0,0.08);border:1px solid rgba(153,204,0,0.38);border-radius:10px;">
                                 <div>
                                     <div style="font-size:11px;font-weight:800;color:#99CC00;text-transform:uppercase;letter-spacing:0.05em;">
                                         <i class="fas fa-sparkles me-1"></i> Maximum Quality Always Active &middot; Exact Upfront Per-Photo Quote
                                     </div>
                                     <div style="font-size:12.5px;color:#dce8e0;margin-top:2px;">
-                                        Upload overlapping photos (<code>.JPG / .PNG / .WEBP</code>) or extract sharp keyframes from video (<code>.MP4 / .MOV / .WEBM</code> + optional <code>.SRT / .GPX</code>). Video frames are extracted first so you know the <strong>exact image count and Euro price</strong> before launching processing.
+                                        Upload overlapping photos or extract sharp keyframes from video first so you always see the <strong>exact photo count and Euro quote</strong> before launching. <strong>100% automatically refunded (0,00 &euro; charged)</strong> if processing fails.
                                     </div>
                                 </div>
                                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                                     <span id="photoGcpHubBadge" style="padding:5px 11px;border-radius:999px;background:{'rgba(56,189,248,0.16)' if has_photo_gcp else '#141d17'};border:1px solid {'#38bdf8' if has_photo_gcp else '#34463b'};color:{'#bae6fd' if has_photo_gcp else '#9eb2a5'};font-size:11.5px;font-weight:700;">
-                                        {f'✓ GCP Control Active ({html.escape(control_name or (str(len(gcp_photo_pts)) + " GCPs"))})' if has_photo_gcp else 'No GCPs attached'}
+                                        {f'✓ GCP Control Active ({html.escape(control_name or (str(len(gcp_photo_pts)) + " GCPs"))})' if has_photo_gcp else 'Optional Metric GCPs'}
                                     </span>
                                     <div style="padding:6px 12px;border-radius:8px;background:#121914;border:1px solid #99CC00;color:#99CC00;font-weight:800;font-size:13px;">
-                                        {num_files} frames &middot; {'0.00 € (Local PC)' if is_desktop_local_mode else f'{upfront_eur_val:.2f} € Cloud Quote'}
+                                        {num_files} frames &middot; {'0,00 € (Local PC)' if is_desktop_local_mode else f'{upfront_eur_val:.2f} € Cloud Quote'}
                                     </div>
                                 </div>
                             </div>
 
-                            <div style="background:#111814;border:1px solid #2b3c32;border-radius:10px;padding:12px 14px;">
-                                <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
-                                    <div>
-                                        <span style="font-size:12px;font-weight:700;color:#fff;"><i class="fas fa-map-marked-alt me-1" style="color:#99CC00;"></i> Dataset Georeferencing &amp; Map Location</span>
-                                        <span id="photoGeorefStatusBadge" style="margin-left:8px;font-size:11px;padding:3px 9px;border-radius:999px;font-weight:700;background:{'rgba(153,204,0,0.18)' if has_photo_georef else ('rgba(245,158,11,0.18)' if num_files > 0 else '#18241d')};border:1px solid {'#99CC00' if has_photo_georef else ('#f59e0b' if num_files > 0 else '#3c5244')};color:{'#d9f99d' if has_photo_georef else ('#fde68a' if num_files > 0 else '#cbd5e1')};">
-                                            {f'✓ Georeferenced automatically ({len(exif_gps_points)} EXIF GPS frames)' if len(exif_gps_points) >= 3 else ('✓ Metric GCP Control Attached' if has_photo_gcp else ('📍 Unreferenced (No GPS/GCPs) — Click map for initial spot (3D Mesh + Point Cloud only)' if num_files > 0 else 'Upload photos or video to auto-detect GPS on map'))}
-                                        </span>
+                            <div style="background:#111613;border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:20px;margin-bottom:16px;">
+                                <div style="font-size:12px;font-weight:700;color:#99CC00;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px;">
+                                    <i class="fas fa-camera me-1"></i> 1. Add Photos or Video Frames &amp; Optional Ground Control Points
+                                </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-5 col-12">
+                                        <div style="height:100%;border:2px dashed rgba(153,204,0,0.55);border-radius:11px;padding:16px;background:#0e1511;display:flex;flex-direction:column;justify-content:space-between;gap:10px;">
+                                            <div>
+                                                <div style="font-size:13px;font-weight:700;color:#fff;"><i class="fas fa-images me-1" style="color:#99CC00;"></i> Overlapping Aerial / Terrestrial Photos</div>
+                                                <div style="font-size:11.5px;color:#9eb2a5;margin-top:4px;">Select or drop <code>.JPG, .JPEG, .PNG, .WEBP, .TIF</code> photos (EXIF GPS &amp; RTK tags auto-detected).</div>
+                                            </div>
+                                            <div>
+                                                <button type="button" id="botonAdd" class="btn btn-primary btn-sm w-100" style="{'display:none;' if (show_processed or is_processing_now) else 'display:inline-block;'}font-weight:700;padding:9px 14px;" data-bs-toggle="modal" data-bs-target="#staticBackdrop2">
+                                                    <i class="fas fa-plus-circle me-1"></i> + SELECT / UPLOAD PHOTOS
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div style="display:flex;gap:6px;align-items:center;min-width:240px;">
-                                        <input type="text" id="photoMapSearchInput" class="form-control form-control-sm" style="background:#161c18;border:1px solid #35483c;color:#fff;font-size:12px;" placeholder="Search place on map..." />
-                                        <button type="button" onclick="searchPhotogrammetryMapPlace()" class="btn btn-sm btn-secondary" style="font-size:11.5px;">Find</button>
+                                    <div class="col-md-4 col-12">
+                                        <div style="height:100%;border:1px solid rgba(153,204,0,0.38);border-radius:11px;padding:16px;background:#0e1511;display:flex;flex-direction:column;justify-content:space-between;gap:10px;">
+                                            <div>
+                                                <div style="font-size:13px;font-weight:700;color:#fff;"><i class="fas fa-film me-1" style="color:#99CC00;"></i> Extract Frames from Video</div>
+                                                <div style="font-size:11.5px;color:#9eb2a5;margin-top:4px;">Have an <code>.MP4 / .MOV / .WEBM</code> flight video (+ optional <code>.SRT / .GPX</code>)? Extract sharp keyframes first to see exact photo count &amp; price.</div>
+                                            </div>
+                                            <div>
+                                                <button type="button" id="btnOpenVideoStageModal" class="btn btn-secondary btn-sm w-100" style="{'display:none;' if (show_processed or is_processing_now) else 'display:inline-block;'}border-color:#99CC00;color:#d9f99d;font-weight:700;padding:9px 14px;" data-bs-toggle="modal" data-bs-target="#modalVideoPhotogrammetry">
+                                                    &#127916; + EXTRACT FRAMES FROM VIDEO
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 col-12">
+                                        <div style="height:100%;border:1px solid rgba(56,189,248,0.38);border-radius:11px;padding:16px;background:#0e1511;display:flex;flex-direction:column;justify-content:space-between;gap:10px;">
+                                            <div>
+                                                <div style="font-size:13px;font-weight:700;color:#fff;">&#8982; Ground Control (GCPs)</div>
+                                                <div style="font-size:11.5px;color:#9eb2a5;margin-top:4px;">Optional: mark 3+ survey GCPs on your uploaded images or attach a <code>gcp_list.txt</code> for cm-level accuracy.</div>
+                                            </div>
+                                            <div>
+                                                <button type="button" id="btnOpenPhotoGcpStudio" class="btn btn-secondary btn-sm w-100" style="{'display:none;' if (show_processed or is_processing_now) else 'display:inline-block;'}border-color:#38bdf8;color:#bae6fd;font-weight:700;padding:9px 12px;" onclick="openPhotogrammetryGcpStudio({pid})">
+                                                    &#8982; OPEN GCP STUDIO
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div id="photoTaskLocationMap" style="width:100%;height:215px;border-radius:8px;border:1px solid #29382f;background:#0a0f0c;margin-bottom:8px;"></div>
-                                <div class="row g-2 align-items-center">
-                                    <div class="col-md-3 col-6">
-                                        <label style="font-size:10.5px;color:#9eb2a5;display:block;">Initial Latitude (WGS84)</label>
-                                        <input type="text" id="photoApproxLat" value="{approx_lat_str}" placeholder="Click map or auto-GPS" class="form-control form-control-sm" style="background:#161c18;border:1px solid #334439;color:#fff;font-size:12px;" onchange="savePhotogrammetryManualCoords()" />
+
+                                <div style="background:#0e1511;border:1px solid #2b3c32;border-radius:10px;padding:13px 15px;">
+                                    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+                                        <div>
+                                            <span style="font-size:12px;font-weight:700;color:#fff;"><i class="fas fa-map-marked-alt me-1" style="color:#99CC00;"></i> 2. Georeferencing &amp; Map Location</span>
+                                            <span id="photoGeorefStatusBadge" style="margin-left:8px;font-size:11px;padding:3px 9px;border-radius:999px;font-weight:700;background:{'rgba(153,204,0,0.18)' if has_photo_georef else ('rgba(245,158,11,0.18)' if num_files > 0 else '#18241d')};border:1px solid {'#99CC00' if has_photo_georef else ('#f59e0b' if num_files > 0 else '#3c5244')};color:{'#d9f99d' if has_photo_georef else ('#fde68a' if num_files > 0 else '#cbd5e1')};">
+                                                {f'✓ Georeferenced automatically ({len(exif_gps_points)} EXIF GPS frames)' if len(exif_gps_points) >= 3 else ('✓ Metric GCP Control Attached' if has_photo_gcp else ('📍 Unreferenced (No GPS/GCPs) — Click map for initial spot (3D Mesh + Point Cloud only)' if num_files > 0 else 'Upload photos or video frames to auto-detect GPS on map'))}
+                                            </span>
+                                        </div>
+                                        <div style="display:flex;gap:6px;align-items:center;min-width:240px;">
+                                            <input type="text" id="photoMapSearchInput" class="form-control form-control-sm" style="background:#161c18;border:1px solid #35483c;color:#fff;font-size:12px;" placeholder="Search city / address on map..." />
+                                            <button type="button" onclick="searchPhotogrammetryMapPlace()" class="btn btn-sm btn-secondary" style="font-size:11.5px;">Find</button>
+                                        </div>
                                     </div>
-                                    <div class="col-md-3 col-6">
-                                        <label style="font-size:10.5px;color:#9eb2a5;display:block;">Initial Longitude (WGS84)</label>
-                                        <input type="text" id="photoApproxLon" value="{approx_lon_str}" placeholder="Click map or auto-GPS" class="form-control form-control-sm" style="background:#161c18;border:1px solid #334439;color:#fff;font-size:12px;" onchange="savePhotogrammetryManualCoords()" />
+                                    <div id="photoTaskLocationMap" style="width:100%;height:225px;border-radius:8px;border:1px solid #29382f;background:#0a0f0c;margin-bottom:8px;"></div>
+                                    <div class="row g-2 align-items-center">
+                                        <div class="col-md-3 col-6">
+                                            <label style="font-size:10.5px;color:#cbd5e1;font-weight:600;display:block;">Initial Latitude (WGS84)</label>
+                                            <input type="text" id="photoApproxLat" value="{approx_lat_str}" placeholder="Click map or auto-GPS" class="form-control form-control-sm" style="background:#161c18;border:1px solid #334439;color:#fff;font-size:12px;" onchange="savePhotogrammetryManualCoords()" />
+                                        </div>
+                                        <div class="col-md-3 col-6">
+                                            <label style="font-size:10.5px;color:#cbd5e1;font-weight:600;display:block;">Initial Longitude (WGS84)</label>
+                                            <input type="text" id="photoApproxLon" value="{approx_lon_str}" placeholder="Click map or auto-GPS" class="form-control form-control-sm" style="background:#161c18;border:1px solid #334439;color:#fff;font-size:12px;" onchange="savePhotogrammetryManualCoords()" />
+                                        </div>
+                                        <div class="col-md-6 col-12">
+                                            <small style="color:#b8c6be;font-size:11.5px;display:block;line-height:1.4;">
+                                                {'✓ Full metric deliverables enabled: <strong>Orthophoto + DSM + DTM + Dense Point Cloud + 3D Textured Mesh</strong>.' if has_photo_georef else 'Without GPS or GCPs, Photogrammetry reconstructs your <strong>3D Textured Mesh + Dense Point Cloud</strong> anchored at the map pin you click (refine X, Y, Z later in MyEarth). Want metric Orthophoto + DSM + DTM? Mark 3+ points in <strong>GCP Studio</strong>!'}
+                                            </small>
+                                        </div>
                                     </div>
-                                    <div class="col-md-6 col-12">
-                                        <small style="color:#b8c6be;font-size:11.5px;display:block;line-height:1.4;">
-                                            {'✓ Full metric deliverables enabled: <strong>Orthophoto + DSM + DTM + Dense Point Cloud + 3D Textured Mesh</strong>.' if has_photo_georef else 'Without GPS or GCPs, Photogrammetry reconstructs your <strong>3D Textured Mesh + Dense Point Cloud</strong> anchored at the map pin you click (refine X, Y, Z later in MyEarth). Want metric Orthophoto + DSM + DTM? Mark 3+ points in <strong>GCP Studio</strong>!'}
-                                        </small>
+                                </div>
+
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-4 pt-2" style="border-top:1px solid rgba(255,255,255,0.08);">
+                                    <a class="btn btn-secondary" href="/{norm_lang}/Projects?open_project={root_pid}#taskNode_{pid}">&larr; BACK TO MYEARTH</a>
+                                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                        <span style="font-size:12px;color:#9eb2a5;">{'Upload at least 3 overlapping photos to enable processing.' if num_files < 3 else f'✓ {num_files} frames staged and ready for Maximum Quality reconstruction.'}</span>
+                                        <button type="button" class="btn btn-primary" id="botonProcess" style="{'display:none;' if (show_processed or is_processing_now or num_files < 1) else 'display:inline-block;'}font-weight:700;padding:10px 24px;" data-bs-toggle="modal" data-bs-target="#staticBackdrop3">
+                                            <i class="fas fa-play-circle me-1"></i> LAUNCH PHOTOGRAMMETRY ({'0,00 € Local PC' if is_desktop_local_mode else f'{upfront_eur_val:.2f} €'})
+                                        </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div id="cabecera" class="row header-project" style="{'display:none;' if show_processed else 'display:flex;'}">
-                            <div class="col-md-3 header-table-project">FILE NAME</div>
+                        <div id="cabecera" class="row header-project" style="{'display:none;' if (show_processed or num_files == 0) else 'display:flex;'}">
+                            <div class="col-md-3 header-table-project">STAGED PHOTO / FRAME</div>
                             <div class="col-md-2 header-table-project">SIZE</div>
                             <div class="col-md-2 header-table-project">RESOLUTION</div>
                             <div class="col-md-2 header-table-project">CAPTURE DATE</div>
@@ -3529,14 +3613,9 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                         </div>
 
                         <div class="content-box">
-                            <div id="nofiles" class="row text-center" style="{'display:none;' if (show_processed or num_files > 0) else 'display:block;'}">
-                                <div class="col-12" style="padding: 48px 20px;">
-                                    <div class="imagen-anadir">
-                                        <img id="imganadir" style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#staticBackdrop2" src="/Resources/Projects/imagenes-project.svg" />
-                                    </div>
-                                    <div class="texto-nofiles">
-                                        <span class="color-verde-modal">Upload</span> the files for this project
-                                    </div>
+                            <div id="nofiles" class="row text-center" style="display:none;">
+                                <div class="col-12" style="padding: 16px;">
+                                    <img id="imganadir" style="cursor: pointer; width:36px;" data-bs-toggle="modal" data-bs-target="#staticBackdrop2" src="/Resources/Projects/imagenes-project.svg" />
                                 </div>
                             </div>
 
@@ -7043,7 +7122,7 @@ def render_credit_packs_page(user: Dict[str, Any], lang: str = "en") -> str:
 def _render_unified_task_upload_page(
     user: Dict[str, Any],
     project_id: int,
-    task_kind: str = "imported",
+    task_kind: str = "external",
     lang: str = "en",
 ) -> Optional[str]:
     norm_lang = normalize_lang(lang)
@@ -7051,6 +7130,13 @@ def _render_unified_task_upload_page(
     proj = store.get_project(project_id)
     if not proj or int(proj.get("CREATE_ID") or 0) != int(user.get("ID") or 0):
         return None
+    norm_kind = str(task_kind or "").strip().lower()
+    if norm_kind in ("imported", "", "direct"):
+        norm_kind = "external"
+    is_gaussian = norm_kind == "gaussian"
+    is_media = norm_kind == "media"
+    is_gis_import = not is_gaussian and not is_media
+
     root_pid, _ = store.get_subprojects_family(project_id)
     root_proj = store.get_project(root_pid) or proj
     root_pname = html.escape(str(root_proj.get("NAME") or f"Project #{root_pid}"))
@@ -7060,7 +7146,12 @@ def _render_unified_task_upload_page(
     pname = html.escape(str(proj.get("NAME") or f"Task #{project_id}"))
     pdesc = html.escape(str(proj.get("TASK_DESCRIPTION") or proj.get("DESCRIPTION") or ""))
     pdate = html.escape(str(proj.get("TASK_CREATION_DATE") or proj.get("CAPTURE_DATE") or "")[:10])
-    pmethod = html.escape(str(proj.get("CAPTURE_METHOD") or proj.get("METHODOLOGY") or ("3D Gaussian Splatting" if task_kind == "gaussian" else "Direct File Import")))
+    default_method = (
+        "3D Gaussian Splatting"
+        if is_gaussian
+        else ("360° Panorama / UAV Geo-Video" if is_media else "GIS / 3D Scan Import")
+    )
+    pmethod = html.escape(str(proj.get("CAPTURE_METHOD") or proj.get("METHODOLOGY") or default_method))
     _raw_lat_v = proj.get("LATITUD")
     _raw_lon_v = proj.get("LONGITUD")
     _has_real_coords = False
@@ -7077,18 +7168,20 @@ def _render_unified_task_upload_page(
     if proj.get("GCP_OBSERVATIONS") or proj.get("PHOTOGRAMMETRY_CONTROL"):
         _has_real_coords = True
     plat = html.escape(str(_raw_lat_v)) if _has_real_coords and _raw_lat_v is not None else ""
-    plon = html.escape(str(_raw_lon_v)) if _has_real_coords and _raw_lon_v is not None else ""
+    plon = html.escape(str(_raw_lon_v)) if _raw_lon_v is not None and _has_real_coords else ""
     myearth_return_url = f"/{norm_lang}/Projects?open_project={root_pid}#taskNode_{project_id}"
     gcp_obs_doc = proj.get("GCP_OBSERVATIONS") if isinstance(proj.get("GCP_OBSERVATIONS"), dict) else {}
     gcp_attached_count = len([p for p in (gcp_obs_doc.get("points") or []) if isinstance(p, dict) and p.get("role", "gcp") != "check"])
 
-    is_gaussian = task_kind == "gaussian"
-    task_badge_label = "Gaussian Splatting Task" if is_gaussian else "Direct File Import Task"
-    canonical_path = (
-        f"/Client/GaussianProject.aspx?project_id={project_id}"
-        if is_gaussian
-        else f"/Client/ExternalAssetImport.aspx?project_id={project_id}"
-    )
+    if is_gaussian:
+        task_badge_label = "3D Gaussian Splatting Task"
+        canonical_path = f"/Client/GaussianProject.aspx?project_id={project_id}"
+    elif is_media:
+        task_badge_label = "360° Panoramas & Geo-Video Task"
+        canonical_path = f"/Client/ExternalAssetImport.aspx?project_id={project_id}&kind=media"
+    else:
+        task_badge_label = "GIS, 3D Scan & .ZIP Import"
+        canonical_path = f"/Client/ExternalAssetImport.aspx?project_id={project_id}"
 
     seo_head = build_head_metadata_html(
         title=f"{pname} · {task_badge_label} · MosaicEarth",
@@ -7149,11 +7242,13 @@ def _render_unified_task_upload_page(
             {''.join(existing_rows_html)}
         </div>"""
 
-    accepted_exts = (
-        ".ply,.splat,.spz,.ksplat,.mp4,.mov,.webm,.m4v,.zip,.jpg,.jpeg,.png,.webp,.srt,.gpx,.csv"
-        if is_gaussian
-        else ".tif,.tiff,.laz,.las,.e57,.obj,.fbx,.glb,.gltf,.dae,.ply,.splat,.spz,.ksplat,.zip,.geojson,.json,.kml,.kmz,.gpkg,.dxf,.shp,.gpx,.csv"
-    )
+    if is_gaussian:
+        accepted_exts = ".ply,.splat,.spz,.ksplat,.mp4,.mov,.webm,.m4v,.zip,.jpg,.jpeg,.png,.webp,.srt,.gpx,.csv"
+    elif is_media:
+        accepted_exts = ".jpg,.jpeg,.webp,.png,.mp4,.mov,.webm,.m4v,.srt,.gpx,.csv,.jgw,.pgw,.wld"
+    else:
+        accepted_exts = ".tif,.tiff,.laz,.las,.e57,.obj,.fbx,.glb,.gltf,.dae,.usdz,.usda,.usdc,.zip,.geojson,.json,.kml,.kmz,.gpkg,.dxf,.shp,.tfw,.wld,.prj,.mtl"
+
     uid = int(user.get("ID") or 0)
     upfront_task_quote_banner = ""
     cancel_gaussian_html = ""
@@ -7205,19 +7300,25 @@ def _render_unified_task_upload_page(
         </div>"""
     if is_gaussian and os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1":
         upfront_task_quote_banner = '<section style="margin-bottom:18px;padding:16px;border:1px solid #607b39;border-radius:10px;background:#132017"><strong>Local COLMAP + OpenSplat · 0.00 €</strong><p>Photos and videos are reconstructed on this computer. Automatic mode uses a compatible GPU when available and falls back to CPU. See Processing settings in the account menu for the active engines. Local processing uses no cloud credits or storage quota. Finished Gaussian files can also be imported directly.</p></section>'
-    format_pills_html = (
+
+    if is_gaussian:
+        format_pills_html = """
+        <span class="workflow-pill">3D Gaussian Splatting Task</span>
+        <span class="workflow-pill">Direct Splat (.PLY / .SPLAT / .SPZ / .KSPLAT) or Multi-View Video / Photos (.MP4 / .MOV / .JPG / .ZIP)</span>
+        <span class="workflow-pill">Maximum Quality (COLMAP + OpenSplat) + Optional GCPs / .SRT</span>
         """
-        <span class="workflow-pill">Gaussian Splatting Task</span>
-        <span class="workflow-pill">Direct Splat (.PLY / .SPLAT / .SPZ / .KSPLAT) or Video/Image Set (.MP4 / .MOV / .ZIP)</span>
-        <span class="workflow-pill">Output stored in Survey Task subfolder</span>
+    elif is_media:
+        format_pills_html = """
+        <span class="workflow-pill">360° Panoramas &amp; Geo-Video &middot; Free (0,00 &euro;)</span>
+        <span class="workflow-pill">360° Spherical Panoramas &amp; EXIF Geotagged Photos (.JPG / .WEBP / .PNG &rarr; Virtual Tour)</span>
+        <span class="workflow-pill">Hosted Geo-Video (.MP4 / .MOV + .SRT / .GPX) or 0-MB YouTube / Vimeo Link</span>
         """
-        if is_gaussian
-        else """
-        <span class="workflow-pill">Direct File Import Task · Free (0 €)</span>
-        <span class="workflow-pill">Orthophoto / DSM (.TIF), 3D Mesh (.OBJ / .FBX / .GLB), Point Cloud (.LAS / .LAZ / .E57), Splat (.PLY / .SPLAT)</span>
-        <span class="workflow-pill">Auto-converted to Web 3D Tiles / COG</span>
+    else:
+        format_pills_html = """
+        <span class="workflow-pill">GIS, 3D Scan &amp; .ZIP Import &middot; Free (0,00 &euro;)</span>
+        <span class="workflow-pill">Orthophoto / DSM / DTM (.TIF) &middot; Point Cloud (.LAZ / .LAS / .E57) &middot; 3D Mesh / Scan (.GLB / .OBJ / .FBX / .USDZ)</span>
+        <span class="workflow-pill">Vector GIS / CAD (.GEOJSON / .KML / .GPKG / .SHP / .DXF) &middot; Full Export .ZIP</span>
         """
-    )
 
     head_extra = """
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -7238,7 +7339,7 @@ def _render_unified_task_upload_page(
     </style>"""
 
     geovideo_link_card_html = ""
-    if not is_gaussian:
+    if is_media:
         geovideo_link_card_html = f"""
                             <details id="geovideo-link-box" style="margin-top:16px;background:#101713;border:1px solid rgba(245,158,11,0.38);border-radius:12px;padding:15px 20px;">
                                 <summary style="cursor:pointer;font-size:12.5px;font-weight:800;color:#fbbf24;letter-spacing:0.03em;list-style:none;display:flex;justify-content:space-between;align-items:center;">
@@ -7307,17 +7408,16 @@ def _render_unified_task_upload_page(
                             </details>"""
 
     zip_migration_banner_html = ""
-    if not is_gaussian:
-        zip_migration_banner_html = f"""<div class="mb-3" style="background:rgba(153,204,0,0.07);border:1px solid rgba(153,204,0,0.32);border-radius:10px;padding:11px 15px;font-size:12.5px;color:#dce8e0;">
+    if is_gis_import:
+        zip_migration_banner_html = """<div class="mb-3" style="background:rgba(153,204,0,0.07);border:1px solid rgba(153,204,0,0.32);border-radius:10px;padding:11px 15px;font-size:12.5px;color:#dce8e0;">
                                 <strong style="color:#99CC00;"><i class="fas fa-file-archive me-1"></i> 1-Click Multi-Platform .ZIP Migration:</strong>
-                                Drop a full project export <code>.zip</code> from <strong>DJI Terra</strong>, <strong>PIX4D</strong>, <strong>Polycam</strong>, <strong>Luma AI</strong>, <strong>DroneDeploy</strong>, <strong>Metashape</strong>, or <strong>WebODM</strong> in the file selector below &mdash; MosaicEarth automatically unpacks and registers every Orthomosaic, DSM, 3D Mesh, Point Cloud/Splat, Vector layer, and Quality Report PDF into this Survey!
-                            </div>
-                            <div id="import-quick-modes" class="mb-3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:8px;">
-                                <button type="button" data-import-preset="all" data-accept="{accepted_exts}" class="btn btn-sm" style="text-align:left;padding:9px 12px;border-radius:9px;background:#1b2a1f;border:1.5px solid #99CC00;color:#eff8e9;font-weight:700;font-size:12px;">
-                                    &#128506; All GIS, 3D Scans &amp; .ZIP<br/><span style="font-weight:400;font-size:10.5px;color:#b7cbbd;">GeoTIFF, LAZ, GLB/OBJ/USDZ, Vector, ZIP</span>
-                                </button>
-                                <button type="button" data-import-preset="pano" data-accept=".jpg,.jpeg,.webp,.png,.jgw,.pgw,.wld" class="btn btn-sm" style="text-align:left;padding:9px 12px;border-radius:9px;background:#121915;border:1px solid rgba(255,255,255,0.16);color:#dce6dc;font-weight:700;font-size:12px;">
-                                    &#127760; 360&deg; Panoramas &amp; EXIF Photos<br/><span style="font-weight:400;font-size:10.5px;color:#9eb2a5;">1 or multiple .JPG/.WEBP (auto Virtual Tour)</span>
+                                Drop a full project export <code>.zip</code> from <strong>DJI Terra</strong>, <strong>PIX4D</strong>, <strong>Polycam</strong>, <strong>Luma AI</strong>, <strong>DroneDeploy</strong>, <strong>Metashape</strong>, or <strong>WebODM</strong> in the file selector below &mdash; MosaicEarth automatically unpacks and registers every Orthomosaic, DSM, 3D Mesh, Point Cloud, Vector layer, and Quality Report PDF into this Survey!
+                            </div>"""
+    elif is_media:
+        zip_migration_banner_html = f"""
+                            <div id="import-quick-modes" class="mb-3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;">
+                                <button type="button" data-import-preset="pano" data-accept=".jpg,.jpeg,.webp,.png,.jgw,.pgw,.wld" class="btn btn-sm" style="text-align:left;padding:9px 12px;border-radius:9px;background:#1b2a1f;border:1.5px solid #99CC00;color:#eff8e9;font-weight:700;font-size:12px;">
+                                    &#127760; 360&deg; Panoramas &amp; EXIF Photos<br/><span style="font-weight:400;font-size:10.5px;color:#b7cbbd;">1 or multiple .JPG/.WEBP (auto Virtual Tour)</span>
                                 </button>
                                 <button type="button" data-import-preset="video_file" data-accept=".mp4,.mov,.webm,.m4v,.srt,.gpx,.csv" class="btn btn-sm" style="text-align:left;padding:9px 12px;border-radius:9px;background:#121915;border:1px solid rgba(255,255,255,0.16);color:#dce6dc;font-weight:700;font-size:12px;">
                                     &#127909; Hosted Geo-Video File<br/><span style="font-weight:400;font-size:10.5px;color:#9eb2a5;">Select .MP4/.MOV + .SRT/.GPX together</span>
@@ -7326,7 +7426,9 @@ def _render_unified_task_upload_page(
                                     &#127916; 0-MB YouTube / Vimeo Link<br/><span style="font-weight:400;font-size:10.5px;color:#e5c98a;">External video URL + .SRT/.GPX (0 GiB)</span>
                                 </button>
                             </div>
-                            <div id="import-preset-hint" class="mb-3" style="display:none;padding:9px 13px;border-radius:8px;background:#132018;border-left:3px solid #99CC00;color:#dce8e0;font-size:12px;"></div>
+                            <div id="import-preset-hint" class="mb-3" style="display:block;padding:9px 13px;border-radius:8px;background:#132018;border-left:3px solid #99CC00;color:#dce8e0;font-size:12px;">
+                                Select one or multiple 360&deg; equirectangular panoramas (DJI, Insta360, Ricoh Theta) or geotagged drone photos (.JPG/.WEBP/.PNG), or switch to Hosted Geo-Video / 0-MB YouTube Link.
+                            </div>
                             <script>
                             (function(){{
                                 var wrap = document.getElementById('import-quick-modes');
@@ -7335,7 +7437,6 @@ def _render_unified_task_upload_page(
                                 var hintEl = document.getElementById('import-preset-hint');
                                 var gvBox = document.getElementById('geovideo-link-box');
                                 var hints = {{
-                                    all: '',
                                     pano: 'Select one or multiple 360° equirectangular panoramas (DJI, Insta360, Ricoh Theta) or geotagged drone photos (.JPG/.WEBP/.PNG). EXIF GPS, altitude, and gimbal orientation are extracted automatically!',
                                     video_file: 'Select your drone or action-cam video (.MP4 / .MOV / .WEBM) — hold Ctrl/Cmd to also select its companion DJI .SRT, .GPX, or .CSV flight log at the same time.',
                                     video_link: 'Paste your YouTube, Vimeo, or HTTPS .MP4 URL in the 0-MB Geo-Video panel below and attach an optional .SRT / .GPX telemetry track.'
@@ -7366,15 +7467,21 @@ def _render_unified_task_upload_page(
                                     if (!b) return;
                                     activatePreset(b.getAttribute('data-import-preset'), true);
                                 }});
-                                try {{
-                                    var sp = new URLSearchParams(window.location.search);
-                                    if (sp.get('focus') === 'media') {{
-                                        if (gvBox) gvBox.open = true;
-                                        activatePreset('pano', false);
-                                    }}
-                                }} catch (e) {{}}
                             }})();
                             </script>"""
+
+    if is_gaussian:
+        card_section_heading = f'Upload Photos, Video or Pre-Trained Splat into "{pname}"'
+        submit_btn_label = "UPLOAD & GENERATE GAUSSIAN SPLAT"
+        georef_helper_html = "EXIF GPS photos, companion <code>.SRT / .GPX / .CSV</code> logs, or Metric GCPs place and scale your 3D Gaussian Splat automatically. For unreferenced captures or <code>.PLY / .SPZ</code> files, <strong>click anywhere on the map</strong> to set an approximate location (fine-tune later in MyEarth &rarr; Adjust Placement)."
+    elif is_media:
+        card_section_heading = f'Upload 360&deg; Panoramas, Geo-Photos or Geo-Video into "{pname}"'
+        submit_btn_label = "UPLOAD & REGISTER 360° / GEO-MEDIA"
+        georef_helper_html = "EXIF GPS panoramas/photos and companion <code>.SRT / .GPX / .CSV</code> video flight tracks place their pin automatically on the map. For unreferenced media, <strong>click anywhere on the map</strong> to set its position."
+    else:
+        card_section_heading = f'Upload GIS Layer, 3D Scan or .ZIP Bundle into "{pname}"'
+        submit_btn_label = "UPLOAD & IMPORT GIS / 3D ASSET"
+        georef_helper_html = "Georeferenced files (GeoTIFF, LAS/LAZ, GeoJSON/KML/GPKG/SHP, full export <code>.ZIP</code>) place their pin automatically. For unreferenced 3D models/scans (<code>.GLB / .OBJ / .FBX / .USDZ</code>), <strong>click anywhere on the map</strong> to set an approximate spot (fine-tune X, Y, Z &amp; rotation later in MyEarth &rarr; Adjust Placement)."
 
     body_content = f"""
     <section id="taskUploadWorkspace" class="workspace-section pt-4">
@@ -7445,7 +7552,7 @@ def _render_unified_task_upload_page(
                                 </div>''' if is_gaussian else ''}
 
                                 <div style="font-size:12px;font-weight:700;color:#99CC00;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px;">
-                                    <i class="fas fa-cloud-upload-alt me-1"></i> Upload &amp; Register Asset into "{pname}"
+                                    <i class="fas fa-cloud-upload-alt me-1"></i> {card_section_heading}
                                 </div>
 
                                 <div id="unifiedUploadFieldsWrap" class="row g-3">
@@ -7499,7 +7606,7 @@ def _render_unified_task_upload_page(
                                                 </div>
                                                 <div class="col-md-6 col-12">
                                                     <small id="georefHelperCopy" style="color:#9eb2a5;font-size:11.5px;display:block;line-height:1.4;">
-                                                        Georeferenced files (GeoTIFF, LAS/LAZ, GeoJSON/KML, EXIF GPS photos, SRT/GPX video) place their pin automatically. For unreferenced 3D models/scans, <strong>click anywhere on the map</strong> to set an approximate spot (you can fine-tune X, Y, Z &amp; rotation later in MyEarth &rarr; Adjust Placement).
+                                                        {georef_helper_html}
                                                     </small>
                                                 </div>
                                             </div>
@@ -7522,7 +7629,7 @@ def _render_unified_task_upload_page(
                                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-4">
                                     <a class="btn btn-secondary" href="/{norm_lang}/Projects?open_project={root_pid}#taskNode_{project_id}">&larr; BACK TO MYEARTH</a>
                                     <button type="submit" class="btn btn-primary" style="font-weight:700;padding:9px 22px;">
-                                        <i class="fas fa-upload me-1"></i> {'UPLOAD & GENERATE GAUSSIAN SPLAT' if is_gaussian else 'UPLOAD & IMPORT ASSET TO TASK'}
+                                        <i class="fas fa-upload me-1"></i> {submit_btn_label}
                                     </button>
                                 </div>
                             </form>
@@ -7539,8 +7646,25 @@ def render_gaussian_project_page(user: Dict[str, Any], project_id: int, lang: st
     return _render_unified_task_upload_page(user, project_id, task_kind="gaussian", lang=lang)
 
 
-def render_external_asset_import_page(user: Dict[str, Any], project_id: int, lang: str = "en") -> Optional[str]:
-    return _render_unified_task_upload_page(user, project_id, task_kind="imported", lang=lang)
+def render_external_asset_import_page(
+    user: Dict[str, Any],
+    project_id: int,
+    lang: str = "en",
+    kind_override: str = "",
+) -> Optional[str]:
+    store = get_store()
+    proj = store.get_project(project_id) or {}
+    proj_owner_uid = int(proj.get("CREATE_ID") or proj.get("USER_ID") or 0)
+    ext_meta = store.get_external_project_meta(project_id)
+    if ext_meta and int(ext_meta.get("USER_ID") or 0) not in (0, proj_owner_uid):
+        ext_meta = None
+    cand = (
+        str(kind_override or "").strip().lower()
+        or str(proj.get("TASK_KIND") or "").strip().lower()
+        or str((ext_meta or {}).get("PROJECT_KIND") or "").strip().lower()
+    )
+    eff_kind = "media" if cand == "media" else "external"
+    return _render_unified_task_upload_page(user, project_id, task_kind=eff_kind, lang=lang)
 
 
 def render_internal_viewer_page(

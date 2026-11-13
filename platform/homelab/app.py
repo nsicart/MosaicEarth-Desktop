@@ -2357,7 +2357,8 @@ async def route_external_asset_import(
     target_pid = int(project_id or id or request.query_params.get("project_id") or request.query_params.get("id") or 0)
     if target_pid <= 0:
         return RedirectResponse(url=f"/{normalize_lang(lang)}/Projects", status_code=302)
-    html_doc = render_external_asset_import_page(user, target_pid, lang=lang)
+    req_kind = str(request.query_params.get("kind") or request.query_params.get("focus") or "").strip().lower()
+    html_doc = render_external_asset_import_page(user, target_pid, lang=lang, kind_override=req_kind)
     if not html_doc:
         return RedirectResponse(url=f"/{normalize_lang(lang)}/Projects", status_code=302)
     return HTMLResponse(html_doc)
@@ -3346,7 +3347,6 @@ async def webmethod_project_detail(method_name: str, request: Request):
             )
         else:
             root_pid = int((srv_row.get("PARENT_PROJECT_ID") if srv_row else 0) or survey_id)
-        real_kind = "external" if sub_kind == "media" else sub_kind
         new_pid = store.create_project(
             uid,
             sub_name,
@@ -3358,7 +3358,9 @@ async def webmethod_project_detail(method_name: str, request: Request):
             methodology=method_str,
             task_description=sub_desc,
         )
-        if sub_kind == "external":
+        if sub_kind == "media":
+            url = f"/Client/ExternalAssetImport.aspx?project_id={new_pid}&kind=media"
+        elif sub_kind == "external":
             url = f"/Client/ExternalAssetImport.aspx?project_id={new_pid}"
         elif sub_kind == "gaussian":
             url = f"/Client/GaussianProject.aspx?id={new_pid}"

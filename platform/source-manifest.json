@@ -1,6 +1,6 @@
 {
   "project": "MosaicEarth web platform",
-  "revision": "490b57512022acc2e20882c5007d263381394278",
+  "revision": "20eea45f6eaf02a27b4c019705c39f83d07c62d7",
   "files": [
     {
       "path": "homelab/Map2.js",
@@ -32,7 +32,7 @@
     },
     {
       "path": "homelab/app.py",
-      "sha256": "eb7710c517147e5b2c76e564f20379574216ab585189b8e05429a59983d084bc"
+      "sha256": "3a6de57598237715d9068af7d5dae919608f9717d3629fa3b85e38ba4a094116"
     },
     {
       "path": "homelab/asset_metadata.py",
@@ -60,7 +60,7 @@
     },
     {
       "path": "homelab/db_store.py",
-      "sha256": "da0c4b924f0bad0f1ee1e02611399a0b69d2cd79595e329177ff637064da124c"
+      "sha256": "7e932f1222261e2b0cba2b4f776eb94b044cc32250291fec9d243e5e95d05a7c"
     },
     {
       "path": "homelab/desktop_activation.py",
@@ -104,7 +104,7 @@
     },
     {
       "path": "homelab/gis_splat_engine.py",
-      "sha256": "7869d926eeb7e8e86feb4f4ef963eff0e86e7dd1f4438f6cc80543712dc2c9d9"
+      "sha256": "1ad3e3a95ae2b92d6299a442331648875bd8a67d2f972dcdf0cb374f657ab6b0"
     },
     {
       "path": "homelab/interoperability.py",
@@ -148,7 +148,7 @@
     },
     {
       "path": "homelab/pages.py",
-      "sha256": "c79d7564968672203b26f751cd309dbde48ba3d01cba6f708ccc3a5145333c93"
+      "sha256": "ac0dc151e96be9c235e0a872417df1c711c28f617eb9a59f60a2d88c760643a0"
     },
     {
       "path": "homelab/photo_metadata.py",
@@ -240,7 +240,7 @@
     },
     {
       "path": "homelab/workspace_pages.py",
-      "sha256": "3b9883570b782473c7a36fed46716fb44cfa187c7d191bcda43151f5ef33be03"
+      "sha256": "e35bafb1db540be112c9bc9ddebb014a34e8891abadd3e147a85f1f07d854e0b"
     }
   ]
 }

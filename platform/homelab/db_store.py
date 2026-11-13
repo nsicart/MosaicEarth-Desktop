@@ -107,9 +107,58 @@ class MosaicEarthDataStore:
         self._table_snapshots = copy.deepcopy(self.tables)
         self._init_sqlite_overlay()
         self._ensure_legacy_users_studio_plan()
+        self._purge_orphan_project_metadata()
         # Derivative generation belongs to the persistent queue. Opening the
         # store must not rebuild trained Gaussians from position/color alone
         # or reinterpret source uploads as completed models.
+
+    def _purge_orphan_project_metadata(self) -> None:
+        """Removes stale/orphan rows in MOSAICEARTH_EXTERNAL_PROJECTS and MOSAICEARTH_GAUSSIAN_PROJECTS left behind by deleted tasks so new task IDs can never collide with stale task kinds."""
+        with self.lock:
+            valid_projects = {
+                int(p.get("ID") or 0): p
+                for p in self.tables.get("dbo.WEB_PROJECTS", [])
+                if int(p.get("ID") or 0) > 0 and p.get("ACTIVO", True) is not False
+            }
+            ext_rows = self.tables.get("dbo.MOSAICEARTH_EXTERNAL_PROJECTS")
+            if isinstance(ext_rows, list):
+                cleaned_ext = []
+                for row in ext_rows:
+                    pid = int(row.get("PROJECT_ID") or 0)
+                    p_obj = valid_projects.get(pid)
+                    if not p_obj:
+                        continue
+                    row_uid = int(row.get("USER_ID") or 0)
+                    proj_uid = int(p_obj.get("CREATE_ID") or p_obj.get("USER_ID") or 0)
+                    if row_uid and proj_uid and row_uid != proj_uid:
+                        continue
+                    tk = str(p_obj.get("TASK_KIND") or "").strip().lower()
+                    if tk in ("processing", "photogrammetry") or (not tk and int(p_obj.get("STATE_ID") if p_obj.get("STATE_ID") is not None else 3) in (0, 1, 2)):
+                        continue
+                    cleaned_ext.append(row)
+                if len(cleaned_ext) != len(ext_rows):
+                    self.tables["dbo.MOSAICEARTH_EXTERNAL_PROJECTS"] = cleaned_ext
+                    self.persist_table("dbo.MOSAICEARTH_EXTERNAL_PROJECTS")
+
+            gauss_rows = self.tables.get("dbo.MOSAICEARTH_GAUSSIAN_PROJECTS")
+            if isinstance(gauss_rows, list):
+                cleaned_gauss = []
+                for row in gauss_rows:
+                    pid = int(row.get("PROJECT_ID") or 0)
+                    p_obj = valid_projects.get(pid)
+                    if not p_obj:
+                        continue
+                    row_uid = int(row.get("USER_ID") or 0)
+                    proj_uid = int(p_obj.get("CREATE_ID") or p_obj.get("USER_ID") or 0)
+                    if row_uid and proj_uid and row_uid != proj_uid:
+                        continue
+                    tk = str(p_obj.get("TASK_KIND") or "").strip().lower()
+                    if tk in ("processing", "photogrammetry", "external", "media"):
+                        continue
+                    cleaned_gauss.append(row)
+                if len(cleaned_gauss) != len(gauss_rows):
+                    self.tables["dbo.MOSAICEARTH_GAUSSIAN_PROJECTS"] = cleaned_gauss
+                    self.persist_table("dbo.MOSAICEARTH_GAUSSIAN_PROJECTS")
 
     def _ensure_legacy_users_studio_plan(self) -> None:
         """Grants all existing legacy users in dbo.USERS the Studio plan in LEGACY format ('studio' + IS_LEGACY_STUDIO=True)."""
@@ -1514,6 +1563,7 @@ class MosaicEarthDataStore:
         survey_id: int = 0,
         is_project_container: bool = False,
         is_survey_container: bool = False,
+        survey_date: str = "",
         creation_date: str = "",
         methodology: str = "",
         task_description: str = "",
@@ -1523,9 +1573,23 @@ class MosaicEarthDataStore:
             raise ValueError("Enter a project name.")
         now_iso = _fmt_iso_utc(datetime.datetime.now(datetime.timezone.utc))
         norm_kind = (kind or "processing").strip().lower()
+        clean_srv_date = (survey_date or "").strip()[:10]
         with self.lock:
             projects = self.tables.setdefault("dbo.WEB_PROJECTS", [])
-            next_id = next_record_id(projects, "ID", 18755)
+            inherited_srv_date = ""
+            if survey_id > 0 and not clean_srv_date:
+                for p_s in projects:
+                    if int(p_s.get("ID") or 0) == int(survey_id):
+                        inherited_srv_date = str(p_s.get("SURVEY_DATE") or "").strip()[:10]
+                        break
+            eff_creation_date = (creation_date or clean_srv_date or inherited_srv_date or now_iso[:10]).strip()[:10]
+            base_next_id = next_record_id(projects, "ID", 18755)
+            aux_max = 0
+            for aux_tbl in ("dbo.MOSAICEARTH_EXTERNAL_PROJECTS", "dbo.MOSAICEARTH_GAUSSIAN_PROJECTS", "dbo.MOSAICEARTH_EXTERNAL_ASSETS"):
+                for r in self.tables.get(aux_tbl, []):
+                    if not r.get("DESKTOP_PUBLIC_CATALOG"):
+                        aux_max = max(aux_max, int(r.get("PROJECT_ID") or 0))
+            next_id = max(base_next_id, aux_max + 1)
             if is_project_container or is_survey_container:
                 state_id = 4
             else:
@@ -1536,6 +1600,7 @@ class MosaicEarthDataStore:
                 "SURVEY_ID": int(survey_id or 0),
                 "IS_PROJECT_CONTAINER": bool(is_project_container),
                 "IS_SURVEY_CONTAINER": bool(is_survey_container),
+                "TASK_KIND": "container" if (is_project_container or is_survey_container) else norm_kind,
                 "ACTIVO": True,
                 "CREATE_DATE": now_iso,
                 "CREATE_ID": user_id,
@@ -1555,33 +1620,42 @@ class MosaicEarthDataStore:
                 "CREDITS": 12 if norm_kind == "gaussian" else 0,
             })
             self.persist_table("dbo.WEB_PROJECTS")
-            if not is_project_container and not is_survey_container and norm_kind in ("external", "gaussian"):
+            if not is_project_container and not is_survey_container:
                 ext_projs = self.tables.setdefault("dbo.MOSAICEARTH_EXTERNAL_PROJECTS", [])
-                ext_projs.append({
-                    "PROJECT_ID": next_id,
-                    "USER_ID": user_id,
-                    "CREATED_AT": now_iso,
-                    "PROJECT_KIND": "gaussian" if norm_kind == "gaussian" else "external",
-                })
-                self.persist_table("dbo.MOSAICEARTH_EXTERNAL_PROJECTS")
-            if not is_project_container and not is_survey_container and norm_kind == "gaussian":
                 g_projs = self.tables.setdefault("dbo.MOSAICEARTH_GAUSSIAN_PROJECTS", [])
-                g_projs.append({
-                    "PROJECT_ID": next_id,
-                    "USER_ID": user_id,
-                    "MODE": "images",
-                    "REVISION": 1,
-                    "SOURCE_MANIFEST": "[]",
-                    "CURRENT_JOB": None,
-                    "STATUS": "draft",
-                    "STATUS_DETAIL": "Upload 30–200 overlapping photos or one video capture.",
-                    "CREDITS_QUOTED": 12,
-                    "CREDITS_CHARGED": 0,
-                    "ASSET_ID": None,
-                    "CREATED_AT": now_iso,
-                    "UPDATED_AT": now_iso,
-                })
-                self.persist_table("dbo.MOSAICEARTH_GAUSSIAN_PROJECTS")
+                ext_before = len(ext_projs)
+                g_before = len(g_projs)
+                ext_projs[:] = [r for r in ext_projs if int(r.get("PROJECT_ID") or 0) != next_id]
+                g_projs[:] = [r for r in g_projs if int(r.get("PROJECT_ID") or 0) != next_id]
+                if norm_kind in ("external", "media", "gaussian"):
+                    ext_projs.append({
+                        "PROJECT_ID": next_id,
+                        "USER_ID": user_id,
+                        "CREATED_AT": now_iso,
+                        "PROJECT_KIND": norm_kind,
+                    })
+                    self.persist_table("dbo.MOSAICEARTH_EXTERNAL_PROJECTS")
+                elif len(ext_projs) != ext_before:
+                    self.persist_table("dbo.MOSAICEARTH_EXTERNAL_PROJECTS")
+                if norm_kind == "gaussian":
+                    g_projs.append({
+                        "PROJECT_ID": next_id,
+                        "USER_ID": user_id,
+                        "MODE": "images",
+                        "REVISION": 1,
+                        "SOURCE_MANIFEST": "[]",
+                        "CURRENT_JOB": None,
+                        "STATUS": "draft",
+                        "STATUS_DETAIL": "Upload overlapping photos, video, or a pre-trained Splat.",
+                        "CREDITS_QUOTED": 12,
+                        "CREDITS_CHARGED": 0,
+                        "ASSET_ID": None,
+                        "CREATED_AT": now_iso,
+                        "UPDATED_AT": now_iso,
+                    })
+                    self.persist_table("dbo.MOSAICEARTH_GAUSSIAN_PROJECTS")
+                elif len(g_projs) != g_before:
+                    self.persist_table("dbo.MOSAICEARTH_GAUSSIAN_PROJECTS")
             return next_id
 
     def delete_project(self, project_id: int, user_id: int, is_admin: bool = False) -> bool:
@@ -1612,6 +1686,14 @@ class MosaicEarthDataStore:
                     self.persist_table("dbo.WEB_PROJECTS")
                     if ext_ids_to_delete:
                         self.persist_table("dbo.MOSAICEARTH_EXTERNAL_ASSETS")
+                    ext_meta_tbl = self.tables.get("dbo.MOSAICEARTH_EXTERNAL_PROJECTS", [])
+                    if any(int(r.get("PROJECT_ID") or 0) == int(project_id) for r in ext_meta_tbl):
+                        ext_meta_tbl[:] = [r for r in ext_meta_tbl if int(r.get("PROJECT_ID") or 0) != int(project_id)]
+                        self.persist_table("dbo.MOSAICEARTH_EXTERNAL_PROJECTS")
+                    gauss_meta_tbl = self.tables.get("dbo.MOSAICEARTH_GAUSSIAN_PROJECTS", [])
+                    if any(int(r.get("PROJECT_ID") or 0) == int(project_id) for r in gauss_meta_tbl):
+                        gauss_meta_tbl[:] = [r for r in gauss_meta_tbl if int(r.get("PROJECT_ID") or 0) != int(project_id)]
+                        self.persist_table("dbo.MOSAICEARTH_GAUSSIAN_PROJECTS")
                     break
             else:
                 return False
@@ -4273,6 +4355,7 @@ class MosaicEarthDataStore:
         raw_preset = (
             preset
             or str(proj.get("PROCESSING_PRESET") or proj.get("PRESET") or proj.get("TASK_PRESET") or "")
+            or "complete"
         ).strip().lower()
         desc_text = f"{raw_preset} {proj.get('DESCRIPTION') or ''} {proj.get('NAME') or ''}".lower()
 
@@ -5405,23 +5488,23 @@ class MosaicEarthDataStore:
                         "VerticalStatus": str(vg_info.get("vertical_transform_status") or "UNKNOWN_DATUM_NO_OP"),
                     })
             self.persist_table("dbo.WEB_CESIUM_MODELS")
-            self.persist_table("dbo.WEB_PROJECTS")
 
             try:
-                import threading as _threading
                 blob_store = get_blob_store()
                 rep_rel = f"{folder}/procesado/odm_report/report.pdf"
                 if not blob_store.resolve_blob_path("imagenes", rep_rel, allow_remote_fallback=False):
                     pdf_bytes = self._build_quality_report_pdf(proj, files, val_row)
                     blob_store.save_bytes("imagenes", rep_rel, pdf_bytes)
                 if blob_store.is_zero_local_disk():
-                    _threading.Thread(
-                        target=blob_store.sync_folder_to_cloud,
-                        args=("imagenes", folder, True),
-                        daemon=True,
-                    ).start()
+                    proj["PROCESSING_PROGRESS"] = 99
+                    proj["PROCESSING_STAGE"] = "Uploading verified deliverables to cloud storage..."
+                    blob_store.sync_folder_to_cloud("imagenes", folder, True)
+                    proj["PROCESSING_PROGRESS"] = 100
+                    proj["PROCESSING_STAGE"] = "Completed · verified reconstruction products"
             except Exception:
                 pass
+
+            self.persist_table("dbo.WEB_PROJECTS")
 
             self.add_notification(
                 uid,
@@ -5725,29 +5808,48 @@ class MosaicEarthDataStore:
                     if int(pub.get("PROJECT_ID") or 0) == t_pid and int(pub.get("STATUS_ID") or 0) == 2:
                         pubs_by_ft[int(pub.get("FILE_TYPE_ID") or 0)] = pub
 
-                state_id = int(t_row.get("STATE_ID") or 3)
+                state_id = int(t_row.get("STATE_ID") if t_row.get("STATE_ID") is not None else 3)
+                explicit_tk = str(t_row.get("TASK_KIND") or "").strip().lower()
+                t_owner_uid = int(t_row.get("CREATE_ID") or t_row.get("USER_ID") or 0)
                 gp_row = gauss_by_pid.get(t_pid)
+                if gp_row and int(gp_row.get("USER_ID") or 0) not in (0, t_owner_uid):
+                    gp_row = None
                 ep_row = ext_meta_by_pid.get(t_pid)
-                is_gauss_task = gp_row is not None or (ep_row and str(ep_row.get("PROJECT_KIND") or "").lower() == "gaussian")
-                is_ext_task = bool(ep_row and str(ep_row.get("PROJECT_KIND") or "").lower() == "external")
+                if ep_row and int(ep_row.get("USER_ID") or 0) not in (0, t_owner_uid):
+                    ep_row = None
+                ep_kind = str((ep_row or {}).get("PROJECT_KIND") or "").strip().lower()
+
+                if explicit_tk in ("processing", "photogrammetry"):
+                    is_gauss_task = False
+                    is_media_task = False
+                    is_ext_task = False
+                else:
+                    is_gauss_task = explicit_tk == "gaussian" or gp_row is not None or ep_kind == "gaussian"
+                    is_media_task = explicit_tk == "media" or ep_kind == "media"
+                    is_ext_task = explicit_tk == "external" or ep_kind == "external"
 
                 if is_gauss_task:
                     task_kind = "gaussian"
-                    task_type_label = "Gaussian Splatting Task"
+                    task_type_label = "3D Gaussian Splatting Task"
                     upload_url = f"/Client/GaussianProject.aspx?id={t_pid}"
+                    report_url = ""
+                elif is_media_task:
+                    task_kind = "media"
+                    task_type_label = "360° Panoramas & Geo-Video Task"
+                    upload_url = f"/Client/ExternalAssetImport.aspx?project_id={t_pid}&kind=media"
                     report_url = ""
                 elif is_ext_task:
                     task_kind = "external"
-                    task_type_label = "Direct File Import Task"
+                    task_type_label = "GIS, 3D Scan & .ZIP Import"
                     upload_url = f"/Client/ExternalAssetImport.aspx?project_id={t_pid}"
                     report_url = ""
                 else:
                     task_kind = "processing"
-                    task_type_label = "Standard Photogrammetry Task"
+                    task_type_label = "Photogrammetry Task"
                     upload_url = f"/Client/Project.aspx?id={t_pid}&upload=1"
                     report_url = f"/ProcessedAssetFile.ashx/{t_folder}/procesado/odm_report/report.pdf" if (state_id == 4 and bool(t_row.get("ZIP_UPLOADED"))) else ""
 
-                if state_id in (1, 2) and not is_gauss_task and not is_ext_task and not t_row.get("IS_PROJECT_CONTAINER") and not t_row.get("IS_SURVEY_CONTAINER"):
+                if state_id in (1, 2) and not is_gauss_task and not is_ext_task and not is_media_task and not t_row.get("IS_PROJECT_CONTAINER") and not t_row.get("IS_SURVEY_CONTAINER"):
                     tasks.append({
                         "id": f"task-odm-{t_pid}",
                         "survey_id": pid,
@@ -5890,7 +5992,8 @@ class MosaicEarthDataStore:
                     ea_method = str(ea.get("CAPTURE_METHOD") or t_method or ("3D Gaussian Splatting" if is_gauss_asset else "Direct File Import"))
                     ea_desc = str(ea.get("DESCRIPTION") or t_desc or "")
                     ea_cat_id = int(ea.get("CATEGORY_ID") or t_cat_id or 0)
-                    ea_tags = str(ea.get("TAGS") or t_tags or "")
+                    _raw_ea_tags = str(ea.get("TAGS") or t_tags or "").strip()
+                    ea_tags = "" if _raw_ea_tags in ("0", "0.0", "None", "null", "undefined") else _raw_ea_tags
                     ea_lat = _try_float(ea.get("LATITUDE"))
                     ea_lon = _try_float(ea.get("LONGITUDE"))
                     ea_title = str(ea.get("TITLE") or ea.get("DISPLAY_NAME") or ea.get("SOURCE_FILE_NAME") or f"Asset #{aid}.{fmt}")

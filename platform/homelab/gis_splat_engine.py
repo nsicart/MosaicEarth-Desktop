@@ -587,10 +587,26 @@ def _write_khr_gaussian_splatting_glb_and_tileset(
             cameras = camera_doc["cameras"]
             camera = next((c for c in cameras if c.get("img_name") == camera_doc.get("validation_image")), cameras[0])
             # OpenSplat exports camera-to-world in the COLMAP convention:
-            # +Z looks forward, +Y down. Keep it in the unmodified model frame.
+            # +Z looks forward, +Y down. If a metric Sim(3) was applied to the splat geometry,
+            # transform the calibrated camera pose into the exact same root-z-up ENU frame.
+            cam_pos = [float(x) for x in camera["position"]]
+            cam_dir = [float(r[2]) for r in camera["rotation"]]
+            cam_up = [float(-r[1]) for r in camera["rotation"]]
+            applied_sim3 = camera_doc.get("applied_model_sim3")
+            if isinstance(applied_sim3, dict) and applied_sim3.get("rotation") and applied_sim3.get("scale"):
+                s_c = float(applied_sim3["scale"])
+                R_c = np.asarray(applied_sim3["rotation"], dtype=np.float64)
+                t_c = np.asarray(applied_sim3.get("translation") or [0.0, 0.0, 0.0], dtype=np.float64)
+                cam_pos = (s_c * (R_c @ np.asarray(cam_pos, dtype=np.float64)) + t_c).tolist()
+                d_vec = R_c @ np.asarray(cam_dir, dtype=np.float64)
+                u_vec = R_c @ np.asarray(cam_up, dtype=np.float64)
+                d_vec /= max(float(np.linalg.norm(d_vec)), 1e-12)
+                u_vec /= max(float(np.linalg.norm(u_vec)), 1e-12)
+                cam_dir = d_vec.tolist()
+                cam_up = u_vec.tolist()
             tileset_obj["extras"] = {"mosaicearthCamera": {"version": 1, "space": "root-z-up",
-                "position": camera["position"], "direction": [r[2] for r in camera["rotation"]],
-                "up": [-r[1] for r in camera["rotation"]], "fov_y": 2 * math.atan(camera["height"] / (2 * camera["fy"]))}}
+                "position": cam_pos, "direction": cam_dir,
+                "up": cam_up, "fov_y": 2 * math.atan(camera["height"] / (2 * camera["fy"]))}}
     ts_path.write_text(json.dumps(tileset_obj, indent=2), encoding="utf-8")
 
     transform_meta = {
@@ -1593,6 +1609,59 @@ def _laplacian_sharpness_score(rgb_frame: np.ndarray) -> float:
     return float(np.var(inner)) if inner.size > 0 else 0.0
 
 
+def _rotation_matrix_to_quat_xyzw(R: np.ndarray) -> np.ndarray:
+    """Converts a proper 3x3 SO(3) rotation matrix into a unit quaternion (x, y, z, w)."""
+    m = np.asarray(R, dtype=np.float64)
+    tr = float(m[0, 0] + m[1, 1] + m[2, 2])
+    if tr > 0.0:
+        s = math.sqrt(tr + 1.0) * 2.0
+        qw = 0.25 * s
+        qx = (m[2, 1] - m[1, 2]) / s
+        qy = (m[0, 2] - m[2, 0]) / s
+        qz = (m[1, 0] - m[0, 1]) / s
+    elif (m[0, 0] > m[1, 1]) and (m[0, 0] > m[2, 2]):
+        s = math.sqrt(max(1e-12, 1.0 + m[0, 0] - m[1, 1] - m[2, 2])) * 2.0
+        qw = (m[2, 1] - m[1, 2]) / s
+        qx = 0.25 * s
+        qy = (m[0, 1] + m[1, 0]) / s
+        qz = (m[0, 2] + m[2, 0]) / s
+    elif m[1, 1] > m[2, 2]:
+        s = math.sqrt(max(1e-12, 1.0 + m[1, 1] - m[0, 0] - m[2, 2])) * 2.0
+        qw = (m[0, 2] - m[2, 0]) / s
+        qx = (m[0, 1] + m[1, 0]) / s
+        qy = 0.25 * s
+        qz = (m[1, 2] + m[2, 1]) / s
+    else:
+        s = math.sqrt(max(1e-12, 1.0 + m[2, 2] - m[0, 0] - m[1, 1])) * 2.0
+        qw = (m[1, 0] - m[0, 1]) / s
+        qx = (m[0, 2] + m[2, 0]) / s
+        qy = (m[1, 2] + m[2, 1]) / s
+        qz = 0.25 * s
+    q = np.array([qx, qy, qz, qw], dtype=np.float64)
+    q /= max(float(np.linalg.norm(q)), 1e-12)
+    return q
+
+
+def _rotate_quaternions_xyzw_by_matrix(rot_xyzw: Optional[np.ndarray], R: np.ndarray) -> Optional[np.ndarray]:
+    """Left-multiplies N unit quaternions (x, y, z, w) by SO(3) rotation R, enforcing qw >= 0 for SPZ v2."""
+    if rot_xyzw is None or len(rot_xyzw) == 0:
+        return rot_xyzw
+    rx, ry, rz, rw = _rotation_matrix_to_quat_xyzw(R)
+    q_old = np.asarray(rot_xyzw, dtype=np.float64)
+    ox, oy, oz, ow = q_old[:, 0], q_old[:, 1], q_old[:, 2], q_old[:, 3]
+    nx = rw * ox + rx * ow + ry * oz - rz * oy
+    ny = rw * oy - rx * oz + ry * ow + rz * ox
+    nz = rw * oz + rx * oy - ry * ox + rz * ow
+    nw = rw * ow - rx * ox - ry * oy - rz * oz
+    q_new = np.column_stack([nx, ny, nz, nw])
+    norms = np.maximum(np.linalg.norm(q_new, axis=1, keepdims=True), 1e-12)
+    q_new = q_new / norms
+    neg_w = q_new[:, 3] < 0.0
+    if np.any(neg_w):
+        q_new[neg_w] *= -1.0
+    return q_new.astype(np.float32)
+
+
 def _persist_opensplat_result(ply, cameras, benchmark, out_dir, frame_gps_map, manual_anchor_wgs84):
     from .processing_architecture import align_colmap_cameras_sim3_umeyama
 
@@ -1614,9 +1683,11 @@ def _persist_opensplat_result(ply, cameras, benchmark, out_dir, frame_gps_map, m
     fitted = align_colmap_cameras_sim3_umeyama(
         reg_images=cam_centers, frame_gps_map=frame_gps_map, manual_anchor_wgs84=manual_anchor_wgs84,
     )
-    # The tile writer uses the manual anchor. Preserve the fitted Sim(3) separately.
-    placement = {"georeferencing_state": "MANUALLY_PLACED" if manual_anchor_wgs84 else "UNREFERENCED",
-                 "is_metric_aligned": False, "anchor_wgs84": manual_anchor_wgs84}
+    if fitted and fitted.get("is_metric_aligned"):
+        placement = fitted
+    else:
+        placement = {"georeferencing_state": "MANUALLY_PLACED" if manual_anchor_wgs84 else "UNREFERENCED",
+                     "is_metric_aligned": False, "anchor_wgs84": manual_anchor_wgs84}
     benchmark.update(georeferencing_alignment=placement, fitted_camera_alignment=fitted,
                      validation_scope="single_held_out_view")
     (out_dir / "cameras_sfm.json").write_text(
@@ -1632,7 +1703,7 @@ def _run_sfm_and_gaussian_splat_optimization(
     out_dir: Path,
     training_iterations: int = 150,
     allow_synthetic_cpu_fallback: bool = False,
-    preset: str = "STANDARD",
+    preset: str = "HIGH_QUALITY",
     input_kind: str = "images",
     frame_gps_map: Optional[Dict[str, Dict[str, Any]]] = None,
     raw_input_count: int = 0,
@@ -2191,7 +2262,7 @@ def build_gaussian_splatting_from_media(
     fallback_alt: float = 0.0,
     render_mode: str = "gaussian_splat",
     allow_synthetic_cpu_fallback: bool = False,
-    quality_preset: str = "balanced",
+    quality_preset: str = "HIGH_QUALITY",
     stage_cb: Optional[Any] = None,
     cloud_job_key: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -2345,10 +2416,12 @@ def build_gaussian_splatting_from_media(
                     vid_path = Path(tmpd) / f"input.{ext}"
                     vid_path.write_bytes(fbytes)
                     vid_samples = list(companion_telemetry_samples)
-                    if not vid_samples:
-                        try:
-                            from .geo_video import _is_valid_lat_lon, probe_video_metadata_and_embedded_telemetry
-                            v_probe = probe_video_metadata_and_embedded_telemetry(vid_path)
+                    vid_duration_s = 0.0
+                    try:
+                        from .geo_video import _is_valid_lat_lon, probe_video_metadata_and_embedded_telemetry
+                        v_probe = probe_video_metadata_and_embedded_telemetry(vid_path)
+                        vid_duration_s = float(v_probe.get("duration_s") or 0.0)
+                        if not vid_samples:
                             if v_probe.get("samples"):
                                 vid_samples = sorted(list(v_probe["samples"]), key=lambda r: float(r.get("t_ms") or 0))
                             elif _is_valid_lat_lon(v_probe.get("tag_lat"), v_probe.get("tag_lon")):
@@ -2358,19 +2431,26 @@ def build_gaussian_splatting_from_media(
                                     "lon": float(v_probe["tag_lon"]),
                                     "alt_m": float(v_probe.get("tag_alt") or 0.0),
                                 }]
-                        except Exception:
-                            vid_samples = []
+                    except Exception:
+                        pass
+                    start_s = 0.5 if (0.0 < vid_duration_s <= 6.0) else 1.0
+                    n_extract = 24 if allow_synthetic_cpu_fallback else 64
+                    if vid_duration_s > start_s + 1.0:
+                        fps_val = max(0.25, min(4.0, float(n_extract) / max(1.0, vid_duration_s - start_s)))
+                    else:
+                        fps_val = 2.0
+                    max_vid_dim = 256 if allow_synthetic_cpu_fallback else min(target_max_dim, 1600)
                     cmd = [
-                        ffmpeg_bin, "-y", "-ss", "1.5", "-i", str(vid_path),
-                        "-vf", f"fps=2,scale='min({min(target_max_dim, 1280)},iw)':-2",
-                        "-frames:v", "28",
+                        ffmpeg_bin, "-y", "-ss", f"{start_s:.2f}", "-i", str(vid_path),
+                        "-vf", f"fps={fps_val:.4f},scale='min({max_vid_dim},iw)':-2",
+                        "-frames:v", str(n_extract),
                         str(Path(tmpd) / "frame_%04d.jpg"),
                     ]
-                    subprocess.run(cmd, capture_output=True, timeout=120)
+                    subprocess.run(cmd, capture_output=True, timeout=180)
                     from .video_photogrammetry import interpolate_telemetry_at_ms
                     for f_idx, fp in enumerate(sorted(Path(tmpd).glob("frame_*.jpg"))):
                         try:
-                            t_ms = (1.5 + f_idx * 0.5) * 1000.0
+                            t_ms = (start_s + (f_idx / fps_val)) * 1000.0
                             v_gps = interpolate_telemetry_at_ms(vid_samples, t_ms) if vid_samples else None
                             if v_gps:
                                 detected_gps.append(v_gps)
@@ -2409,7 +2489,7 @@ def build_gaussian_splatting_from_media(
             non_redundant.append((frm, onm, gps))
         if not non_redundant:
             non_redundant = sharp_frames
-        effective_max_views = min(target_max_views, 20) if has_video_input else target_max_views
+        effective_max_views = min(target_max_views, 48) if has_video_input else target_max_views
         n_views = min(len(non_redundant), effective_max_views)
         selected_tuples = [non_redundant[int(i * len(non_redundant) / n_views)] for i in range(n_views)]
         frames_rgb = [t[0] for t in selected_tuples]
@@ -2462,39 +2542,57 @@ def build_gaussian_splatting_from_media(
         except Exception:
             pass
 
-    gcp_sim3_applied = False
-    if cloud_job_key and ":" in str(cloud_job_key) and (out_dir / "cameras_sfm.json").is_file():
+    model_sim3_applied = False
+    if (out_dir / "cameras_sfm.json").is_file():
         try:
-            from .db_store import get_store
-            from .processing_architecture import triangulate_gcp_observations_sim3
-            gs_pid = int(str(cloud_job_key).split(":")[1])
-            gs_proj = get_store().get_project(gs_pid) or {}
-            gcp_obs_doc = gs_proj.get("GCP_OBSERVATIONS")
-            if isinstance(gcp_obs_doc, dict) and gcp_obs_doc.get("points"):
-                cam_doc = json.loads((out_dir / "cameras_sfm.json").read_text(encoding="utf-8"))
-                gcp_fit = triangulate_gcp_observations_sim3(
-                    cam_doc.get("cameras") or [], gcp_obs_doc, frame_gps_map=frame_gps_map
-                )
-                if gcp_fit and gcp_fit.get("is_metric_aligned"):
-                    s_g = float(gcp_fit["sim3_scale"])
-                    R_g = np.asarray(gcp_fit["sim3_rotation_matrix"], dtype=np.float32)
-                    t_g = np.asarray(gcp_fit["sim3_translation_enu_m"], dtype=np.float32)
-                    if 1e-4 < s_g < 1e5 and np.all(np.isfinite(R_g)) and np.all(np.isfinite(t_g)):
-                        pos_all = (s_g * (pos_all.astype(np.float32) @ R_g.T)) + t_g
-                        if scales_all is not None:
-                            scales_all = scales_all.astype(np.float32) * s_g
-                        anc = gcp_fit.get("anchor_wgs84") or {}
-                        eff_lat = float(anc.get("lat", eff_lat))
-                        eff_lon = float(anc.get("lon", eff_lon))
-                        eff_alt = float(anc.get("alt", eff_alt))
-                        gcp_sim3_applied = True
-                        if (out_dir / "splat_benchmark.json").is_file():
-                            b_doc = json.loads((out_dir / "splat_benchmark.json").read_text(encoding="utf-8"))
-                            b_doc["georeferencing"] = gcp_fit
-                            b_doc["georeferencing_alignment"] = gcp_fit
-                            (out_dir / "splat_benchmark.json").write_text(json.dumps(b_doc, indent=2), encoding="utf-8")
+            cam_doc = json.loads((out_dir / "cameras_sfm.json").read_text(encoding="utf-8"))
+            active_fit: Optional[Dict[str, Any]] = None
+            if cloud_job_key and ":" in str(cloud_job_key):
+                from .db_store import get_store
+                from .processing_architecture import triangulate_gcp_observations_sim3
+                gs_pid = int(str(cloud_job_key).split(":")[1])
+                gs_proj = get_store().get_project(gs_pid) or {}
+                gcp_obs_doc = gs_proj.get("GCP_OBSERVATIONS")
+                if isinstance(gcp_obs_doc, dict) and gcp_obs_doc.get("points"):
+                    gcp_fit = triangulate_gcp_observations_sim3(
+                        cam_doc.get("cameras") or [], gcp_obs_doc, frame_gps_map=frame_gps_map
+                    )
+                    if gcp_fit and gcp_fit.get("is_metric_aligned"):
+                        active_fit = gcp_fit
+            if active_fit is None:
+                cand_fit = cam_doc.get("fitted_camera_alignment") or cam_doc.get("georeferencing_alignment")
+                if isinstance(cand_fit, dict) and cand_fit.get("is_metric_aligned"):
+                    active_fit = cand_fit
+            if active_fit is not None:
+                s_g = float(active_fit["sim3_scale"])
+                R_g = np.asarray(active_fit["sim3_rotation_matrix"], dtype=np.float32)
+                t_g = np.asarray(active_fit["sim3_translation_enu_m"], dtype=np.float32)
+                if 1e-4 < s_g < 1e5 and np.all(np.isfinite(R_g)) and np.all(np.isfinite(t_g)):
+                    pos_all = (s_g * (pos_all.astype(np.float32) @ R_g.T)) + t_g
+                    if scales_all is not None:
+                        scales_all = scales_all.astype(np.float32) * s_g
+                    if rot_all is not None:
+                        rot_all = _rotate_quaternions_xyzw_by_matrix(rot_all, R_g)
+                    anc = active_fit.get("anchor_wgs84") or {}
+                    eff_lat = float(anc.get("lat", eff_lat))
+                    eff_lon = float(anc.get("lon", eff_lon))
+                    eff_alt = float(anc.get("alt", eff_alt))
+                    model_sim3_applied = True
+                    cam_doc["georeferencing"] = active_fit
+                    cam_doc["georeferencing_alignment"] = active_fit
+                    cam_doc["applied_model_sim3"] = {
+                        "scale": float(s_g),
+                        "rotation": [[float(v) for v in row] for row in R_g],
+                        "translation": [float(v) for v in t_g],
+                    }
+                    (out_dir / "cameras_sfm.json").write_text(json.dumps(cam_doc, indent=2), encoding="utf-8")
+                    if (out_dir / "splat_benchmark.json").is_file():
+                        b_doc = json.loads((out_dir / "splat_benchmark.json").read_text(encoding="utf-8"))
+                        b_doc["georeferencing"] = active_fit
+                        b_doc["georeferencing_alignment"] = active_fit
+                        (out_dir / "splat_benchmark.json").write_text(json.dumps(b_doc, indent=2), encoding="utf-8")
         except Exception:
-            gcp_sim3_applied = False
+            model_sim3_applied = False
 
     ref_frame = frames_rgb[0] if frames_rgb else None
     ply_p, splat_p = _write_gaussian_splat_files_with_tiles(
@@ -2511,7 +2609,7 @@ def build_gaussian_splatting_from_media(
         frame_img=ref_frame,
         render_mode=render_mode,
     )
-    if trained_gpu_ply.is_file() and not gcp_sim3_applied:
+    if trained_gpu_ply.is_file() and not model_sim3_applied:
         # Preserve the full 62-property Inria 3DGS PLY from GPU training as model.ply
         shutil.copy2(trained_gpu_ply, out_dir / "model.ply")
         derived_spz_dir = out_dir / "derived" / "spz"
