@@ -87,6 +87,33 @@ def render_home_master(
     else:
         user_label = html.escape(raw_email) if user else ""
     has_unread = get_store().has_unread_notifications(int(user["ID"])) if user else False
+    is_admin_user = bool(
+        user
+        and not is_desktop_local
+        and user.get("ACTIVO", True)
+        and not bool(user.get("SESSION_REVOKED"))
+        and (int(user.get("ROL_ID") or 0) == 1 or user.get("IS_ADMIN") or user.get("IsAdmin"))
+    )
+    admin_workspace_btn = (
+        '<a class="me-workspace-btn" id="li_admin" href="/Admin/ControlCenter.aspx" title="Admin Control Center — Cloud Platform Administration">'
+        '<i class="fas fa-shield-alt" style="font-size:13px;"></i><span>Admin</span></a>'
+        if is_admin_user
+        else ""
+    )
+    admin_dropdown_item = (
+        '<li><a class="dropdown-item" href="/Admin/ControlCenter.aspx" style="color:#fbbf24;font-weight:700;">'
+        '<i class="fas fa-shield-alt me-1"></i> Admin Control Center</a></li>'
+        if is_admin_user
+        else ""
+    )
+    new_task_workspace_btn = (
+        f'<a class="me-workspace-btn me-new-task-nav-btn" id="li_new_task" href="/{norm_lang}/Projects?new_task=1" '
+        'onclick="if (typeof window.openQuickNewTaskModal === \'function\') { event.preventDefault(); window.openQuickNewTaskModal(); }" '
+        'title="New Task — Jump directly to the Task Selector (Upload GIS/3D, Photogrammetry, Gaussian Splat or 360°/Geo-Video)">'
+        '<i class="fas fa-plus-circle" style="font-size:13px;"></i><span>+ New Task</span></a>'
+        if user
+        else ""
+    )
     green_dot_style = ' style="display: inline;"' if has_unread else ' style="display: none;"'
     asset_base = "/ProcessedAssetFile.ashx/"
     is_fullscreen_map = 'class="container-fluid2"' in (body_content or "")
@@ -222,6 +249,22 @@ def render_home_master(
             box-shadow: 0 0 12px rgba(153, 204, 0, 0.25);
         }}
         .me-workspace-btn.activeLink svg {{
+            color: #0b110d !important;
+        }}
+        .me-workspace-btn.me-new-task-nav-btn {{
+            background: rgba(153, 204, 0, 0.16) !important;
+            border: 1px solid #99CC00 !important;
+            color: #f0f9e8 !important;
+            font-family: OpenSansBold, Arial, sans-serif;
+            font-weight: 700 !important;
+        }}
+        .me-workspace-btn.me-new-task-nav-btn:hover {{
+            background: #99CC00 !important;
+            color: #0b110d !important;
+            box-shadow: 0 0 12px rgba(153, 204, 0, 0.35);
+        }}
+        .me-workspace-btn.me-new-task-nav-btn:hover i,
+        .me-workspace-btn.me-new-task-nav-btn:hover svg {{
             color: #0b110d !important;
         }}
         .me-brand-mark {{
@@ -1156,6 +1199,7 @@ def render_home_master(
                                 <li class="nav-item">
                                     <div class="me-workspace-nav-group" role="group" aria-label="User Workspace Tools">
                                         <span class="me-workspace-label">Workspace</span>
+                                        {new_task_workspace_btn}
                                         <a class="me-workspace-btn" id="li_projects" href="{f'/{norm_lang}/Projects' if user else f'/Default.aspx?ReturnUrl=%2F{norm_lang}%2FProjects'}" title="MyEarth — Projects, Surveys, Tasks &amp; Assets">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                                             <span>MyEarth</span>
@@ -1184,8 +1228,9 @@ def render_home_master(
                                         <img src="/Resources/UserMenu.svg" alt="" style="width:16px;height:16px;" />
                                     </a>
                                     <ul class="dropdown-menu dropdown-menu-end text-start" aria-labelledby="navbarDropdownMenuLink">
-                                        {f'<li><a class="dropdown-item" href="/en/Projects#desktopCloudProjectsHost" style="color:#38bdf8;font-weight:700;"><i class="fas fa-cloud me-1"></i> Cloud Account &amp; Synchronization</a></li><li><hr class="dropdown-divider" style="border-color:rgba(255,255,255,0.12);" /></li>' if is_desktop_local else ''}
-                                        {f'<li><a class="dropdown-item" href="/{norm_lang}/Projects" style="color:#99CC00;font-weight:700;">MyEarth (Projects &amp; Surveys)</a></li><li><a class="dropdown-item" href="/{norm_lang}/MyMaps" style="color:#99CC00;font-weight:700;">MyMosaics (3D Scenes)</a></li><li><a class="dropdown-item" href="/{norm_lang}/Profile">Account, Storage Quota &amp; NodeODM</a></li><li><a class="dropdown-item" href="/{norm_lang}/CreditPacks">Storage Plans &amp; Cloud Processing (€)</a></li>' if user else f'<li><a class="dropdown-item" href="/Default.aspx?ReturnUrl=%2F{norm_lang}%2FProjects" style="color:#99CC00;font-weight:700;">Sign In to MyEarth / MyMosaics</a></li>'}
+                                        {f'<li><a class="dropdown-item" href="/Default.aspx?switch_account=1" style="color:#38bdf8;font-weight:700;"><i class="fas fa-cloud me-1"></i> Sign In / Switch Cloud Account</a></li><li><hr class="dropdown-divider" style="border-color:rgba(255,255,255,0.12);" /></li>' if is_desktop_local else ''}
+                                        {admin_dropdown_item}
+                                        {f'<li><a class="dropdown-item" href="/{norm_lang}/Projects?new_task=1" style="color:#99CC00;font-weight:700;"><i class="fas fa-plus-circle me-1"></i> + New Task (Upload / Create)</a></li><li><a class="dropdown-item" href="/{norm_lang}/Projects" style="color:#99CC00;font-weight:700;">MyEarth (Projects &amp; Surveys)</a></li><li><a class="dropdown-item" href="/{norm_lang}/MyMaps" style="color:#99CC00;font-weight:700;">MyMosaics (3D Scenes)</a></li><li><a class="dropdown-item" href="/{norm_lang}/Profile">Account, Storage Quota &amp; NodeODM</a></li><li><a class="dropdown-item" href="/{norm_lang}/CreditPacks">Storage Plans &amp; Cloud Processing (€)</a></li>' if user else f'<li><a class="dropdown-item" href="/Default.aspx?ReturnUrl=%2F{norm_lang}%2FProjects" style="color:#99CC00;font-weight:700;">Sign In to MyEarth / MyMosaics</a></li>'}
                                         <li><a class="dropdown-item" href="/{norm_lang}/Desktop">MosaicEarth Desktop &amp; Connectors</a></li>
                                         <li><a class="dropdown-item" href="/{norm_lang}/Faqs">Help &amp; FAQs</a></li>
                                         <li><a class="dropdown-item" href="/Terms.aspx" target="_blank" rel="noopener">Terms of Service</a></li>
@@ -1303,20 +1348,23 @@ def render_map2_page(
         description = f"Interactive 3D geospatial globe and public directory with {total_count} georeferenced drone orthophotos (GeoTIFF), 3D photogrammetry models, Gaussian Splats and LiDAR point clouds."
         badge = "PUBLIC 3D GLOBE & CATALOGUE"
 
+    has_explicit_coords = (
+        abs(float(lat_param or 0.0)) > 1e-5 or abs(float(lon_param or 0.0)) > 1e-5
+    )
     init_lat = (
-        active_region["center_lat"]
-        if active_region
-        else (page_items[0]["Latitude"] if page_items and (active_family or active_category) else None)
+        float(lat_param)
+        if has_explicit_coords
+        else (active_region["center_lat"] if active_region else None)
     )
     init_lon = (
-        active_region["center_lon"]
-        if active_region
-        else (page_items[0]["Longitude"] if page_items and (active_family or active_category) else None)
+        float(lon_param)
+        if has_explicit_coords
+        else (active_region["center_lon"] if active_region else None)
     )
     init_height = (
-        active_region["default_height_meters"]
-        if active_region
-        else (2200.0 if (active_family or active_category) else None)
+        2000.0
+        if has_explicit_coords
+        else (active_region["default_height_meters"] if active_region else None)
     )
     globe_preconfig = {
         "hasFilter": bool(active_family or active_category or active_region),
@@ -1532,8 +1580,8 @@ def render_map2_page(
         const HEIGHT3 = 0;
         const HEIGHT4 = 0;
         const tipo = '{effective_type}';
-        const latMarket = '{lat_param}';
-        const lonMarket = '{lon_param}';
+        const latMarket = '{lat_param if has_explicit_coords else ""}';
+        const lonMarket = '{lon_param if has_explicit_coords else ""}';
         const key = {json.dumps(cesium_key)};
         if (typeof CargarActiveMenu === 'function') CargarActiveMenu("li_map");
         window.launchGlobalFirstPersonFly = function() {{
@@ -1568,7 +1616,10 @@ def render_map2_page(
         }}, 4650);
     </script>
     <script src="/js/front/MosaicTemporalFilter.js?v=20260916-ux"></script>
-    <script src="/js/front/Map2.js?v=20261015-expansion"></script>"""
+    <script src="/js/front/MosaicPano360.js?v=20261112"></script>
+    <script src="/js/front/MosaicGeoVideo.js?v=20261112"></script>
+    <script src="/js/front/MosaicPrint3D.js?v=20261112-v2"></script>
+    <script src="/js/front/Map2.js?v=20261113-fix00"></script>"""
 
     return render_home_master(head_extra, seo_head, body_content, scripts_extra, user=user, lang=norm_lang)
 
@@ -4603,14 +4654,38 @@ def render_desktop_connectors_page(user: Optional[Dict[str, Any]] = None, lang: 
         account = '<p>The official installer costs €29 once, or is included with an active Studio plan.</p><button type="button" id="desktop-purchase">Buy official installer · €29</button><a class="me-dl" href="/en/Account">View Studio plan</a>'
     else:
         account = '<p>The official installer costs €29 once, or is included with an active Studio plan.</p><a class="me-dl" href="/Login.aspx?ReturnUrl=%2Fen%2FDesktop">Sign in to buy or download</a>'
-    plugins = ''.join(f'<article class="me-card"><h2>{label}</h2><p>{description}</p>{download(target, "Download plugin ZIP")}<a href="https://github.com/nsicart/MosaicEarth-Desktop/blob/main/CONNECTORS.md">Installation instructions</a></article>'
-        for target, label, description in (
-            ("webodm", "WebODM", "Synchronize completed tasks, original photographs, products and processing metadata from WebODM. Restore cloud files into a new local task."),
-            ("webui", "OpenDroneMap WebUI", "A separate package for OpenDroneMap’s WebUI plugin system. Transfer completed tasks and restore cloud projects with verified downloads."),
-            ("qgis", "QGIS", "Synchronize project settings, data layers, styles and coordinate systems. Reopen downloaded QGIS projects or add compatible cloud products as layers.")))
-    body = f'''<main class="me-distribution"><p class="me-eyebrow">MOSAICEARTH · DESKTOP & CONNECTORS</p><h1>Your projects, locally and in the cloud</h1>
-<p class="me-intro">Process on your computer with NodeODX and OpenSplat. Synchronize photographs, completed models and project data with MyEarth when you choose.</p>
-<p>Release {version} · canonical cloud service: <a href="https://app.mosaicearth.app">app.mosaicearth.app</a></p>
+    full_interface = release.get("interface") == "full-platform"
+    desktop_intro = ("The MosaicEarth interface on your computer: Public Map, Public Mosaics, MyEarth, MyMosaics and Fly View. Process locally with NodeODX and OpenSplat, and choose when to synchronize complete projects and scenes with your cloud account."
+                     if full_interface else "Process on your computer with NodeODX and OpenSplat. Synchronize photographs, completed models and project data with MyEarth when you choose.")
+    release_note = ("" if full_interface else '<p class="me-muted">The update with the complete web interface is in final validation. The downloads below are the current published release.</p>')
+    processing_requirements = '<p>Local processing requires Docker with Linux containers. The application checks the installation and downloads verified NodeODX and OpenSplat CPU engines (about 1.3 GB). Allow at least 20 GB of free disk space. CPU processing is supported in this release. macOS installers are not available.</p>'
+    if "nvidia-cuda" in (release.get("accelerators") or []):
+        processing_requirements = ('<p>Automatic mode detects a compatible NVIDIA GPU inside Docker and uses CPU when GPU processing is unavailable. You can also select CPU only. GPU acceleration applies to OpenSplat training and supported NodeODX stages; some processing stages still use CPU.</p>'
+            '<p>Local processing requires Docker with Linux containers. For GPU acceleration, Windows needs Docker Desktop with WSL 2 and a compatible NVIDIA driver; Linux needs the NVIDIA driver and NVIDIA Container Toolkit. CPU engines download about 1.4 GB; the optional GPU bundle is about 9.1 GB. Allow an additional 50 GB free for GPU installation, plus space for your projects. Downloads resume and are verified before installation.</p>'
+            '<p><a href="https://github.com/nsicart/MosaicEarth-Desktop/blob/v0.4.1/GPU.md">GPU compatibility and setup instructions</a>. Local processing does not use paid cloud GPUs. macOS installers are not available.</p>')
+    plugins = ''.join(
+        f'<article class="me-card"><span class="me-badge">{badge}</span><h2>{label}</h2><p>{description}</p>'
+        f'{extra_cta}{download(target, dl_label)}<a href="{doc_url}">{doc_label}</a></article>'
+        for badge, target, label, description, dl_label, doc_url, doc_label, extra_cta in (
+            ("Survey Control · MIT Open Source", "gcp-studio", "MosaicEarth GCP Studio", "Browser Ground Control Point & Check Point editor for both UAV Photogrammetry (OpenDroneMap gcp_list.txt) and 3D Gaussian Splatting (multi-view ray triangulation + Umeyama Sim(3) metric alignment). Supports EPSG:4326, UTM, EPSG:25831 and custom PROJ strings.", "Download standalone GCP Studio ZIP", "https://github.com/nsicart/MosaicEarth-GCP-Studio", "Source code & GitHub Repository (MIT)", '<a class="me-dl me-dl-alt" href="/GCPStudio.aspx">Open MosaicEarth GCP Studio (/GCPStudio.aspx)</a>'),
+            ("Mobile & On-Device 3D", "android-capture", "MosaicEarth Capture (Android)", "Capture photos and video, or import drone microSD folders. Run free on-device Photogrammetry (point cloud, textured 3D mesh, orthophoto & DSM) and free on-device 3D Gaussian Splatting, upload local models to MyEarth for €0, or process in MosaicEarth Cloud.", "Download Android APK (ARM64)", "https://github.com/nsicart/MosaicEarth-Capture-Android", "Source code & GitHub Releases", ""),
+            ("iOS · LiDAR .USDZ & Share Sheet", "ios-bridge", "MosaicEarth Bridge for iOS", "Send iPhone & iPad Pro LiDAR .USDZ scans (Scaniverse, Polycam, Apple RoomPlan), 360° panoramas, EXIF geo-photos and drone Geo-Videos straight from the iOS Share Sheet or installable Safari Web App (/bridge), with instant unlisted Share Portal & iframe embed.", "Download Apple Shortcut & Swift Source ZIP", "https://github.com/nsicart/MosaicEarth-Bridge-iOS", "Source code & GitHub Repository", '<a class="me-dl me-dl-alt" href="/bridge">Open MosaicEarth Bridge Web App (/bridge)</a>'),
+            ("UAV Photogrammetry & LiDAR", "djiterra", "DJI Terra", "Auto-discover DJI Terra reconstruction outputs (map/result.tif orthomosaic, map/dsm.tif elevation, terra_b3dm 3D Tiles, terra_las / terra_pnts point clouds, terra_obj textured meshes and PDF quality reports) via Watch Folder daemon, CLI or GUI into dated 4D Surveys.", "Download DJI Terra connector ZIP", "https://github.com/nsicart/MosaicEarth-Connector-DJITerra", "Source code & GitHub Repository", ""),
+            ("UAV Photogrammetry & 3DGS", "pix4d", "PIX4Dmapper & PIX4Dmatic", "Auto-detect PIX4Dmapper (1_initial PDF report, 2_densification .laz/.obj/.fbx, 3_dsm_ortho DSM & mosaic GeoTIFFs) and PIX4Dmatic (.spz / .ply Gaussian Splats, COPC point clouds, meshes & ortho/DSM) with Watch Folder automation and 4D Survey routing.", "Download PIX4D connector ZIP", "https://github.com/nsicart/MosaicEarth-Connector-PIX4D", "Source code & GitHub Repository", ""),
+            ("Enterprise GIS · Python Toolbox", "arcgispro", "ArcGIS Pro (.pyt Toolbox & Live WMTS)", "Native ArcGIS Pro Python Toolbox (MosaicEarth.pyt) + standalone CLI/GUI: publish Raster, Feature, Multipatch, CAD .DXF and 3D Scene layers to MyEarth, stream live authenticated OGC WMTS 1.0.0 / KML layers into ArcGISProject('CURRENT'), or pull Cloud Surveys locally.", "Download ArcGIS Pro Toolbox ZIP", "https://github.com/nsicart/MosaicEarth-Connector-ArcGISPro", "Source code & GitHub Repository", ""),
+            ("Desktop GIS", "qgis", "QGIS", "Synchronize project settings, data layers, styles and coordinate systems. Reopen downloaded QGIS projects, stream live OGC WMTS 1.0.0 / XYZ layers, or add compatible cloud products directly to the map canvas.", "Download plugin ZIP", "https://github.com/nsicart/MosaicEarth-Connector-QGIS", "Source code & GitHub Repository", ""),
+            ("3D Gaussian Splatting", "postshot", "Jawset Postshot & LichtFeld Studio", "Publish photorealistic 3D Gaussian Splats (.ply, .splat, .spz, .ksplat) from Jawset Postshot and LichtFeld Studio with automatic WGS84 EXIF / COLMAP georeferencing, Watch Folder mode, and instant copy of Share Portal + oEmbed / iframe code to clipboard.", "Download Postshot / LichtFeld ZIP", "https://github.com/nsicart/MosaicEarth-Connector-Postshot", "Source code & GitHub Repository", ""),
+            ("3D Creation & Gaussian Splats", "blender", "Blender (3D & Gaussian Splats)", "Export and synchronize textured .glb scenes, PBR meshes and 3D Gaussian Splats (.ply, .spz, .splat, .ksplat) with WGS84 georeferencing and dated 4D Survey routing, or pull MyEarth models into Blender Collections.", "Download add-on ZIP", "https://github.com/nsicart/MosaicEarth-Connector-Blender", "Source code & GitHub Repository", ""),
+            ("Photogrammetry Suite", "metashape", "Agisoft Metashape", "One-click menu export and verified chunked upload of Orthomosaics (GeoTIFF), DEM/DSM elevation models (for Cut/Fill & 4D ΔVolume), Dense Point Clouds (.laz), 3D Models and PDF reports into MyEarth Projects & 4D Surveys.", "Download plugin ZIP", "https://github.com/nsicart/MosaicEarth-Connector-Metashape", "Source code & GitHub Repository", ""),
+            ("Point Clouds & LiDAR", "cloudcompare", "CloudCompare", "Synchronize classified/cleaned .laz, .las and .ply point clouds, M3C2 distance outputs, rasterized GeoTIFF DSMs and 3D Gaussian Splats via GUI, CLI or CloudCompare-PythonRuntime, and pull Cloud revisions locally.", "Download connector ZIP", "https://github.com/nsicart/MosaicEarth-Connector-CloudCompare", "Source code & GitHub Repository", ""),
+            ("Photogrammetry & RealityScan", "realitycapture", "RealityCapture", "Interactive connector, live -delegateTo exporter and drop-in Post-Export automation script for CapturingReality ortho, DSM, textured mesh (.glb / .obj.zip) and point-cloud / 3DGS deliverables into dated MyEarth 4D Surveys.", "Download connector ZIP", "https://github.com/nsicart/MosaicEarth-Connector-RealityCapture", "Source code & GitHub Repository", ""),
+            ("Open-Source Photogrammetry", "webodm", "WebODM", "Synchronize completed tasks, original photographs, products and processing metadata from WebODM. Restore cloud files into a new local task.", "Download plugin ZIP", "https://github.com/nsicart/MosaicEarth-Connector-WebODM", "Source code & GitHub Repository", ""),
+            ("Open-Source Photogrammetry", "webui", "OpenDroneMap WebUI", "A separate package for OpenDroneMap’s WebUI plugin system. Transfer completed tasks and restore cloud projects with verified downloads.", "Download plugin ZIP", "https://github.com/nsicart/MosaicEarth-Connector-WebODM", "Source code & GitHub Repository", ""),
+        )
+    )
+    body = f'''<main class="me-distribution"><p class="me-eyebrow">MOSAICEARTH · DESKTOP, GCP STUDIO, MOBILE BRIDGE &amp; OPEN-SOURCE CONNECTORS</p><h1>Your projects, locally and in the cloud</h1>
+<p class="me-intro">{desktop_intro}</p>{release_note}
+<p>Release {version} · Connectors <code>v0.4.0</code> · GCP Studio <code>v0.1.0</code> · canonical cloud service: <a href="https://app.mosaicearth.app">app.mosaicearth.app</a></p>
 <div class="me-grid"><article class="me-card me-featured"><h2>Official Desktop installer</h2>{account}
 <p>Windows uses a graphical installation wizard. Linux uses its package manager. The official distribution is associated with your account and up to two computers. Activation grants last 30 days for offline use; renew with the same eligible account.</p>
 <p>Local processing requires Docker with Linux containers. The application checks the installation and downloads verified NodeODX and OpenSplat CPU engines (about 1.3 GB). Allow at least 20 GB of free disk space. NVIDIA CUDA setup is documented separately. macOS installers are not available.</p>
@@ -4619,9 +4694,9 @@ def render_desktop_connectors_page(user: Optional[Dict[str, Any]] = None, lang: 
 <a class="me-dl" href="https://github.com/nsicart/MosaicEarth-Desktop">Source code and build instructions</a>{download("desktop-source", "Corresponding release source")}
 <p>AGPL-3.0-or-later. The account controls the commercial distribution and services; it does not remove the redistribution rights granted by open-source licenses.</p>
 <a href="/open-source">Engine source code and third-party notices</a></article></div>
-<h2 class="me-section">Open-source connectors</h2><div class="me-grid me-three">{plugins}</div>
-<article class="me-card"><h2>What synchronization transfers</h2><p>Original photographs and other source files, completed products, supporting files and project metadata. Transfers resume from verified chunks and check complete files with SHA-256. Downloading creates a new local copy; it does not overwrite an existing project.</p>
-<p>The cloud preserves revisions and prepares supported products for its viewers. File transfer and viewer preparation have separate statuses. A format unsupported by a host application remains available as its original file. Storage is subject to your account’s quota; synchronization does not automatically purchase cloud processing.</p></article>
+<h2 class="me-section">Open-source GCP Studio, mobile, GIS, photogrammetry &amp; 3DGS connectors (14)</h2><div class="me-grid">{plugins}</div>
+<article class="me-card"><h2>What synchronization &amp; Wave 2 workflows support</h2><p>Original photographs and source files, orthomosaics &amp; DSM/DTM GeoTIFFs, dense LiDAR / photogrammetric point clouds, textured 3D meshes &amp; Apple LiDAR <code>.USDZ</code>, 3D Gaussian Splats, 360° equirectangular Virtual Tours, GPS-synced Drone Geo-Videos (<code>0 MB</code> YouTube/Vimeo or MP4 + <code>.SRT</code>/GPMF/<code>.GPX</code>), CAD <code>.DXF</code> vectors, PDF quality reports, and full Project &rarr; 4D Survey &rarr; Task hierarchies. Transfers resume from verified 4 MiB chunks with end-to-end SHA-256 verification.</p>
+<p>Once in MyEarth, deliverables unlock live read-only OGC <code>WMTS 1.0.0</code> / <code>XYZ</code> / Google Earth <code>NetworkLink .KML</code> streaming, 3D Print Maker Studio (watertight <code>.3MF</code> &amp; <code>.STL</code> maquettes), CAD <code>.DXF</code> &amp; branded engineering PDF reports, and instant <code>oEmbed</code> / client Share Portals.</p></article>
 <p id="desktop-message" role="status" aria-live="polite"></p></main>'''
     css = '''<style>.me-distribution{max-width:1200px;margin:auto;padding:40px 24px;color:#e9f1eb}.me-distribution h1{font-size:clamp(28px,4vw,46px);line-height:1.15}.me-intro{font-size:18px;max-width:850px}.me-eyebrow,.me-muted{color:#b6cbbb}.me-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:28px 0}.me-three{grid-template-columns:repeat(3,minmax(0,1fr))}.me-card{padding:24px;border:1px solid #416047;border-radius:12px;background:#17251c;min-width:0}.me-featured{border-color:#9bc56d}.me-card h2{font-size:23px;margin-top:0}.me-card p{line-height:1.65}.me-distribution a{color:#b6e893}.me-dl,.me-distribution button{display:block;padding:12px 16px;margin:12px 0;border:1px solid #72915c;border-radius:7px;background:#284625;color:#eff8e9!important;font-weight:600;text-decoration:none}.me-distribution button{cursor:pointer;width:100%;text-align:left}.me-distribution button:disabled{opacity:.55;cursor:wait}.me-distribution :focus-visible{outline:3px solid #c4f381;outline-offset:3px}.me-checksum code{display:block;overflow-wrap:anywhere;color:#d7e5d3}.me-section{margin-top:40px}#desktop-message{padding:12px;background:#203224;border-radius:6px}#desktop-message:empty{display:none}@media(max-width:800px){.me-grid,.me-three{grid-template-columns:1fr}.me-distribution{padding:24px 16px}}</style>'''
     scripts = '''<script src="/mosaicearth-desktop-distribution.js?v=020" defer></script>'''

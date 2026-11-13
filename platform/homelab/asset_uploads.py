@@ -15,13 +15,43 @@ MAX_BYTES = 1024**3
 MAX_FILES = 200
 LIFETIME_SECONDS = 24 * 3600
 GAUSSIAN_MODELS = {".ply", ".splat", ".spz", ".ksplat"}
-GAUSSIAN_MEDIA = {".mp4", ".mov", ".webm", ".zip", ".jpg", ".jpeg", ".png"}
-SIDECARS = {".jgw", ".tfw", ".pgw", ".wld", ".prj", ".mtl", ".dbf", ".shx", ".cpg", ".qpj", ".sbn", ".sbx", ".xml"}
+GAUSSIAN_MEDIA = {".mp4", ".mov", ".webm", ".m4v", ".zip", ".jpg", ".jpeg", ".png", ".webp"}
+GAUSSIAN_TELEMETRY = {".srt", ".gpx", ".csv"}
+SIDECARS = {".jgw", ".tfw", ".pgw", ".wld", ".prj", ".mtl", ".dbf", ".shx", ".cpg", ".qpj", ".sbn", ".sbx", ".xml", ".srt"}
 IMPORT_FILES = GAUSSIAN_MODELS | SIDECARS | {
     ".tif", ".tiff", ".laz", ".las", ".e57", ".obj", ".fbx", ".glb", ".gltf",
-    ".dae", ".zip", ".geojson", ".json", ".kml", ".kmz", ".gpkg", ".dxf",
-    ".shp", ".gpx", ".csv", ".jpg", ".jpeg", ".png",
+    ".dae", ".usdz", ".usda", ".usdc", ".zip", ".geojson", ".json", ".kml", ".kmz", ".gpkg", ".dxf",
+    ".shp", ".gpx", ".csv", ".jpg", ".jpeg", ".png", ".webp",
+    ".mp4", ".mov", ".webm", ".m4v",
 }
+
+
+def is_pretrained_gaussian_archive(zip_path: Path) -> bool:
+    """Returns True if a .zip archive already contains a pre-trained 3D Gaussian Splatting model
+    (.splat, .spz, .ksplat, or a 3DGS .ply with f_dc_0 + opacity + scale_0)."""
+    import zipfile
+
+    if not zip_path or not zip_path.is_file() or not zipfile.is_zipfile(zip_path):
+        return False
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            for item in zf.infolist():
+                if item.is_dir():
+                    continue
+                ext = Path(item.filename).suffix.lower()
+                if ext in {".splat", ".spz", ".ksplat"}:
+                    return True
+                if ext == ".ply":
+                    with zf.open(item, "r") as fp:
+                        hdr = fp.read(65536)
+                    if hdr.startswith((b"ply\n", b"ply\r\n")):
+                        hdr_part = hdr.split(b"end_header", 1)[0]
+                        props = {ln.split()[-1] for ln in hdr_part.splitlines() if ln.startswith(b"property ")}
+                        if {b"opacity", b"scale_0", b"f_dc_0"} <= props:
+                            return True
+    except Exception:
+        return False
+    return False
 
 
 class UploadError(Exception):
@@ -41,7 +71,7 @@ def normalize_files(files, origin):
         if (not isinstance(name, str) or not 1 <= len(name) <= 240 or name in {".", ".."}
                 or any(c in "/\\\0" or ord(c) < 32 for c in name)):
             raise UploadError("Invalid file name.")
-        allowed = GAUSSIAN_MODELS | GAUSSIAN_MEDIA if origin == "gaussian" else IMPORT_FILES
+        allowed = (GAUSSIAN_MODELS | GAUSSIAN_MEDIA | GAUSSIAN_TELEMETRY) if origin == "gaussian" else IMPORT_FILES
         if Path(name).suffix.lower() not in allowed:
             raise UploadError("File format is not supported for this task.", 415)
         if type(size) is not int or size <= 0 or size > MAX_BYTES:
@@ -52,11 +82,19 @@ def normalize_files(files, origin):
     if sum(item["size"] for item in normalized) > MAX_BYTES:
         raise UploadError("The upload exceeds 1 GiB.", 413)
     if origin == "gaussian":
-        extensions = {Path(item["name"]).suffix.lower() for item in normalized}
-        if extensions & ({".mp4", ".mov", ".webm", ".zip"} | GAUSSIAN_MODELS):
-            if len(normalized) != 1:
+        non_telem = [it for it in normalized if Path(it["name"]).suffix.lower() not in GAUSSIAN_TELEMETRY]
+        telem = [it for it in normalized if Path(it["name"]).suffix.lower() in GAUSSIAN_TELEMETRY]
+        if not non_telem:
+            raise UploadError("Select photos, a video, an archive, or a 3D Gaussian model.")
+        if len(telem) > 1:
+            raise UploadError("Attach at most one GPS telemetry file (.srt, .gpx, or .csv).")
+        extensions = {Path(item["name"]).suffix.lower() for item in non_telem}
+        if extensions & ({".mp4", ".mov", ".webm", ".m4v", ".zip"} | GAUSSIAN_MODELS):
+            if len(non_telem) != 1:
                 raise UploadError("Select one video, archive, or Gaussian model at a time.")
-        elif len(normalized) < 4:
+            if telem and not (extensions & {".mp4", ".mov", ".webm", ".m4v"}):
+                raise UploadError("Telemetry files (.srt/.gpx/.csv) can only accompany video or photo captures.")
+        elif len(non_telem) < 4:
             raise UploadError("Select at least four overlapping photos.")
     return normalized
 
@@ -141,9 +179,16 @@ class AssetUpload:
         for index, item in enumerate(data["files"]):
             path = self.file_path(index, item["name"])
             offsets.append(path.stat().st_size if path.is_file() else 0)
-        return {"upload_id": self.upload_id, "status": data["status"], "files": data["files"],
-                "offsets": offsets, "job_id": data.get("job_id"), "asset_id": data.get("asset_id"),
-                "checkout_url": data.get("checkout_url") if data["status"] == "AWAITING_PAYMENT" else None}
+        res_st = {"upload_id": self.upload_id, "status": data["status"], "files": data["files"],
+                  "offsets": offsets, "job_id": data.get("job_id"), "asset_id": data.get("asset_id"),
+                  "asset_ids": data.get("asset_ids") or ([data["asset_id"]] if data.get("asset_id") else []),
+                  "job_ids": data.get("job_ids") or ([data["job_id"]] if data.get("job_id") else []),
+                  "checkout_url": data.get("checkout_url") if data["status"] == "AWAITING_PAYMENT" else None}
+        if data.get("migrated_platform"):
+            res_st["migrated_platform"] = data["migrated_platform"]
+        if data.get("saved_reports_pdf"):
+            res_st["saved_reports_pdf"] = data["saved_reports_pdf"]
+        return res_st
 
     def append(self, index, offset, contents, digest):
         if not contents or len(contents) > CHUNK_BYTES or hashlib.sha256(contents).hexdigest() != digest:
@@ -205,9 +250,20 @@ class AssetUpload:
             status = self.public_status(data)
             if data["status"] not in {"UPLOADING", "AWAITING_PAYMENT"} or status["offsets"] != [f["size"] for f in data["files"]]:
                 raise UploadError("All files must finish uploading before processing.", 409)
-            files = [(f["name"], self.relpath(i, f["name"])) for i, f in enumerate(data["files"])]
-            if data["origin"] == "imported":
-                files.sort(key=lambda item: Path(item[0]).suffix.lower() in SIDECARS)
+            indexed_files = [(i, f["name"], self.relpath(i, f["name"])) for i, f in enumerate(data["files"])]
+            if data["origin"] in {"imported", "gaussian"}:
+                has_video_or_photo = any(
+                    Path(f[1]).suffix.lower() in {".mp4", ".mov", ".webm", ".m4v", ".jpg", ".jpeg", ".png", ".webp"}
+                    for f in indexed_files
+                )
+                indexed_files.sort(
+                    key=lambda item: (
+                        Path(item[1]).suffix.lower() in SIDECARS,
+                        (Path(item[1]).suffix.lower() in GAUSSIAN_TELEMETRY if has_video_or_photo else False),
+                    )
+                )
+            files = [(name, relp) for _, name, relp in indexed_files]
+            first_orig_idx = indexed_files[0][0]
             details = data["details"]
             with self.store.lock, cross_process_file_lock(queue.lock_file), self.store.stripe_transaction():
                 self.require_owner()
@@ -221,7 +277,17 @@ class AssetUpload:
                 else:
                     self.check_storage_quota(sum(status["offsets"]))
                     first, rel = files[0]
-                    training = data["origin"] == "gaussian" and Path(first).suffix.lower() not in GAUSSIAN_MODELS
+                    first_ext = Path(first).suffix.lower()
+                    pretrained_zip = (
+                        data["origin"] == "gaussian"
+                        and first_ext == ".zip"
+                        and is_pretrained_gaussian_archive(self.file_path(first_orig_idx, first))
+                    )
+                    training = (
+                        data["origin"] == "gaussian"
+                        and first_ext not in GAUSSIAN_MODELS
+                        and not pretrained_zip
+                    )
                     if training:
                         if project.get("PENDING_GAUSSIAN_UPLOAD_ID") not in (None, "", self.upload_id):
                             raise UploadError("This task already has an upload awaiting payment. Resume it before starting another reconstruction.", 409)
@@ -240,8 +306,9 @@ class AssetUpload:
                             raise UploadError("Cloud Gaussian training is unavailable on this server.", 503)
                         if data["status"] == "AWAITING_PAYMENT" and not paid_for_upload:
                             return self.public_status(data)
+                        photo_or_media_cnt = sum(1 for fn, _ in files if Path(fn).suffix.lower() not in GAUSSIAN_TELEMETRY)
                         auth = {"ok": True} if (local_training or paid_for_upload) else self.store.authorize_and_charge_task_upfront(
-                            self.user_id, self.project_id, num_images=len(files), task_kind="gaussian",
+                            self.user_id, self.project_id, num_images=max(1, photo_or_media_cnt), task_kind="gaussian",
                             total_megabytes=sum(status["offsets"]) / (1024**2), target_mode="cloud",
                         )
                         if not auth.get("ok"):
@@ -253,21 +320,94 @@ class AssetUpload:
                                         checkout_attempt=str(uuid.uuid4()))
                             self.write(data)
                             return self.public_status(data)
-                    aid = self.store.create_external_asset_import(
-                        project_id=self.project_id, user_id=self.user_id,
-                        display_name=details.get("title") or first, source_filename=first,
-                        stored_rel_path=rel, size_bytes=sum(status["offsets"]),
-                        lat=details.get("lat"), lon=details.get("lon"),
-                        description=details.get("description"), capture_date=details.get("capture_date"),
-                        capture_method=details.get("capture_method"), source_origin=data["origin"],
-                        run_sync=False, extra_media_rel_paths=files,
-                        staged_upload_id=self.upload_id,
-                        quality_preset=details.get("quality_preset", "STANDARD"),
-                        upload_attempt=data.get("attempt", ""),
+                    aid_list = []
+                    jid_list = []
+                    photo_exts = {".jpg", ".jpeg", ".png", ".webp"}
+                    is_multi_photo_batch = (
+                        data["origin"] == "imported"
+                        and len(files) >= 2
+                        and all(Path(fname).suffix.lower() in photo_exts for fname, _ in files)
                     )
-                    jid = next(j["ID"] for j in queue._jobs_table() if j["ASSET_ID"] == aid)
+                    migrated_zip_info = None
+                    if data["origin"] == "imported" and len(files) == 1 and Path(files[0][0]).suffix.lower() == ".zip":
+                        try:
+                            from .zip_migrator import ingest_migration_zip_into_project, inspect_migration_zip
+                            local_zip = self.file_path(0, files[0][0])
+                            z_plan = inspect_migration_zip(local_zip)
+                            if z_plan.get("deliverables_count", 0) >= 1 and (
+                                bool(details.get("migrate_bundle")) or bool(z_plan.get("is_multi_deliverable_bundle"))
+                            ):
+                                migrated_zip_info = ingest_migration_zip_into_project(
+                                    self.store,
+                                    self.blobs,
+                                    zip_path=local_zip,
+                                    project_id=self.project_id,
+                                    user_id=self.user_id,
+                                    base_title=str(details.get("title") or ""),
+                                    capture_date=str(details.get("capture_date") or ""),
+                                    lat=details.get("lat"),
+                                    lon=details.get("lon"),
+                                    run_sync=False,
+                                    staged_upload_id=self.upload_id,
+                                    upload_attempt=data.get("attempt", ""),
+                                )
+                        except Exception:
+                            migrated_zip_info = None
+
+                    if migrated_zip_info and migrated_zip_info.get("asset_ids"):
+                        aid_list = list(migrated_zip_info["asset_ids"])
+                        jid_list = [
+                            next(j["ID"] for j in queue._jobs_table() if j["ASSET_ID"] == item_aid)
+                            for item_aid in aid_list
+                        ]
+                        aid, jid = aid_list[0], jid_list[0]
+                        data["migrated_platform"] = migrated_zip_info.get("platform")
+                        data["saved_reports_pdf"] = migrated_zip_info.get("saved_reports_pdf") or []
+                    elif is_multi_photo_batch:
+                        base_title = (details.get("title") or "").strip()
+                        for orig_i, fname, frel in indexed_files:
+                            fsize = int(status["offsets"][orig_i])
+                            item_title = f"{base_title} ({len(aid_list) + 1}/{len(files)})" if base_title else fname
+                            item_aid = self.store.create_external_asset_import(
+                                project_id=self.project_id, user_id=self.user_id,
+                                display_name=item_title, source_filename=fname,
+                                stored_rel_path=frel, size_bytes=fsize,
+                                lat=details.get("lat"), lon=details.get("lon"),
+                                description=details.get("description"), capture_date=details.get("capture_date"),
+                                capture_method=details.get("capture_method"), source_origin=data["origin"],
+                                run_sync=False, extra_media_rel_paths=[(fname, frel)],
+                                staged_upload_id=self.upload_id,
+                                quality_preset="HIGH_QUALITY",
+                                upload_attempt=data.get("attempt", ""),
+                            )
+                            item_jid = next(j["ID"] for j in queue._jobs_table() if j["ASSET_ID"] == item_aid)
+                            aid_list.append(item_aid)
+                            jid_list.append(item_jid)
+                        aid, jid = aid_list[0], jid_list[0]
+                    else:
+                        aid = self.store.create_external_asset_import(
+                            project_id=self.project_id, user_id=self.user_id,
+                            display_name=details.get("title") or first, source_filename=first,
+                            stored_rel_path=rel, size_bytes=sum(status["offsets"]),
+                            lat=details.get("lat"), lon=details.get("lon"),
+                            description=details.get("description"), capture_date=details.get("capture_date"),
+                            capture_method=details.get("capture_method"), source_origin=data["origin"],
+                            run_sync=False, extra_media_rel_paths=files,
+                            staged_upload_id=self.upload_id,
+                            quality_preset="HIGH_QUALITY",
+                            upload_attempt=data.get("attempt", ""),
+                        )
+                        jid = next(j["ID"] for j in queue._jobs_table() if j["ASSET_ID"] == aid)
+                        aid_list = [aid]
+                        jid_list = [jid]
             queue._wake_event.set()
-            data.update(status="QUEUED", asset_id=aid, job_id=jid)
+            data.update(
+                status="QUEUED",
+                asset_id=aid,
+                job_id=jid,
+                asset_ids=aid_list if previous is None else ([aid]),
+                job_ids=jid_list if previous is None else ([jid]),
+            )
             self.write(data)
             return self.public_status(data)
 
@@ -288,7 +428,7 @@ class AssetUpload:
                     raise UploadError("The previous payment is being reconciled. Your originals are preserved; retry once the refund is confirmed.", 409)
                 if self.public_status(data)["offsets"] != [f["size"] for f in data["files"]]:
                     raise UploadError("The saved originals are unavailable. Contact support before starting another upload.", 409)
-                for field in ("asset_id", "job_id", "checkout_url", "checkout_session", "checkout_quote", "checkout_attempt"):
+                for field in ("asset_id", "job_id", "asset_ids", "job_ids", "checkout_url", "checkout_session", "checkout_quote", "checkout_attempt"):
                     data.pop(field, None)
                 data.update(status="UPLOADING", attempt=str(uuid.uuid4()), expires_at=time.time()+LIFETIME_SECONDS)
                 self.write(data)
@@ -303,7 +443,8 @@ def validate_source(path, name, gaussian=False):
     ext = Path(name).suffix.lower()
     with path.open("rb") as file:
         header = file.read(65536) if ext == ".ply" else file.read(128)
-    if ext in {".mp4", ".mov", ".webm"}:
+    if ext in {".mp4", ".mov", ".webm", ".m4v"}:
+        max_dur = 900 if gaussian else 7200
         result = subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
              "stream=codec_name,width,height,avg_frame_rate:format=duration", "-of", "json", str(path)],
@@ -313,10 +454,10 @@ def validate_source(path, name, gaussian=False):
             video = json.loads(result.stdout)
             stream = video["streams"][0]
             if (result.returncode or not stream["codec_name"] or not stream["width"] or not stream["height"]
-                    or not 0 < float(video["format"]["duration"]) <= 900):
+                    or not 0 < float(video["format"]["duration"]) <= max_dur):
                 raise ValueError
         except (ValueError, KeyError, IndexError):
-            raise ValueError("The video is invalid or longer than 15 minutes.") from None
+            raise ValueError("The video is invalid or longer than 15 minutes." if gaussian else "The video file is invalid or exceeds the 2-hour limit.") from None
     elif ext in {".zip", ".kmz"}:
         if not zipfile.is_zipfile(path):
             raise ValueError("The archive is invalid.")
@@ -331,15 +472,25 @@ def validate_source(path, name, gaussian=False):
                             or ((item.external_attr >> 16) & 0o170000) == 0o120000
                             or (item.file_size > 10 * 1024**2 and item.file_size > 200 * max(item.compress_size, 1))):
                         raise ValueError("The Gaussian archive contains an unsafe entry.")
-    elif ext in {".jpg", ".jpeg", ".png"}:
+    elif ext in {".jpg", ".jpeg", ".png", ".webp"}:
         from PIL import Image
         with Image.open(path) as picture:
             # DJI JPEGs may include the CIPA multi-picture (MPF) metadata and
             # are identified as MPO by Pillow. Their primary image is JPEG.
-            formats = {"PNG"} if ext == ".png" else {"JPEG", "MPO"}
-            if picture.format not in formats or (ext != ".png" and not header.startswith(b"\xff\xd8\xff")):
+            formats = {"PNG"} if ext == ".png" else ({"WEBP"} if ext == ".webp" else {"JPEG", "MPO"})
+            valid_magic = (
+                True
+                if ext == ".png"
+                else (header.startswith(b"RIFF") and header[8:12] == b"WEBP")
+                if ext == ".webp"
+                else header.startswith(b"\xff\xd8\xff")
+            )
+            if picture.format not in formats or not valid_magic:
                 raise ValueError("The image format does not match the file name.")
             picture.verify()
+    elif ext in {".usdz", ".usda", ".usdc"}:
+        from .usdz_converter import validate_usd_archive_or_stage
+        validate_usd_archive_or_stage(path, name)
     elif ext == ".ply":
         if not header.startswith((b"ply\n", b"ply\r\n")):
             raise ValueError("The PLY file has an invalid header.")
@@ -350,8 +501,22 @@ def validate_source(path, name, gaussian=False):
 
 
 def gaussian_training_input(asset):
-    source_ext = Path(str(asset.get("STORAGE_RELATIVE_PATH") or "")).suffix.lower()
-    return asset.get("SOURCE_ORIGIN") == "gaussian" and source_ext in GAUSSIAN_MEDIA
+    rel = str(asset.get("STORAGE_RELATIVE_PATH") or "")
+    source_ext = Path(rel).suffix.lower()
+    if asset.get("SOURCE_ORIGIN") != "gaussian" or source_ext not in GAUSSIAN_MEDIA:
+        return False
+    if source_ext == ".zip":
+        summary = str(asset.get("PIPELINE_SUMMARY") or "")
+        if "Imported 3D Gaussian Splat archive" in summary:
+            return False
+        try:
+            from .blob_store import get_blob_store
+            zp = get_blob_store().resolve_blob_path("assets", rel, allow_remote_fallback=False)
+            if zp and is_pretrained_gaussian_archive(zp):
+                return False
+        except Exception:
+            pass
+    return True
 
 
 def asset_output_available(asset):

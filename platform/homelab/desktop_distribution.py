@@ -17,7 +17,41 @@ def release_manifest():
 
 def connector_download(request, target, user):
     root, release = release_manifest()
-    aliases = {"webodm-plugin": "webodm", "webui-plugin": "webui", "qgis-plugin": "qgis"}
+    aliases = {
+        "webodm-plugin": "webodm",
+        "webui-plugin": "webui",
+        "qgis-plugin": "qgis",
+        "capture-android": "android-capture",
+        "mosaicearth-capture-apk": "android-capture",
+        "blender-addon": "blender",
+        "blender-plugin": "blender",
+        "metashape-plugin": "metashape",
+        "agisoft-metashape": "metashape",
+        "cloudcompare-plugin": "cloudcompare",
+        "cloudcompare-bridge": "cloudcompare",
+        "realitycapture-connector": "realitycapture",
+        "capturingreality": "realitycapture",
+        "apple-shortcut": "ios-bridge",
+        "ios-shortcut": "ios-bridge",
+        "mosaicearth-bridge-ios": "ios-bridge",
+        "ios": "ios-bridge",
+        "dji-terra": "djiterra",
+        "dji_terra": "djiterra",
+        "djiterra-connector": "djiterra",
+        "pix4dmapper": "pix4d",
+        "pix4dmatic": "pix4d",
+        "pix4d-connector": "pix4d",
+        "arcgis-pro": "arcgispro",
+        "arcgis": "arcgispro",
+        "arcgis-toolbox": "arcgispro",
+        "jawset-postshot": "postshot",
+        "lichtfeld": "postshot",
+        "lichtfeld-studio": "postshot",
+        "postshot-3dgs": "postshot",
+        "gcp": "gcp-studio",
+        "gcp_studio": "gcp-studio",
+        "mosaicearth-gcp-studio": "gcp-studio",
+    }
     target = aliases.get(target, target)
     if target in {"desktop-installer-win", "desktop-installer-linux"}:
         if not user:

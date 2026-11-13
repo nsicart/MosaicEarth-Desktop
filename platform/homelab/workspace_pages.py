@@ -713,7 +713,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             border: 1px solid #344239;
             border-radius: 9px;
             margin-bottom: 16px;
-            overflow: hidden;
+            overflow: visible;
             transition: border-color 0.18s ease, box-shadow 0.18s ease;
         }
         .myearth-project-node:hover {
@@ -722,6 +722,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
         .myearth-project-header {
             padding: 15px 20px;
             background: linear-gradient(180deg, #18211b 0%, #141b16 100%);
+            border-radius: 8px 8px 0 0;
             display: flex;
             flex-wrap: wrap;
             align-items: center;
@@ -821,11 +822,12 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             background: #101612;
             border: 1px solid #2e3c33;
             border-radius: 8px;
-            overflow: hidden;
+            overflow: visible;
         }
         .myearth-survey-header {
             padding: 12px 16px;
             background: #141c17;
+            border-radius: 7px 7px 0 0;
             display: flex;
             flex-wrap: wrap;
             align-items: center;
@@ -839,11 +841,12 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             background: #0d130f;
             border: 1px solid #25332a;
             border-radius: 7px;
-            overflow: hidden;
+            overflow: visible;
         }
         .myearth-task-header {
             padding: 9px 14px;
             background: #111914;
+            border-radius: 6px 6px 0 0;
             display: flex;
             flex-wrap: wrap;
             align-items: center;
@@ -1037,7 +1040,8 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
         a_desc = html.escape(str(a.get("description") or ""))
         a_cat_id = int(a.get("category_id") or 0)
         a_cat_name = html.escape(str((DEFAULT_CATEGORIES.get(a_cat_id) or {}).get("name") or ""))
-        a_tags = html.escape(str(a.get("tags") or ""))
+        _raw_a_tags = str(a.get("tags") or "").strip()
+        a_tags = "" if _raw_a_tags in ("0", "0.0", "None", "null", "undefined") else html.escape(_raw_a_tags)
         agsd = html.escape(str(a.get("gsd") or ""))
         agps = html.escape(str(a.get("gps_accuracy") or ""))
         alat = float(a.get("lat") or 41.9702)
@@ -1182,13 +1186,13 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                     </div>
                     <div class="col-md-2 col-6">
                         <label>Visibility &amp; Storage Quota</label>
-                        <select id="meVis_{aid_str}" class="form-control">
+                        <select id="meVis_{aid_str}" class="form-control" onchange="var pw=document.getElementById('mePriceWrap_{aid_str}');if(pw)pw.style.display=(this.value==='marketplace'?'block':'none');">
                             <option value="private" {'selected' if vis_mode == 'private' else ''}>Private (Counts Toward Storage Quota)</option>
                             <option value="public_free" {'selected' if vis_mode == 'public_free' else ''}>Public Free (0 € · 0 GiB Quota)</option>
                             <option value="marketplace" {'selected' if vis_mode == 'marketplace' else ''}>Marketplace € (0 GiB Quota)</option>
                         </select>
                     </div>
-                    <div class="col-md-1 col-6">
+                    <div class="col-md-1 col-6" id="mePriceWrap_{aid_str}" style="display:{'block' if vis_mode == 'marketplace' else 'none'};">
                         <label>Price (€)</label>
                         <input type="number" min="0" step="1" id="mePrice_{aid_str}" class="form-control" value="{price_eur if price_eur > 0 else 25}" />
                     </div>
@@ -1245,7 +1249,8 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                 t_method = html.escape(str(tf.get("methodology") or ""))
                 t_cat_id = int(tf.get("category_id") or 0)
                 t_cat_name = html.escape(str((DEFAULT_CATEGORIES.get(t_cat_id) or {}).get("name") or ""))
-                t_tags = html.escape(str(tf.get("tags") or ""))
+                _raw_t_tags = str(tf.get("tags") or "").strip()
+                t_tags = "" if _raw_t_tags in ("0", "0.0", "None", "null", "undefined") else html.escape(_raw_t_tags)
                 t_area = html.escape(str(tf.get("area") or ""))
                 t_gsd = html.escape(str(tf.get("gsd") or ""))
                 t_gps = html.escape(str(tf.get("gps_accuracy") or ""))
@@ -1695,7 +1700,54 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
             </div>
         </div>"""
 
-    storage_bar_html = f"""                            <!-- Private Storage Quota Bar -->
+    is_admin_user = (not is_desktop_local) and bool(int(user.get("ROL_ID") or 0) == 1 or user.get("IS_ADMIN") or user.get("IsAdmin"))
+    admin_shortcut_bar_html = ""
+    if is_admin_user:
+        admin_shortcut_bar_html = f"""
+                            <div style="background:linear-gradient(135deg,rgba(153,204,0,0.12) 0%,rgba(16,185,129,0.08) 100%);border:1px solid rgba(153,204,0,0.42);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;">
+                                <div style="font-size:12.5px;color:#e4efe7;">
+                                    <strong style="color:#99CC00;"><i class="fas fa-shield-alt me-1"></i>Platform Administrator ({html.escape(str(user.get("EMAIL") or ""))})</strong> &middot;
+                                    <span><strong>MyEarth</strong> displays only projects owned personally by this account. To inspect and manage all platform users, projects, tasks, assets, finances and integrations, open the <strong>Admin Control Center</strong>.</span>
+                                </div>
+                                <a href="/Admin/ControlCenter.aspx" class="myearth-action-btn myearth-action-btn--primary" style="padding:6px 14px;font-size:12px;text-decoration:none;white-space:nowrap;">
+                                    <i class="fas fa-sliders-h me-1"></i>OPEN ADMIN CONTROL CENTER
+                                </a>
+                            </div>"""
+
+    quick_dest_options: List[str] = [
+        f'<option value="auto" selected>&#10024; Auto-create new {html.escape(i18n["project"])} &amp; {html.escape(i18n["survey"])} automatically (rename anytime)</option>'
+    ]
+    for _p in projects_tree:
+        _pid = int(_p["id"])
+        _pname = html.escape(str(_p["name"]))
+        for _s in (_p.get("surveys") or []):
+            _sid = int(_s["id"])
+            _sname = html.escape(str(_s["name"]))
+            quick_dest_options.append(f'<option value="survey:{_sid}">{_pname} &rsaquo; {_sname}</option>')
+        quick_dest_options.append(f'<option value="project:{_pid}">{_pname} &rsaquo; + Auto-create new {html.escape(i18n["survey"])}</option>')
+    quick_dest_options_html = "".join(quick_dest_options)
+
+    body_content = f"""
+    <section id="projects" class="workspace-section">
+        <div class="container">
+            <div class="row" style="margin-bottom: 15px;">
+                <div class="col-12">
+                    <div class="box-4d">
+                        <div class="titulo-box">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div>MyEarth &middot; {html.escape(i18n['projects'])}, {html.escape(i18n['surveys'])}, Tasks &amp; {html.escape(i18n['assets'])}</div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    {('<a href="/Admin/ControlCenter.aspx" class="myearth-action-btn myearth-action-btn--accent" style="padding:7px 14px;font-size:12px;text-decoration:none;"><i class="fas fa-shield-alt me-1"></i>ADMIN PANEL</a>' if is_admin_user else '')}
+                                    <button type="button" id="btnQuickNewTask" class="myearth-action-btn myearth-action-btn--primary" style="padding:7px 16px;font-size:12px;background:#99CC00;color:#0b110d;font-weight:800;border-color:#99CC00;" onclick="openQuickNewTaskModal()" title="Jump straight to the Task Selector — Project and Survey are created or selected automatically"><i class="fas fa-bolt me-1"></i>+ NEW TASK</button>
+                                    <button type="button" class="myearth-action-btn" style="padding:7px 14px;font-size:12px;border-color:rgba(153,204,0,0.45);color:#dce6dc;" onclick="openNewProjectModal()">+ NEW {html.escape(i18n['project'].upper())}</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="content-box" style="padding: 20px 24px;">
+                            {admin_shortcut_bar_html}
+                            {desktop_hybrid_bar_html}
+                            <!-- Private Storage Quota Bar -->
                             <div class="myearth-quota-bar">
                                 <div>
                                     <div style="font-size:10.5px;font-family:OpenSansBold,Arial,sans-serif;color:#99CC00;text-transform:uppercase;letter-spacing:0.08em;">
@@ -1783,7 +1835,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
 
                             <!-- 1) Expandable Tree View (Default) -->
                             <div id="myEarthTreeView">
-                                {''.join(tree_nodes_html) if tree_nodes_html else '<p style="color:#8fa099;padding:20px 0;">No projects created yet. Click <strong>+ NEW PROJECT</strong> to create your first top-level project container.</p>'}
+                                {''.join(tree_nodes_html) if tree_nodes_html else '<div style="padding:24px 18px;border:1px dashed rgba(153,204,0,0.38);border-radius:10px;background:rgba(16,23,19,0.65);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;"><div style="color:#acbbb0;font-size:13.5px;">No projects yet. Jump straight into the <strong>Task Selector</strong> (Project &amp; Survey are created automatically) or create an empty Project container first.</div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="myearth-action-btn myearth-action-btn--primary" style="background:#99CC00;color:#0b110d;font-weight:800;border-color:#99CC00;padding:8px 16px;" onclick="openQuickNewTaskModal()"><i class="fas fa-bolt me-1"></i>+ NEW TASK (QUICK START)</button><button type="button" class="myearth-action-btn" onclick="openNewProjectModal()">+ NEW PROJECT</button></div></div>'}
                                 {desktop_cloud_projects_section_html}
                             </div>
 
@@ -1906,6 +1958,29 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                 <div class="modal-body">
                     <input type="hidden" id="hdnParentProjectId" value="0" />
                     <div id="parentProjectBanner" style="margin-bottom:14px;padding:9px 12px;border-radius:6px;background:#101713;border:1px solid #40634f;color:#b5d979;font-size:12px;font-family:OpenSansSemiBold,Arial,sans-serif;"></div>
+                    <div id="quickTaskContainerBox" style="display:none;margin-bottom:14px;padding:11px 14px;border-radius:8px;background:#101713;border:1px solid rgba(153,204,0,0.42);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+                            <label for="selQuickTargetDestination" style="margin:0;font-size:12px;color:#b5d979;font-family:OpenSansSemiBold,Arial,sans-serif;">
+                                <i class="fas fa-folder-tree me-1"></i>Destination {html.escape(i18n['project'])} / {html.escape(i18n['survey'])} (automatic by default)
+                            </label>
+                            <a href="#" id="lnkToggleCustomContainers" onclick="event.preventDefault(); toggleQuickCustomContainerNames();" style="font-size:11.5px;color:#99CC00;text-decoration:none;">
+                                Optional: custom {html.escape(i18n['project'])}/{html.escape(i18n['survey'])} names &#9662;
+                            </a>
+                        </div>
+                        <select id="selQuickTargetDestination" class="form-control" onchange="onQuickDestinationChange()">
+                            {quick_dest_options_html}
+                        </select>
+                        <div id="quickCustomContainerFields" class="row g-2 mt-2" style="display:none;">
+                            <div class="col-md-6 col-12" id="wrapQuickProjectName">
+                                <label for="txtQuickProjectName" style="font-size:11.5px;color:#acbbb0;">{html.escape(i18n['project'])} name (optional)</label>
+                                <input type="text" class="form-control form-control-sm" id="txtQuickProjectName" placeholder="Leave blank to auto-name with today's date" />
+                            </div>
+                            <div class="col-md-6 col-12" id="wrapQuickSurveyName">
+                                <label for="txtQuickSurveyName" style="font-size:11.5px;color:#acbbb0;">{html.escape(i18n['survey'])} name (optional)</label>
+                                <input type="text" class="form-control form-control-sm" id="txtQuickSurveyName" placeholder="Leave blank to auto-name (e.g. Survey 1)" />
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="form-group mb-3">
                         <label style="font-family:OpenSansSemiBold,Arial,sans-serif;color:#dce6dc;">1. What would you like to do?</label>
@@ -1943,7 +2018,7 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                     <div class="row g-3 mt-1">
                         <div class="col-md-6 col-12">
                             <div class="form-group mb-0">
-                                <label for="inputName">Task name *</label>
+                                <label for="inputName" id="lblTaskNameField">Task name *</label>
                                 <input type="text" class="form-control" id="inputName" placeholder="e.g. Vol Fotogramètric Octubre / Importació Punts GPS" />
                             </div>
                         </div>
@@ -2242,12 +2317,83 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                 }
             });
         }
+        window.__meQuickTaskMode = false;
+        function toggleQuickCustomContainerNames() {
+            var box = document.getElementById('quickCustomContainerFields');
+            if (!box) return;
+            box.style.display = (box.style.display === 'none' || !box.style.display) ? 'flex' : 'none';
+            onQuickDestinationChange();
+        }
+        function onQuickDestinationChange() {
+            var sel = document.getElementById('selQuickTargetDestination');
+            if (!sel) return;
+            var val = String(sel.value || 'auto');
+            var wrapProj = document.getElementById('wrapQuickProjectName');
+            var wrapSrv = document.getElementById('wrapQuickSurveyName');
+            var toggleLnk = document.getElementById('lnkToggleCustomContainers');
+            if (val.indexOf('survey:') === 0) {
+                if (toggleLnk) toggleLnk.style.display = 'none';
+                var box = document.getElementById('quickCustomContainerFields');
+                if (box) box.style.display = 'none';
+            } else {
+                if (toggleLnk) toggleLnk.style.display = 'inline';
+                if (wrapProj) wrapProj.style.display = (val === 'auto') ? 'block' : 'none';
+                if (wrapSrv) wrapSrv.style.display = 'block';
+            }
+        }
+        function _defaultQuickTaskTitle(kindVal, dateStr) {
+            var d = dateStr || new Date().toISOString().slice(0, 10);
+            if (kindVal === 'processing') return 'Photogrammetry · ' + d;
+            if (kindVal === 'gaussian') return 'Gaussian Splat · ' + d;
+            if (kindVal === 'media') return '360° & Geo-Media · ' + d;
+            return 'GIS & 3D Import · ' + d;
+        }
+        function openQuickNewTaskModal() {
+            window.__meQuickTaskMode = true;
+            document.getElementById('hdnParentProjectId').value = '0';
+            var titleEl = document.getElementById('staticBackdropLabel');
+            if (titleEl) titleEl.textContent = 'New Task · Choose What to Upload or Create';
+            var b = document.getElementById('parentProjectBanner');
+            if (b) b.style.display = 'none';
+            var qBox = document.getElementById('quickTaskContainerBox');
+            if (qBox) qBox.style.display = 'block';
+            var sel = document.getElementById('selQuickTargetDestination');
+            if (sel) sel.value = 'auto';
+            var customBox = document.getElementById('quickCustomContainerFields');
+            if (customBox) customBox.style.display = 'none';
+            var pInp = document.getElementById('txtQuickProjectName');
+            if (pInp) pInp.value = '';
+            var sInp = document.getElementById('txtQuickSurveyName');
+            if (sInp) sInp.value = '';
+            onQuickDestinationChange();
+            var lblName = document.getElementById('lblTaskNameField');
+            if (lblName) lblName.textContent = 'Task name (optional — auto-named if left blank)';
+            var nameInp = document.getElementById('inputName');
+            if (nameInp) {
+                nameInp.value = '';
+                nameInp.placeholder = 'Optional — leave blank to auto-name by task type & date';
+            }
+            var todayStr = new Date().toISOString().slice(0, 10);
+            document.getElementById('inputTaskCreationDate').value = todayStr;
+            document.getElementById('inputTaskMethodology').value = '';
+            document.getElementById('inputTaskDescription').value = '';
+            $('#staticBackdrop').modal('show');
+        }
         function openAddAssetTaskModal(surveyId, surveyName) {
+            window.__meQuickTaskMode = false;
+            var titleEl = document.getElementById('staticBackdropLabel');
+            if (titleEl) titleEl.textContent = 'Add data to Survey';
+            var qBox = document.getElementById('quickTaskContainerBox');
+            if (qBox) qBox.style.display = 'none';
+            var lblName = document.getElementById('lblTaskNameField');
+            if (lblName) lblName.textContent = 'Task name *';
             document.getElementById('hdnParentProjectId').value = String(surveyId);
             var b = document.getElementById('parentProjectBanner');
             b.style.display = 'block';
             b.textContent = 'Target Survey: ' + (surveyName || ('#' + surveyId));
-            document.getElementById('inputName').value = '';
+            var nameInp = document.getElementById('inputName');
+            nameInp.value = '';
+            nameInp.placeholder = 'e.g. Vol Fotogramètric Octubre / Importació Punts GPS';
             document.getElementById('inputTaskCreationDate').value = new Date().toISOString().slice(0, 10);
             document.getElementById('inputTaskMethodology').value = '';
             document.getElementById('inputTaskDescription').value = '';
@@ -2255,13 +2401,42 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
         }
         function submitMyEarthCreate() {
             var surveyId = parseInt(document.getElementById('hdnParentProjectId').value || '0', 10);
+            var targetProjectId = 0;
+            var quickProjectName = '';
+            var quickSurveyName = '';
+            var isQuick = !!window.__meQuickTaskMode;
+            if (isQuick) {
+                var sel = document.getElementById('selQuickTargetDestination');
+                var destVal = sel ? String(sel.value || 'auto') : 'auto';
+                if (destVal.indexOf('survey:') === 0) {
+                    surveyId = parseInt(destVal.slice(7) || '0', 10);
+                } else if (destVal.indexOf('project:') === 0) {
+                    surveyId = 0;
+                    targetProjectId = parseInt(destVal.slice(8) || '0', 10);
+                } else {
+                    surveyId = 0;
+                    targetProjectId = 0;
+                }
+                var pInp = document.getElementById('txtQuickProjectName');
+                var sInp = document.getElementById('txtQuickSurveyName');
+                quickProjectName = pInp ? (pInp.value || '').trim() : '';
+                quickSurveyName = sInp ? (sInp.value || '').trim() : '';
+            }
             var nameVal = (document.getElementById('inputName').value || '').trim();
             var kindEl = document.querySelector('input[name="projectKind"]:checked');
             var kindVal = kindEl ? kindEl.value : 'external';
             var cDate = (document.getElementById('inputTaskCreationDate').value || '').trim();
             var methodVal = (document.getElementById('inputTaskMethodology').value || '').trim();
             var descVal = (document.getElementById('inputTaskDescription').value || '').trim();
-            if (!nameVal) { toastr.error('Please enter a task or asset name.'); focusMyEarthField('inputName'); return; }
+            if (!nameVal) {
+                if (isQuick) {
+                    nameVal = _defaultQuickTaskTitle(kindVal, cDate);
+                } else {
+                    toastr.error('Please enter a task or asset name.');
+                    focusMyEarthField('inputName');
+                    return;
+                }
+            }
             submitMyEarthCreation('#staticBackdrop', {
                 type: 'POST',
                 url: '/Client/Project.aspx/CreateSurveyTask',
@@ -2269,6 +2444,10 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                 dataType: 'json',
                 data: JSON.stringify({
                     surveyId: surveyId,
+                    targetProjectId: targetProjectId,
+                    quickCreate: isQuick,
+                    projectName: quickProjectName,
+                    surveyName: quickSurveyName,
                     name: nameVal,
                     projectKind: kindVal,
                     creationDate: cDate,
@@ -2277,11 +2456,30 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                 }),
                 success: function(res) {
                     var d = typeof res.d === 'string' ? JSON.parse(res.d) : res.d;
+                    if (d && d.projectId) {
+                        try {
+                            var m = _getOpenProjectsMap();
+                            m[String(d.projectId)] = 1;
+                            _saveOpenProjectsMap(m);
+                        } catch (e) {}
+                    }
                     if (d && (d.redirectUrl || d.url)) window.location.href = d.redirectUrl || d.url;
                     else window.location.reload();
                 }
             });
         }
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                var params = new URLSearchParams(window.location.search || '');
+                if (params.get('new_task') === '1') {
+                    params.delete('new_task');
+                    var cleanQs = params.toString();
+                    var cleanUrl = window.location.pathname + (cleanQs ? '?' + cleanQs : '') + (window.location.hash || '');
+                    if (window.history && window.history.replaceState) window.history.replaceState({}, '', cleanUrl);
+                    setTimeout(function() { openQuickNewTaskModal(); }, 80);
+                }
+            } catch (e) {}
+        });
         function saveProjectMeta(pid) {
             var newName = (document.getElementById('projNameInput_' + pid).value || '').trim();
             var newDesc = (document.getElementById('projDescInput_' + pid).value || '').trim();
@@ -2739,7 +2937,21 @@ def render_projects_page(user: Dict[str, Any], lang: str = "en") -> str:
                     if (caret) caret.classList.remove('is-collapsed');
                 }
             });
-            if (openPid) {
+            var hashTarget = (window.location.hash || '').replace(/^#/, '');
+            var targetEl = hashTarget ? document.getElementById(hashTarget) : null;
+            if (targetEl) {
+                var cur = targetEl;
+                while (cur && cur !== document.body) {
+                    if (cur.id && (cur.id.indexOf('projBody_') === 0 || cur.id.indexOf('surveyBody_') === 0 || cur.id.indexOf('taskBody_') === 0)) {
+                        cur.style.display = 'block';
+                    }
+                    cur = cur.parentElement;
+                }
+                var ownTaskBody = document.getElementById(hashTarget.replace('taskNode_', 'taskBody_'));
+                if (ownTaskBody) ownTaskBody.style.display = 'block';
+                targetEl.style.boxShadow = '0 0 0 2px #99CC00';
+                setTimeout(function() { targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 140);
+            } else if (openPid) {
                 var node = document.getElementById('projectNode_' + openPid);
                 if (node) setTimeout(function() { node.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120);
             }
@@ -3099,8 +3311,10 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
     )
 
     head_extra = """
-    <link href="/vendor/cesium/Widgets/widgets.css" rel="stylesheet" />
-    <script src="/vendor/cesium/Cesium.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.144/Build/Cesium/Cesium.js"></script>
     <script src="/js/front/MosaicCesiumRuntime.js?v=__MOSAIC_MAP_RUNTIME_VERSION__"></script>
     <script src="/js/front/MosaicAnnotations.js?v=20261016-r45"></script>
     <link rel="stylesheet" href="/css/MosaicAnnotations.css?v=20261016-r45" />
@@ -3130,6 +3344,43 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
     is_desktop_local_mode = os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1"
     desktop_cloud_acc = store.get_desktop_cloud_account() if is_desktop_local_mode else {"logged_in": True}
     desktop_cloud_logged_in = bool(desktop_cloud_acc.get("logged_in"))
+
+    exif_gps_points = []
+    for _pf in files_list:
+        try:
+            _pla = float(_pf.get("LATITUD") or 0.0)
+            _plo = float(_pf.get("LONGITUD") or 0.0)
+            if (abs(_pla) > 1e-5 or abs(_plo) > 1e-5) and not (
+                abs(_pla - 41.8205) < 1e-4 and abs(_plo - 1.8676) < 1e-4 and not _pf.get("HAS_EXIF_GPS")
+            ):
+                exif_gps_points.append([round(_pla, 6), round(_plo, 6), str(_pf.get("FILE_NAME") or _pf.get("FILENAME") or "")])
+        except Exception:
+            pass
+    gcp_obs_photo = proj.get("GCP_OBSERVATIONS") if isinstance(proj.get("GCP_OBSERVATIONS"), dict) else {}
+    gcp_photo_pts = [p for p in (gcp_obs_photo.get("points") or []) if isinstance(p, dict) and p.get("role", "gcp") != "check"]
+    has_photo_gcp = bool(control_name or len(gcp_photo_pts) >= 3)
+    has_photo_georef = len(exif_gps_points) >= 3 or has_photo_gcp
+    _raw_p_lat = proj.get("LATITUD")
+    _raw_p_lon = proj.get("LONGITUD")
+    has_user_approx_pin = False
+    approx_lat_str = ""
+    approx_lon_str = ""
+    try:
+        _plf = float(_raw_p_lat) if _raw_p_lat not in (None, "") else 0.0
+        _plnf = float(_raw_p_lon) if _raw_p_lon not in (None, "") else 0.0
+        if (abs(_plf) > 1e-5 or abs(_plnf) > 1e-5) and not (
+            (abs(_plf - 41.8205) < 1e-4 and abs(_plnf - 1.8676) < 1e-4)
+            or (abs(_plf - 41.9794) < 1e-4 and abs(_plnf - 2.8214) < 1e-4)
+        ):
+            has_user_approx_pin = True
+            approx_lat_str = f"{_plf:.6f}"
+            approx_lon_str = f"{_plnf:.6f}"
+    except Exception:
+        pass
+    if exif_gps_points and not approx_lat_str:
+        approx_lat_str = f"{sum(p[0] for p in exif_gps_points) / len(exif_gps_points):.6f}"
+        approx_lon_str = f"{sum(p[1] for p in exif_gps_points) / len(exif_gps_points):.6f}"
+    exif_gps_json = json.dumps(exif_gps_points[:600])
 
     body_content = f"""
     <section id="projects" class="mosaic-workflow">
@@ -3176,8 +3427,10 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                                     <span class="subpage-current"><label id="nameProject">{html.escape(pname)}</label></span>
                                 </div>
                                 <div class="col-6 text-end">
-                                    <button type="button" id="botonAdd" class="btn btn-secondary" style="{'display:none;' if show_processed else 'display:inline-block;'}" data-bs-toggle="modal" data-bs-target="#staticBackdrop2">+ ADD</button>
-                                    <button type="button" class="btn btn-primary" id="botonProcess" style="{'display:none;' if (show_processed or num_files < 1) else 'display:inline-block;'}" data-bs-toggle="modal" data-bs-target="#staticBackdrop3">PROCESS</button>
+                                    <button type="button" id="botonAdd" class="btn btn-secondary" style="{'display:none;' if (show_processed or is_processing_now) else 'display:inline-block;'}" data-bs-toggle="modal" data-bs-target="#staticBackdrop2">+ ADD PHOTOS</button>
+                                    <button type="button" id="btnOpenVideoStageModal" class="btn btn-secondary" style="{'display:none;' if (show_processed or is_processing_now) else 'display:inline-block;'}border-color:#99CC00;color:#d9f99d;" data-bs-toggle="modal" data-bs-target="#modalVideoPhotogrammetry">&#127916; + VIDEO FRAMES</button>
+                                    <button type="button" id="btnOpenPhotoGcpStudio" class="btn btn-secondary" style="{'display:none;' if (show_processed or is_processing_now) else 'display:inline-block;'}border-color:#38bdf8;color:#bae6fd;" onclick="openPhotogrammetryGcpStudio({pid})">&#8982; GCP STUDIO</button>
+                                    <button type="button" class="btn btn-primary" id="botonProcess" style="{'display:none;' if (show_processed or is_processing_now or num_files < 1) else 'display:inline-block;'}" data-bs-toggle="modal" data-bs-target="#staticBackdrop3">PROCESS ({upfront_eur_val:.2f} &euro;)</button>
                                     <div style="margin-bottom: 5px; display: {'inline-block' if show_processed else 'none'};">
                                         <a href="{report_dl}" target="_blank" class="btn-secondary" id="enlaceReport">DOWNLOAD REPORT</a>
                                     </div>
@@ -3211,6 +3464,58 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                             <div class="processing-stage-actions background-process-actions">
                                 <a href="/{norm_lang}/Projects?open_project={root_pid}" class="btn btn-primary">BACK TO MYEARTH</a>
                                 <button id="btnCancel" type="button" class="btn-cancel" style="{'display:inline-block;' if is_processing_now else 'display:none;'}" onclick="btnCancelTask();">CANCEL PROCESSING</button>
+                            </div>
+                        </div>
+
+                        <div id="photogrammetryUnifiedHub" style="{'display:none;' if (show_processed or is_processing_now) else 'display:block;'}padding:16px 20px;border-bottom:1px solid #243029;background:#0e1511;">
+                            <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;padding:11px 14px;background:rgba(153,204,0,0.08);border:1px solid rgba(153,204,0,0.34);border-radius:10px;">
+                                <div>
+                                    <div style="font-size:11px;font-weight:800;color:#99CC00;text-transform:uppercase;letter-spacing:0.05em;">
+                                        <i class="fas fa-sparkles me-1"></i> Maximum Quality Always Active &middot; Exact Upfront Per-Photo Quote
+                                    </div>
+                                    <div style="font-size:12.5px;color:#dce8e0;margin-top:2px;">
+                                        Upload overlapping photos (<code>.JPG / .PNG / .WEBP</code>) or extract sharp keyframes from video (<code>.MP4 / .MOV / .WEBM</code> + optional <code>.SRT / .GPX</code>). Video frames are extracted first so you know the <strong>exact image count and Euro price</strong> before launching processing.
+                                    </div>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                    <span id="photoGcpHubBadge" style="padding:5px 11px;border-radius:999px;background:{'rgba(56,189,248,0.16)' if has_photo_gcp else '#141d17'};border:1px solid {'#38bdf8' if has_photo_gcp else '#34463b'};color:{'#bae6fd' if has_photo_gcp else '#9eb2a5'};font-size:11.5px;font-weight:700;">
+                                        {f'✓ GCP Control Active ({html.escape(control_name or (str(len(gcp_photo_pts)) + " GCPs"))})' if has_photo_gcp else 'No GCPs attached'}
+                                    </span>
+                                    <div style="padding:6px 12px;border-radius:8px;background:#121914;border:1px solid #99CC00;color:#99CC00;font-weight:800;font-size:13px;">
+                                        {num_files} frames &middot; {'0.00 € (Local PC)' if is_desktop_local_mode else f'{upfront_eur_val:.2f} € Cloud Quote'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="background:#111814;border:1px solid #2b3c32;border-radius:10px;padding:12px 14px;">
+                                <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+                                    <div>
+                                        <span style="font-size:12px;font-weight:700;color:#fff;"><i class="fas fa-map-marked-alt me-1" style="color:#99CC00;"></i> Dataset Georeferencing &amp; Map Location</span>
+                                        <span id="photoGeorefStatusBadge" style="margin-left:8px;font-size:11px;padding:3px 9px;border-radius:999px;font-weight:700;background:{'rgba(153,204,0,0.18)' if has_photo_georef else ('rgba(245,158,11,0.18)' if num_files > 0 else '#18241d')};border:1px solid {'#99CC00' if has_photo_georef else ('#f59e0b' if num_files > 0 else '#3c5244')};color:{'#d9f99d' if has_photo_georef else ('#fde68a' if num_files > 0 else '#cbd5e1')};">
+                                            {f'✓ Georeferenced automatically ({len(exif_gps_points)} EXIF GPS frames)' if len(exif_gps_points) >= 3 else ('✓ Metric GCP Control Attached' if has_photo_gcp else ('📍 Unreferenced (No GPS/GCPs) — Click map for initial spot (3D Mesh + Point Cloud only)' if num_files > 0 else 'Upload photos or video to auto-detect GPS on map'))}
+                                        </span>
+                                    </div>
+                                    <div style="display:flex;gap:6px;align-items:center;min-width:240px;">
+                                        <input type="text" id="photoMapSearchInput" class="form-control form-control-sm" style="background:#161c18;border:1px solid #35483c;color:#fff;font-size:12px;" placeholder="Search place on map..." />
+                                        <button type="button" onclick="searchPhotogrammetryMapPlace()" class="btn btn-sm btn-secondary" style="font-size:11.5px;">Find</button>
+                                    </div>
+                                </div>
+                                <div id="photoTaskLocationMap" style="width:100%;height:215px;border-radius:8px;border:1px solid #29382f;background:#0a0f0c;margin-bottom:8px;"></div>
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-3 col-6">
+                                        <label style="font-size:10.5px;color:#9eb2a5;display:block;">Initial Latitude (WGS84)</label>
+                                        <input type="text" id="photoApproxLat" value="{approx_lat_str}" placeholder="Click map or auto-GPS" class="form-control form-control-sm" style="background:#161c18;border:1px solid #334439;color:#fff;font-size:12px;" onchange="savePhotogrammetryManualCoords()" />
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <label style="font-size:10.5px;color:#9eb2a5;display:block;">Initial Longitude (WGS84)</label>
+                                        <input type="text" id="photoApproxLon" value="{approx_lon_str}" placeholder="Click map or auto-GPS" class="form-control form-control-sm" style="background:#161c18;border:1px solid #334439;color:#fff;font-size:12px;" onchange="savePhotogrammetryManualCoords()" />
+                                    </div>
+                                    <div class="col-md-6 col-12">
+                                        <small style="color:#b8c6be;font-size:11.5px;display:block;line-height:1.4;">
+                                            {'✓ Full metric deliverables enabled: <strong>Orthophoto + DSM + DTM + Dense Point Cloud + 3D Textured Mesh</strong>.' if has_photo_georef else 'Without GPS or GCPs, Photogrammetry reconstructs your <strong>3D Textured Mesh + Dense Point Cloud</strong> anchored at the map pin you click (refine X, Y, Z later in MyEarth). Want metric Orthophoto + DSM + DTM? Mark 3+ points in <strong>GCP Studio</strong>!'}
+                                        </small>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -3499,12 +3804,14 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                             <div style="font-size:11px;color:#99CC00;margin-top:2px;">0.00 &euro; &middot; Local NodeODX / ODX</div>
                         </button>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label" for="photogrammetryPreset">Processing preset</label>
-                        <select class="form-select" id="photogrammetryPreset">
-                            <option value="complete">Complete · Orthophoto, DSM, DTM, point cloud and textured mesh</option>
-                            <option value="fast_ortho">Fast · Orthophoto</option>
-                        </select>
+                    <input type="hidden" id="photogrammetryPreset" value="complete" />
+                    <div class="mb-3" style="padding:10px 13px;background:#101914;border:1px solid rgba(153,204,0,0.4);border-radius:8px;">
+                        <div style="font-size:11px;font-weight:800;color:#99CC00;text-transform:uppercase;letter-spacing:0.05em;">
+                            <i class="fas fa-check-circle me-1"></i> Maximum Quality Always Active
+                        </div>
+                        <div style="font-size:12px;color:#dce8e0;margin-top:2px;">
+                            {'Ultra feature extraction &middot; High-density 3D point cloud &middot; 400k-face 3D textured mesh &middot; 1.0 cm/px Orthophoto + DSM + DTM.' if has_photo_georef else 'Unreferenced 3D Reconstruction Mode: Ultra feature extraction &middot; High-density 3D point cloud + 3D textured mesh anchored at your selected map pin.'}
+                        </div>
                     </div>
                     <div id="cloudEnginePanel" style="{'display:none;' if is_desktop_local_mode else 'display:block;'}">
                         {f'''<div style="background:#17212b;border:1px solid #38bdf8;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#e0f2fe;">
@@ -3553,14 +3860,15 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                     </div>
                     <div style="background:#0f1612;border:1px solid #2b3c32;border-radius:8px;padding:12px;margin-bottom:10px;font-size:12px;color:#dce6dc;">
                         <div style="font-size:11px;font-weight:700;color:#99CC00;text-transform:uppercase;margin-bottom:6px;">
-                            <i class="fas fa-layer-group me-1"></i> Deliverables for the selected preset
+                            <i class="fas fa-layer-group me-1"></i> Maximum Quality Deliverables
                         </div>
                         <div style="font-size:11.5px;color:#b8c6be;line-height:1.55;">
-                            <strong>Fast:</strong> Orthophoto GeoTIFF and map tiles.<br/>
-                            <strong>Complete:</strong> Five products, verified before completion:<br/>
+                            {'''Five georeferenced products, verified before completion:<br/>
                             &bull; <strong>Orthophoto</strong> (<code>GeoTIFF</code> + Map Tiles) &middot; <strong>Dense Point Cloud</strong> (<code>LAZ</code> + <code>3D Tiles</code>) &middot; <strong>3D Textured Mesh</strong> (<code>OBJ/ZIP</code> + <code>3D Tiles</code>)<br/>
                             &bull; <strong>DSM — Digital Surface Model</strong> (<code>dsm.tif</code>) &middot; <strong>DTM — Digital Terrain Model / Bare Earth</strong> (<code>dtm.tif</code>)<br/>
-                            <span style="font-size:11px;color:#9ca3af;"><em>Terrain Derivatives (Hillshade, Slope, Aspect &amp; Contours) can be generated on demand from any DSM or DTM asset after completion.</em></span>
+                            <span style="font-size:11px;color:#9ca3af;"><em>Terrain Derivatives (Hillshade, Slope, Aspect &amp; Contours) can be generated on demand from any DSM or DTM asset in MyEarth.</em></span>''' if has_photo_georef else '''Unreferenced 3D Reconstruction (no EXIF GPS or GCPs attached):<br/>
+                            &bull; <strong>3D Textured Mesh</strong> (<code>OBJ/ZIP</code> + <code>3D Tiles</code>) &middot; <strong>Dense Point Cloud</strong> (<code>LAZ</code> + <code>3D Tiles</code>)<br/>
+                            <span style="font-size:11px;color:#fde68a;"><em>Note: Metric Orthophoto, DSM, and DTM require EXIF GPS or 3+ Ground Control Points (click <strong>GCP STUDIO</strong> before processing to enable them).</em></span>'''}
                         </div>
                         <input type="hidden" id="chkEnableDtm" value="1" checked="checked" />
                     </div>
@@ -3568,6 +3876,8 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                         window.__meIsDesktopLocal = {'true' if os.environ.get('MOSAICEARTH_DESKTOP_LOCAL') == '1' else 'false'};
                         window.__meTaskEngineMode = window.__meIsDesktopLocal ? 'local' : 'cloud';
                         window.__meLocalEngineReady = false;
+                        window.__mePhotoHasGeoref = {'true' if has_photo_georef else 'false'};
+                        window.__mePhotoHasApproxPin = {'true' if has_user_approx_pin else 'false'};
                         function probeLocalNodeOdmEngine() {{
                             var badge = document.getElementById('localEngineStatusBadge');
                             fetch('/api/desktop/nodeodm-status').then(function(r) {{ return r.json(); }}).then(function(info) {{
@@ -3625,8 +3935,19 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                         function submitTaskToSelectedEngine() {{
                             var params = new URLSearchParams(window.location.search);
                             var pid = parseInt(params.get('id') || '{pid}', 10);
+                            var latInp = document.getElementById('photoApproxLat');
+                            var lonInp = document.getElementById('photoApproxLon');
+                            var latVal = latInp ? latInp.value.trim() : '';
+                            var lonVal = lonInp ? lonInp.value.trim() : '';
+                            if (!window.__mePhotoHasGeoref && (!latVal || !lonVal)) {{
+                                $('#staticBackdrop3').modal('hide');
+                                toastr.warning('Unreferenced dataset: click on the map to set an approximate initial location (or mark 3+ GCPs in GCP Studio) before starting processing.');
+                                var mapEl = document.getElementById('photoTaskLocationMap');
+                                if (mapEl) mapEl.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+                                return;
+                            }}
                             var btn = document.getElementById('processTask');
-                            var preset = document.getElementById('photogrammetryPreset').value;
+                            var preset = 'complete';
                             var origTxt = btn ? btn.textContent : '';
                             if (btn) {{ btn.disabled = true; btn.textContent = 'Submitting photogrammetry…'; }}
                             $.ajax({{
@@ -3635,7 +3956,7 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                                 contentType: 'application/json; charset=utf-8',
                                 dataType: 'json',
                                 timeout: 300000,
-                                data: JSON.stringify({{ project_id: pid, target_mode: window.__meTaskEngineMode || 'auto', processing_preset: preset }}),
+                                data: JSON.stringify({{ project_id: pid, target_mode: window.__meTaskEngineMode || 'auto', processing_preset: preset, lat: latVal, lon: lonVal }}),
                                 success: function(res) {{
                                     if (btn) {{ btn.disabled = false; btn.textContent = origTxt; }}
                                     var d = res && res.d ? res.d : '';
@@ -3713,14 +4034,14 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                     <div class="row">
                         <div class="col-12 text-center">
                             <div class="dropzone" style="border:2px dashed rgba(153,204,0,0.55);border-radius:12px;padding:28px 18px;background:#101713;cursor:pointer;">
-                                <input type="file" id="myFile1" class="dropzone-file-input" aria-label="Select source images" accept=".jpg,.jpeg,.png" onchange="getDocument1(this)" multiple="multiple" style="display:none;" />
+                                <input type="file" id="myFile1" class="dropzone-file-input" aria-label="Select source images" accept=".jpg,.jpeg,.png,.webp" onchange="getDocument1(this)" multiple="multiple" style="display:none;" />
                                 <div class="divaddfiles">
                                     <span class="upload-cloud-icon" aria-hidden="true" style="display:inline-flex;width:44px;height:44px;color:#99CC00;margin-bottom:8px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="44" height="44"><path d="M7 18h10a4 4 0 0 0 .4-8A6 6 0 0 0 6 8.6 4.7 4.7 0 0 0 7 18Zm5-8v6m-3-3 3-3 3 3"/></svg></span>
                                     <br />
-                                    <span id="titleaddfiles" style="font-size:15px;font-weight:700;color:#fff;">Click to select drone / aerial photos</span>
+                                    <span id="titleaddfiles" style="font-size:15px;font-weight:700;color:#fff;">Click to select drone / aerial / terrestrial photos</span>
                                     <br />
-                                    <span id="subtitleaddfiles" style="font-size:12.5px;color:#99CC00;">or drag and drop JPEG / PNG files here</span>
-                                    <p class="profile-field-help" style="font-size:11.5px;color:#9ca3af;margin-top:10px;margin-bottom:0;">Select overlapping JPEG or PNG photos. EXIF GPS coordinates and dimensions are read automatically.</p>
+                                    <span id="subtitleaddfiles" style="font-size:12.5px;color:#99CC00;">or drag and drop JPEG, PNG, or WEBP files here</span>
+                                    <p class="profile-field-help" style="font-size:11.5px;color:#9ca3af;margin-top:10px;margin-bottom:0;">EXIF GPS coordinates and dimensions are read automatically. Have a video instead? Close and click <strong>+ VIDEO FRAMES</strong>.</p>
                                 </div>
                                 <div class="porcentajeaddfiles" style="display: none;">
                                     <div class="source-transfer-card source-transfer-card--embedded">
@@ -3741,14 +4062,19 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                             </div>
                         </div>
                         <div class="col-12" style="margin-top: 22px;">
-                            <span id="title-gcp" style="font-size:12px;font-weight:700;color:#dce6dc;">Optional Ground Control Points (GCP) file</span>
+                            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                                <span id="title-gcp" style="font-size:12px;font-weight:700;color:#dce6dc;">Optional Ground Control Points (GCP)</span>
+                                <button type="button" class="btn btn-sm" style="background:rgba(56,189,248,0.16);border:1px solid #38bdf8;color:#bae6fd;font-size:11px;font-weight:700;padding:3px 10px;" onclick="$('#staticBackdrop2').modal('hide');openPhotogrammetryGcpStudio({pid});">
+                                    &#8982; Open MosaicEarth GCP Studio
+                                </button>
+                            </div>
                             <div class="gcp-upload" style="background:#101713;border:1px solid #2b3930;border-radius:8px;padding:10px 14px;margin-top:6px;">
                                 <div class="row align-items-center">
                                     <div class="col-8">
-                                        <img id="checkGCP" src="/Resources/checkGCP.svg" style="margin-right: 10px; display: {'inline' if control_name else 'none'};" /><span id="placeholdergcp" style="font-size:12px;color:#9ca3af;">{html.escape(control_name) if control_name else 'Upload a GCP or GEO file (.txt)'}</span>
+                                        <img id="checkGCP" src="/Resources/checkGCP.svg" style="margin-right: 10px; display: {'inline' if control_name else 'none'};" /><span id="placeholdergcp" style="font-size:12px;color:#9ca3af;">{html.escape(control_name) if control_name else 'Or upload an existing gcp_list.txt / geo.txt'}</span>
                                     </div>
                                     <div class="col-4 text-end">
-                                        <span class="uploadbuttongcp" style="display:{'none' if control_name else 'inline'};color:#99CC00;font-size:11.5px;font-weight:700;cursor:pointer;">UPLOAD</span>
+                                        <span class="uploadbuttongcp" style="display:{'none' if control_name else 'inline'};color:#99CC00;font-size:11.5px;font-weight:700;cursor:pointer;">UPLOAD .TXT</span>
                                         <span class="deletebuttongcp" onclick="deleteGCP({pid});" style="display:{'inline' if control_name else 'none'};color:#ef4444;font-size:11.5px;font-weight:700;cursor:pointer;">DELETE</span>
                                     </div>
                                 </div>
@@ -3772,6 +4098,42 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
                             <button type="button" class="btn btn-primary" onclick="subirfichero1()">SELECT PHOTOS</button>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade mosaic-workflow" id="modalVideoPhotogrammetry" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" style="max-width:560px!important;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">&#127916; Extract Sharp Photogrammetry Frames from Video</h5>
+                </div>
+                <div class="modal-body" style="font-size:12.5px;color:#d1d5db;">
+                    <p style="margin-bottom:12px;color:#cbd5e1;line-height:1.55;">
+                        Upload a drone or handheld capture video (<code>.MP4 / .MOV / .WEBM / .M4V</code>) plus an optional telemetry track (<code>.SRT / .GPX / .CSV</code>). MosaicEarth extracts sharp overlapping keyframes, injects GPS EXIF when available, and calculates your <strong>exact per-photo Euro quote</strong> before you launch processing.
+                    </p>
+                    <div class="mb-3">
+                        <label style="font-size:11.5px;font-weight:700;color:#fff;margin-bottom:4px;display:block;">Video File (.MP4, .MOV, .WEBM, .M4V) *</label>
+                        <input type="file" id="inpPhotoVideoFile" accept=".mp4,.mov,.webm,.m4v" class="form-control" style="background:#141c17;border:1px solid #99CC00;color:#fff;font-size:13px;" />
+                    </div>
+                    <div class="mb-3">
+                        <label style="font-size:11.5px;font-weight:700;color:#cbd5e1;margin-bottom:4px;display:block;">Companion GPS Telemetry (.SRT, .GPX, .CSV) &mdash; optional</label>
+                        <input type="file" id="inpPhotoVideoTelem" accept=".srt,.gpx,.csv" class="form-control" style="background:#141c17;border:1px solid #334439;color:#fff;font-size:13px;" />
+                    </div>
+                    <div id="videoStageProgressWrap" style="display:none;background:#0e1511;border:1px solid #2b3c32;border-radius:8px;padding:12px;">
+                        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#99CC00;margin-bottom:6px;">
+                            <span id="videoStageStatusText">Uploading video...</span>
+                            <span id="videoStagePctText">0%</span>
+                        </div>
+                        <div style="height:8px;background:#1a241e;border-radius:999px;overflow:hidden;">
+                            <div id="videoStageBar" style="width:0%;height:100%;background:#99CC00;transition:width 0.2s;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="btnCancelVideoStage" class="btn btn-cancel" data-bs-dismiss="modal">CANCEL</button>
+                    <button type="button" id="btnStartVideoStage" onclick="stageVideoForPhotogrammetry({pid})" class="btn btn-primary" style="font-weight:700;">EXTRACT FRAMES &amp; QUOTE</button>
                 </div>
             </div>
         </div>
@@ -3916,8 +4278,176 @@ def render_project_detail_page(user: Dict[str, Any], slug_or_id: str, lang: str 
         var __project_id = {pid};
         var __can_reprocess_sources = false;
         window.__meTaskCompletedRedirectUrl = "/{norm_lang}/Projects?open_project={root_pid}#taskNode_{pid}";
+        window.__meExifGpsPoints = {exif_gps_json};
         MYLIBRARY.setUrl_page('/Client/Project.aspx');
         CargarActiveMenu("li_projects");
+
+        var __photoLocMap = null;
+        var __photoApproxMarker = null;
+        function setPhotogrammetryPin(lat, lon, fly, persist) {{
+            if (!isFinite(lat) || !isFinite(lon)) return;
+            var laInp = document.getElementById('photoApproxLat');
+            var loInp = document.getElementById('photoApproxLon');
+            if (laInp) laInp.value = Number(lat).toFixed(6);
+            if (loInp) loInp.value = Number(lon).toFixed(6);
+            window.__mePhotoHasApproxPin = true;
+            if (__photoLocMap && window.L) {{
+                if (!__photoApproxMarker) {{
+                    __photoApproxMarker = window.L.marker([lat, lon], {{ draggable: true }}).addTo(__photoLocMap);
+                    __photoApproxMarker.on('dragend', function() {{
+                        var p = __photoApproxMarker.getLatLng();
+                        setPhotogrammetryPin(p.lat, p.lng, false, true);
+                    }});
+                }} else {{
+                    __photoApproxMarker.setLatLng([lat, lon]);
+                }}
+                if (fly) __photoLocMap.setView([lat, lon], Math.max(__photoLocMap.getZoom(), 16));
+            }}
+            if (persist) {{
+                fetch('/api/v2/tasks/' + __project_id + '/location', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ lat: Number(lat), lon: Number(lon) }})
+                }}).then(function(r) {{
+                    if (r.ok) {{
+                        var b = document.getElementById('photoGeorefStatusBadge');
+                        if (b && !window.__mePhotoHasGeoref) {{
+                            b.textContent = '✓ Initial approximate pin set (' + Number(lat).toFixed(4) + ', ' + Number(lon).toFixed(4) + ') — 3D Mesh + Point Cloud ready';
+                            b.style.background = 'rgba(153,204,0,0.18)';
+                            b.style.borderColor = '#99CC00';
+                            b.style.color = '#d9f99d';
+                        }}
+                    }}
+                }}).catch(function() {{}});
+            }}
+        }}
+        function savePhotogrammetryManualCoords() {{
+            var la = parseFloat((document.getElementById('photoApproxLat').value || '').replace(',', '.'));
+            var lo = parseFloat((document.getElementById('photoApproxLon').value || '').replace(',', '.'));
+            if (isFinite(la) && isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180) {{
+                setPhotogrammetryPin(la, lo, true, true);
+            }}
+        }}
+        function searchPhotogrammetryMapPlace() {{
+            var q = (document.getElementById('photoMapSearchInput').value || '').trim();
+            if (!q || !__photoLocMap) return;
+            fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q))
+                .then(function(r) {{ return r.json(); }})
+                .then(function(arr) {{
+                    if (Array.isArray(arr) && arr[0]) {{
+                        var la = parseFloat(arr[0].lat), lo = parseFloat(arr[0].lon);
+                        __photoLocMap.setView([la, lo], 17);
+                        if (!window.__mePhotoHasGeoref) setPhotogrammetryPin(la, lo, false, true);
+                    }}
+                }}).catch(function() {{}});
+        }}
+        function initPhotogrammetryLocationMap() {{
+            var host = document.getElementById('photoTaskLocationMap');
+            if (!host || !window.L || __photoLocMap) return;
+            var la = parseFloat((document.getElementById('photoApproxLat')?.value || '').replace(',', '.'));
+            var lo = parseFloat((document.getElementById('photoApproxLon')?.value || '').replace(',', '.'));
+            var hasInit = isFinite(la) && isFinite(lo) && (Math.abs(la) > 1e-5 || Math.abs(lo) > 1e-5);
+            __photoLocMap = window.L.map(host, {{
+                center: hasInit ? [la, lo] : [30.0, 5.0],
+                zoom: hasInit ? 16 : 2
+            }});
+            var sat = window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}', {{ maxZoom: 20, attribution: 'Tiles &copy; Esri' }}).addTo(__photoLocMap);
+            var osm = window.L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{ maxZoom: 20, attribution: '&copy; OSM' }});
+            window.L.control.layers({{ 'Satellite': sat, 'Streets': osm }}, null, {{ position: 'bottomleft' }}).addTo(__photoLocMap);
+            var bounds = [];
+            (window.__meExifGpsPoints || []).forEach(function(pt) {{
+                bounds.push([pt[0], pt[1]]);
+                window.L.circleMarker([pt[0], pt[1]], {{ radius: 4, color: '#38bdf8', fillColor: '#0284c7', fillOpacity: 0.9, weight: 1 }})
+                    .bindTooltip('📷 ' + (pt[2] || 'Frame')).addTo(__photoLocMap);
+            }});
+            if (bounds.length > 1) {{
+                __photoLocMap.fitBounds(bounds, {{ padding: [24, 24], maxZoom: 18 }});
+            }} else if (hasInit) {{
+                setPhotogrammetryPin(la, lo, false, false);
+            }}
+            __photoLocMap.on('click', function(ev) {{
+                setPhotogrammetryPin(ev.latlng.lat, ev.latlng.lng, false, true);
+            }});
+        }}
+        document.addEventListener('DOMContentLoaded', initPhotogrammetryLocationMap);
+
+        function openPhotogrammetryGcpStudio(pid) {{
+            window.open('/GCPStudio.aspx?task_id=' + encodeURIComponent(pid) + '&mode=photogrammetry', 'mosaicearth_gcp_studio', 'width=1420,height=900,resizable=yes,scrollbars=yes');
+        }}
+        window.addEventListener('message', function(ev) {{
+            if (ev.origin !== window.location.origin || !ev.data) return;
+            if (ev.data.type === 'mosaicearth:gcp-attached' && String(ev.data.taskId) === String(__project_id)) {{
+                toastr.success('Attached ' + ev.data.gcpCount + ' Ground Control Points! Reloading task georeferencing...');
+                setTimeout(function() {{ window.location.reload(); }}, 500);
+            }}
+        }});
+
+        function stageVideoForPhotogrammetry(pid) {{
+            var vInp = document.getElementById('inpPhotoVideoFile');
+            var tInp = document.getElementById('inpPhotoVideoTelem');
+            var btn = document.getElementById('btnStartVideoStage');
+            var cancelBtn = document.getElementById('btnCancelVideoStage');
+            var wrap = document.getElementById('videoStageProgressWrap');
+            var stTxt = document.getElementById('videoStageStatusText');
+            var pctTxt = document.getElementById('videoStagePctText');
+            var bar = document.getElementById('videoStageBar');
+            if (!vInp || !vInp.files || !vInp.files.length) {{
+                toastr.warning('Select a video file (.MP4, .MOV, .WEBM, or .M4V) first.');
+                return;
+            }}
+            var fd = new FormData();
+            fd.append('video', vInp.files[0]);
+            if (tInp && tInp.files && tInp.files.length) {{
+                fd.append('telemetry', tInp.files[0]);
+            }}
+            btn.disabled = true;
+            cancelBtn.disabled = true;
+            vInp.disabled = true;
+            if (tInp) tInp.disabled = true;
+            wrap.style.display = 'block';
+            stTxt.textContent = 'Uploading video...';
+            pctTxt.textContent = '0%';
+            bar.style.width = '0%';
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/v2/tasks/' + encodeURIComponent(pid) + '/photogrammetry-video-stage');
+            xhr.upload.onprogress = function(ev) {{
+                if (!ev.lengthComputable) return;
+                var pct = Math.min(95, Math.round((ev.loaded / ev.total) * 85));
+                pctTxt.textContent = pct + '%';
+                bar.style.width = pct + '%';
+                if (ev.loaded >= ev.total) {{
+                    stTxt.textContent = 'Extracting sharp overlapping keyframes & injecting EXIF GPS...';
+                    pctTxt.textContent = '92%';
+                    bar.style.width = '92%';
+                }}
+            }};
+            xhr.onload = function() {{
+                var data = {{}};
+                try {{ data = JSON.parse(xhr.responseText || '{{}}'); }} catch (_) {{}}
+                if (xhr.status >= 200 && xhr.status < 300 && data.ok) {{
+                    bar.style.width = '100%';
+                    pctTxt.textContent = '100%';
+                    stTxt.textContent = 'Extracted ' + data.extracted_frames + ' sharp frames! Updating quote...';
+                    toastr.success('Extracted ' + data.extracted_frames + ' sharp frames from video!');
+                    setTimeout(function() {{ window.location.reload(); }}, 600);
+                }} else {{
+                    btn.disabled = false;
+                    cancelBtn.disabled = false;
+                    vInp.disabled = false;
+                    if (tInp) tInp.disabled = false;
+                    toastr.error(data.detail || data.error || 'Could not extract frames from video.');
+                }}
+            }};
+            xhr.onerror = function() {{
+                btn.disabled = false;
+                cancelBtn.disabled = false;
+                vInp.disabled = false;
+                if (tInp) tInp.disabled = false;
+                toastr.error('Network error while uploading video.');
+            }};
+            xhr.send(fd);
+        }}
         function pollOdmLiveLog() {{
             fetch("/api/v2/tasks/" + __project_id + "/live-log")
                 .then(function(r) {{ return r.json(); }})
@@ -6531,8 +7061,26 @@ def _render_unified_task_upload_page(
     pdesc = html.escape(str(proj.get("TASK_DESCRIPTION") or proj.get("DESCRIPTION") or ""))
     pdate = html.escape(str(proj.get("TASK_CREATION_DATE") or proj.get("CAPTURE_DATE") or "")[:10])
     pmethod = html.escape(str(proj.get("CAPTURE_METHOD") or proj.get("METHODOLOGY") or ("3D Gaussian Splatting" if task_kind == "gaussian" else "Direct File Import")))
-    plat = html.escape(str(proj.get("LATITUD") if proj.get("LATITUD") is not None else ""))
-    plon = html.escape(str(proj.get("LONGITUD") if proj.get("LONGITUD") is not None else ""))
+    _raw_lat_v = proj.get("LATITUD")
+    _raw_lon_v = proj.get("LONGITUD")
+    _has_real_coords = False
+    try:
+        _lf = float(_raw_lat_v) if _raw_lat_v not in (None, "") else 0.0
+        _lnf = float(_raw_lon_v) if _raw_lon_v not in (None, "") else 0.0
+        if (abs(_lf) > 1e-5 or abs(_lnf) > 1e-5) and not (
+            (abs(_lf - 41.8205) < 1e-4 and abs(_lnf - 1.8676) < 1e-4)
+            or (abs(_lf - 41.9794) < 1e-4 and abs(_lnf - 2.8214) < 1e-4)
+        ):
+            _has_real_coords = True
+    except Exception:
+        _has_real_coords = False
+    if proj.get("GCP_OBSERVATIONS") or proj.get("PHOTOGRAMMETRY_CONTROL"):
+        _has_real_coords = True
+    plat = html.escape(str(_raw_lat_v)) if _has_real_coords and _raw_lat_v is not None else ""
+    plon = html.escape(str(_raw_lon_v)) if _has_real_coords and _raw_lon_v is not None else ""
+    myearth_return_url = f"/{norm_lang}/Projects?open_project={root_pid}#taskNode_{project_id}"
+    gcp_obs_doc = proj.get("GCP_OBSERVATIONS") if isinstance(proj.get("GCP_OBSERVATIONS"), dict) else {}
+    gcp_attached_count = len([p for p in (gcp_obs_doc.get("points") or []) if isinstance(p, dict) and p.get("role", "gcp") != "check"])
 
     is_gaussian = task_kind == "gaussian"
     task_badge_label = "Gaussian Splatting Task" if is_gaussian else "Direct File Import Task"
@@ -6602,7 +7150,7 @@ def _render_unified_task_upload_page(
         </div>"""
 
     accepted_exts = (
-        ".ply,.splat,.spz,.ksplat,.mp4,.mov,.webm,.zip,.jpg,.jpeg,.png"
+        ".ply,.splat,.spz,.ksplat,.mp4,.mov,.webm,.m4v,.zip,.jpg,.jpeg,.png,.webp,.srt,.gpx,.csv"
         if is_gaussian
         else ".tif,.tiff,.laz,.las,.e57,.obj,.fbx,.glb,.gltf,.dae,.ply,.splat,.spz,.ksplat,.zip,.geojson,.json,.kml,.kmz,.gpkg,.dxf,.shp,.gpx,.csv"
     )
@@ -6672,11 +7220,161 @@ def _render_unified_task_upload_page(
     )
 
     head_extra = """
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="/assets/css/Projects.css?v=7" />
     <link rel="stylesheet" href="/assets/css/Project.css?v=7" />
     <link rel="stylesheet" href="/assets/css/external-asset-import.css?v=12" />
-    <script defer src="/js/front/AssetUpload.js?v=20261107-ux"></script>
-    <style>[data-asset-upload] input[type=date] { color-scheme: dark; } [data-asset-upload] button[type=submit]:disabled { opacity:1; color:#acbbb0!important; background:#253328!important; border-color:#48614f!important; } #taskUploadWorkspace code { color: #ff8ac4; } #asset-upload-status, #asset-upload-selection { color: #dce6dc; } #taskUploadWorkspace .workflow-pill {color:#dce6dc;background:#19251d;border:1px solid #48614f;border-radius:6px;display:inline-block;padding:6px 10px;margin:3px;font-size:12px;}</style>"""
+    <script defer src="/js/front/AssetUpload.js?v=20261113-unified"></script>
+    <style>
+        [data-asset-upload] input[type=date] { color-scheme: dark; }
+        [data-asset-upload] button[type=submit]:disabled { opacity:1; color:#acbbb0!important; background:#253328!important; border-color:#48614f!important; }
+        #taskUploadWorkspace code { color: #ff8ac4; }
+        #asset-upload-status, #asset-upload-selection { color: #dce6dc; }
+        #taskUploadWorkspace .workflow-pill { color:#dce6dc; background:#19251d; border:1px solid #48614f; border-radius:6px; display:inline-block; padding:6px 10px; margin:3px; font-size:12px; }
+        .me-unified-dropzone { border:2px dashed rgba(153,204,0,0.55); border-radius:11px; padding:16px; background:#0e1511; transition:border-color 0.16s ease, background 0.16s ease; }
+        .me-unified-dropzone.is-dragover { border-color:#99CC00; background:rgba(153,204,0,0.10); }
+        .me-upload-state-locked { opacity:0.62; pointer-events:none; }
+    </style>"""
+
+    geovideo_link_card_html = ""
+    if not is_gaussian:
+        geovideo_link_card_html = f"""
+                            <details id="geovideo-link-box" style="margin-top:16px;background:#101713;border:1px solid rgba(245,158,11,0.38);border-radius:12px;padding:15px 20px;">
+                                <summary style="cursor:pointer;font-size:12.5px;font-weight:800;color:#fbbf24;letter-spacing:0.03em;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+                                    <span>&#127916; Or Link a 0-MB External Geo-Video (YouTube / Vimeo / Direct MP4 URL + DJI .SRT / .GPX / .CSV)</span>
+                                    <span style="font-size:11px;color:#99CC00;font-weight:700;">0 MB Storage Quota</span>
+                                </summary>
+                                <form id="geovideo-link-form" style="margin-top:14px;">
+                                    <input type="hidden" name="project_id" value="{project_id}" />
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:4px;display:block;">YouTube, Vimeo, or Direct HTTPS .MP4 URL *</label>
+                                            <input type="url" name="external_video_url" required class="form-control" style="background:#161c18;border:1px solid #f59e0b;color:#fff;font-size:13px;" placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/..." />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:4px;display:block;">Telemetry File (.SRT, .GPX, .CSV) &mdash; optional</label>
+                                            <input type="file" name="telemetry_file" accept=".srt,.gpx,.csv" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.18);color:#fff;font-size:13px;" />
+                                        </div>
+                                        <div class="col-md-5">
+                                            <label style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:4px;display:block;">Video Display Title</label>
+                                            <input type="text" name="title" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:13px;" placeholder="e.g. Ridge FPV Flight + DJI SRT" />
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:4px;display:block;">Capture Date</label>
+                                            <input type="date" name="capture_date" value="{pdate}" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:13px;" />
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:4px;display:block;">Fallback Lat</label>
+                                            <input type="text" name="lat" value="{plat}" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:13px;" />
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:4px;display:block;">Fallback Lon</label>
+                                            <input type="text" name="lon" value="{plon}" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:13px;" />
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+                                        <span id="geovideo-link-status" style="font-size:12px;color:#dce6dc;"></span>
+                                        <button type="submit" class="btn btn-primary btn-sm" style="font-weight:700;padding:8px 18px;">
+                                            &#127916; REGISTER 0-MB GEO-VIDEO &amp; 3D TRACK
+                                        </button>
+                                    </div>
+                                </form>
+                                <script>
+                                (function(){{
+                                    var gf = document.getElementById('geovideo-link-form');
+                                    if (!gf) return;
+                                    gf.addEventListener('submit', async function(ev){{
+                                        ev.preventDefault();
+                                        var st = document.getElementById('geovideo-link-status');
+                                        var btn = gf.querySelector('button[type="submit"]');
+                                        btn.disabled = true;
+                                        st.textContent = 'Parsing telemetry & registering 3D Geo-Video...';
+                                        try {{
+                                            var fd = new FormData(gf);
+                                            var r = await fetch('/api/v2/geovideo/create', {{ method: 'POST', body: fd, credentials: 'same-origin' }});
+                                            var data = await r.json();
+                                            if (!r.ok || !data.ok) throw new Error((data && (data.detail || data.error)) || 'Could not register Geo-Video.');
+                                            st.textContent = 'Geo-Video registered (100%)! Returning to MyEarth...';
+                                            window.location.href = '{myearth_return_url}';
+                                        }} catch (err) {{
+                                            st.textContent = err.message || 'Error registering Geo-Video.';
+                                            btn.disabled = false;
+                                        }}
+                                    }});
+                                }})();
+                                </script>
+                            </details>"""
+
+    zip_migration_banner_html = ""
+    if not is_gaussian:
+        zip_migration_banner_html = f"""<div class="mb-3" style="background:rgba(153,204,0,0.07);border:1px solid rgba(153,204,0,0.32);border-radius:10px;padding:11px 15px;font-size:12.5px;color:#dce8e0;">
+                                <strong style="color:#99CC00;"><i class="fas fa-file-archive me-1"></i> 1-Click Multi-Platform .ZIP Migration:</strong>
+                                Drop a full project export <code>.zip</code> from <strong>DJI Terra</strong>, <strong>PIX4D</strong>, <strong>Polycam</strong>, <strong>Luma AI</strong>, <strong>DroneDeploy</strong>, <strong>Metashape</strong>, or <strong>WebODM</strong> in the file selector below &mdash; MosaicEarth automatically unpacks and registers every Orthomosaic, DSM, 3D Mesh, Point Cloud/Splat, Vector layer, and Quality Report PDF into this Survey!
+                            </div>
+                            <div id="import-quick-modes" class="mb-3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:8px;">
+                                <button type="button" data-import-preset="all" data-accept="{accepted_exts}" class="btn btn-sm" style="text-align:left;padding:9px 12px;border-radius:9px;background:#1b2a1f;border:1.5px solid #99CC00;color:#eff8e9;font-weight:700;font-size:12px;">
+                                    &#128506; All GIS, 3D Scans &amp; .ZIP<br/><span style="font-weight:400;font-size:10.5px;color:#b7cbbd;">GeoTIFF, LAZ, GLB/OBJ/USDZ, Vector, ZIP</span>
+                                </button>
+                                <button type="button" data-import-preset="pano" data-accept=".jpg,.jpeg,.webp,.png,.jgw,.pgw,.wld" class="btn btn-sm" style="text-align:left;padding:9px 12px;border-radius:9px;background:#121915;border:1px solid rgba(255,255,255,0.16);color:#dce6dc;font-weight:700;font-size:12px;">
+                                    &#127760; 360&deg; Panoramas &amp; EXIF Photos<br/><span style="font-weight:400;font-size:10.5px;color:#9eb2a5;">1 or multiple .JPG/.WEBP (auto Virtual Tour)</span>
+                                </button>
+                                <button type="button" data-import-preset="video_file" data-accept=".mp4,.mov,.webm,.m4v,.srt,.gpx,.csv" class="btn btn-sm" style="text-align:left;padding:9px 12px;border-radius:9px;background:#121915;border:1px solid rgba(255,255,255,0.16);color:#dce6dc;font-weight:700;font-size:12px;">
+                                    &#127909; Hosted Geo-Video File<br/><span style="font-weight:400;font-size:10.5px;color:#9eb2a5;">Select .MP4/.MOV + .SRT/.GPX together</span>
+                                </button>
+                                <button type="button" data-import-preset="video_link" class="btn btn-sm" style="text-align:left;padding:9px 12px;border-radius:9px;background:#121915;border:1px solid rgba(245,158,11,0.45);color:#fde68a;font-weight:700;font-size:12px;">
+                                    &#127916; 0-MB YouTube / Vimeo Link<br/><span style="font-weight:400;font-size:10.5px;color:#e5c98a;">External video URL + .SRT/.GPX (0 GiB)</span>
+                                </button>
+                            </div>
+                            <div id="import-preset-hint" class="mb-3" style="display:none;padding:9px 13px;border-radius:8px;background:#132018;border-left:3px solid #99CC00;color:#dce8e0;font-size:12px;"></div>
+                            <script>
+                            (function(){{
+                                var wrap = document.getElementById('import-quick-modes');
+                                if (!wrap) return;
+                                var fileInp = document.getElementById('upload-file');
+                                var hintEl = document.getElementById('import-preset-hint');
+                                var gvBox = document.getElementById('geovideo-link-box');
+                                var hints = {{
+                                    all: '',
+                                    pano: 'Select one or multiple 360° equirectangular panoramas (DJI, Insta360, Ricoh Theta) or geotagged drone photos (.JPG/.WEBP/.PNG). EXIF GPS, altitude, and gimbal orientation are extracted automatically!',
+                                    video_file: 'Select your drone or action-cam video (.MP4 / .MOV / .WEBM) — hold Ctrl/Cmd to also select its companion DJI .SRT, .GPX, or .CSV flight log at the same time.',
+                                    video_link: 'Paste your YouTube, Vimeo, or HTTPS .MP4 URL in the 0-MB Geo-Video panel below and attach an optional .SRT / .GPX telemetry track.'
+                                }};
+                                function activatePreset(key, scrollToLink) {{
+                                    var btns = wrap.querySelectorAll('[data-import-preset]');
+                                    btns.forEach(function(b){{
+                                        var active = b.getAttribute('data-import-preset') === key;
+                                        b.style.background = active ? '#1b2a1f' : '#121915';
+                                        b.style.borderColor = active ? '#99CC00' : (b.getAttribute('data-import-preset') === 'video_link' ? 'rgba(245,158,11,0.45)' : 'rgba(255,255,255,0.16)');
+                                    }});
+                                    var targetBtn = wrap.querySelector('[data-import-preset="' + key + '"]');
+                                    if (fileInp && targetBtn && targetBtn.getAttribute('data-accept')) {{
+                                        fileInp.setAttribute('accept', targetBtn.getAttribute('data-accept'));
+                                    }}
+                                    if (hintEl) {{
+                                        var msg = hints[key] || '';
+                                        hintEl.textContent = msg;
+                                        hintEl.style.display = msg ? 'block' : 'none';
+                                    }}
+                                    if (key === 'video_link' && gvBox) {{
+                                        gvBox.open = true;
+                                        if (scrollToLink) gvBox.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+                                    }}
+                                }}
+                                wrap.addEventListener('click', function(ev){{
+                                    var b = ev.target && ev.target.closest && ev.target.closest('[data-import-preset]');
+                                    if (!b) return;
+                                    activatePreset(b.getAttribute('data-import-preset'), true);
+                                }});
+                                try {{
+                                    var sp = new URLSearchParams(window.location.search);
+                                    if (sp.get('focus') === 'media') {{
+                                        if (gvBox) gvBox.open = true;
+                                        activatePreset('pano', false);
+                                    }}
+                                }} catch (e) {{}}
+                            }})();
+                            </script>"""
 
     body_content = f"""
     <section id="taskUploadWorkspace" class="workspace-section pt-4">
@@ -6721,46 +7419,93 @@ def _render_unified_task_upload_page(
 
                             {existing_block}
 
-                            <form data-asset-upload data-latest-job="{int(latest.get('ID') or 0)}" data-latest-asset="{int(latest.get('ASSET_ID') or 0)}" action="/ExternalAssetImportUpload.ashx" method="post" enctype="multipart/form-data" style="background:#111613;border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:20px;">
+                            {zip_migration_banner_html}
+
+                            <form data-asset-upload data-myearth-url="{myearth_return_url}" data-gcp-count="{gcp_attached_count}" data-latest-job="{int(latest.get('ID') or 0)}" data-latest-asset="{int(latest.get('ASSET_ID') or 0)}" action="/ExternalAssetImportUpload.ashx" method="post" enctype="multipart/form-data" style="background:#111613;border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:20px;">
                                 <input type="hidden" name="project_id" value="{project_id}" />
                                 <input type="hidden" name="source_origin" value="{'gaussian' if is_gaussian else 'imported'}" />
-                                {'''<label for="gaussianQuality" class="form-label" style="color:#cbd5e1">Reconstruction quality (photos and video)</label>
-                                <select id="gaussianQuality" name="quality_preset" class="form-select mb-3">
-                                    <option value="FAST">Fast · 2,000 training iterations</option>
-                                    <option value="STANDARD" selected>Standard · 6,000 training iterations</option>
-                                    <option value="HIGH_QUALITY">High quality · 12,000 training iterations</option>
-                                </select><p class="small" style="color:#a9b9b1">Quality depends on capture coverage and sharpness. Existing Gaussian models are imported without training.</p>''' if is_gaussian else ''}
+                                {f'''<input type="hidden" id="gaussianQuality" name="quality_preset" value="HIGH_QUALITY" />
+                                <div class="mb-3" style="padding:12px 15px;background:#0e1712;border:1px solid rgba(153,204,0,0.35);border-radius:10px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;">
+                                    <div>
+                                        <div style="font-size:11.5px;font-weight:800;color:#99CC00;text-transform:uppercase;letter-spacing:0.05em;">
+                                            <i class="fas fa-sparkles me-1"></i> Maximum Quality Always Active (COLMAP + OpenSplat &middot; 15,000 Iterations &middot; 2048px)
+                                        </div>
+                                        <div style="font-size:12px;color:#cbd5e1;margin-top:2px;">
+                                            Photos &amp; videos (plus optional <code>.SRT / .GPX / .CSV</code> or GCPs) reconstruct into <code>.PLY</code>, compressed <code>.SPZ</code>, and Cesium <code>3D Tiles</code>. Pre-trained <code>.PLY / .SPLAT / .SPZ / .KSPLAT</code> (or <code>.ZIP</code>) import at <strong>0,00 &euro;</strong>.
+                                        </div>
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                        <span id="gaussianGcpBadge" style="font-size:11.5px;padding:4px 10px;border-radius:999px;background:{'rgba(153,204,0,0.18)' if gcp_attached_count >= 3 else '#141d17'};border:1px solid {'#99CC00' if gcp_attached_count >= 3 else '#35483c'};color:{'#d9f99d' if gcp_attached_count >= 3 else '#9eb2a5'};font-weight:700;">
+                                            {f'✓ {gcp_attached_count} Metric GCPs Attached' if gcp_attached_count >= 3 else 'Optional Metric GCPs'}
+                                        </span>
+                                        <button type="button" id="btnOpenGaussianGcpStudio" class="btn btn-sm" style="background:rgba(153,204,0,0.15);border:1px solid #99CC00;color:#99CC00;font-weight:700;font-size:11.5px;padding:6px 12px;">
+                                            &#8982; Open MosaicEarth GCP Studio
+                                        </button>
+                                    </div>
+                                </div>''' if is_gaussian else ''}
 
                                 <div style="font-size:12px;font-weight:700;color:#99CC00;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px;">
                                     <i class="fas fa-cloud-upload-alt me-1"></i> Upload &amp; Register Asset into "{pname}"
                                 </div>
 
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label for="upload-file" style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:5px;display:block;">Select File(s) to Upload *</label>
-                                        <input type="file" id="upload-file" name="file" required {'multiple' if is_gaussian else ''} accept="{accepted_exts}" class="form-control" style="background:#161c18;border:1px solid #99CC00;color:#fff;font-size:13px;" />
-                                        <small style="color:#8fa099;font-size:11px;display:block;margin-top:4px;">Supported: {accepted_exts}</small>
+                                <div id="unifiedUploadFieldsWrap" class="row g-3">
+                                    <div class="col-md-7">
+                                        <div id="unifiedDropzone" class="me-unified-dropzone">
+                                            <label for="upload-file" style="font-size:12.5px;color:#fff;font-weight:700;margin-bottom:6px;display:block;cursor:pointer;">
+                                                <i class="fas fa-file-upload me-1" style="color:#99CC00;"></i> Drag &amp; Drop or Select File(s) to Upload *
+                                            </label>
+                                            <input type="file" id="upload-file" name="file" required multiple accept="{accepted_exts}" class="form-control" style="background:#161c18;border:1px solid #99CC00;color:#fff;font-size:13px;" />
+                                            <small style="color:#8fa099;font-size:11px;display:block;margin-top:6px;">Supported: {accepted_exts}</small>
+                                        </div>
                                     </div>
-                                    <div class="col-md-6">
+                                    <div class="col-md-5">
                                         <label for="upload-title" style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:5px;display:block;">Asset Display Name (optional, defaults to filename)</label>
-                                        <input type="text" id="upload-title" name="title" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:13px;" placeholder="e.g. {pname} - Main Layer" />
+                                        <input type="text" id="upload-title" name="title" class="form-control mb-2" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:13px;" placeholder="e.g. {pname} - Main Layer" />
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <label for="upload-capture_date" style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:4px;display:block;">Capture Date</label>
+                                                <input type="date" id="upload-capture_date" name="capture_date" value="{pdate}" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:12.5px;" />
+                                            </div>
+                                            <div class="col-6">
+                                                <label for="upload-capture_method" style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:4px;display:block;">Methodology / Sensor</label>
+                                                <input type="text" id="upload-capture_method" name="capture_method" value="{pmethod}" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:12.5px;" placeholder="e.g. DJI RTK / LiDAR" />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="col-md-4">
-                                        <label for="upload-capture_date" style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:5px;display:block;">Capture / Creation Date</label>
-                                        <input type="date" id="upload-capture_date" name="capture_date" value="{pdate}" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:13px;" />
+
+                                    <div class="col-12">
+                                        <div style="background:#0e1511;border:1px solid #2b3c32;border-radius:10px;padding:13px 15px;">
+                                            <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+                                                <div>
+                                                    <span style="font-size:12px;font-weight:700;color:#fff;"><i class="fas fa-map-marked-alt me-1" style="color:#99CC00;"></i> Georeferencing &amp; Map Location</span>
+                                                    <span id="georefStatusBadge" style="margin-left:8px;font-size:11px;padding:3px 9px;border-radius:999px;background:#18241d;border:1px solid #3c5244;color:#cbd5e1;font-weight:700;">
+                                                        {'✓ Initial coordinates set' if (plat and plon) else 'Select files to auto-detect GPS/CRS or click the map'}
+                                                    </span>
+                                                </div>
+                                                <div style="display:flex;gap:6px;align-items:center;min-width:240px;">
+                                                    <input type="text" id="mapPlaceSearchInput" class="form-control form-control-sm" style="background:#161c18;border:1px solid #35483c;color:#fff;font-size:12px;" placeholder="Search city / address on map..." />
+                                                    <button type="button" id="btnMapPlaceSearch" class="btn btn-sm btn-secondary" style="font-size:11.5px;white-space:nowrap;">Find</button>
+                                                </div>
+                                            </div>
+                                            <div id="uploadLocationMap" style="width:100%;height:230px;border-radius:8px;border:1px solid #29382f;background:#0a0f0c;margin-bottom:10px;"></div>
+                                            <div class="row g-2 align-items-end">
+                                                <div class="col-md-3 col-6">
+                                                    <label for="upload-lat" style="font-size:11px;color:#cbd5e1;font-weight:600;margin-bottom:3px;display:block;">Latitude (WGS84)</label>
+                                                    <input type="text" id="upload-lat" name="lat" value="{plat}" placeholder="Click map or auto-detected" class="form-control form-control-sm" style="background:#161c18;border:1px solid rgba(255,255,255,0.18);color:#fff;font-size:12.5px;" />
+                                                </div>
+                                                <div class="col-md-3 col-6">
+                                                    <label for="upload-lon" style="font-size:11px;color:#cbd5e1;font-weight:600;margin-bottom:3px;display:block;">Longitude (WGS84)</label>
+                                                    <input type="text" id="upload-lon" name="lon" value="{plon}" placeholder="Click map or auto-detected" class="form-control form-control-sm" style="background:#161c18;border:1px solid rgba(255,255,255,0.18);color:#fff;font-size:12.5px;" />
+                                                </div>
+                                                <div class="col-md-6 col-12">
+                                                    <small id="georefHelperCopy" style="color:#9eb2a5;font-size:11.5px;display:block;line-height:1.4;">
+                                                        Georeferenced files (GeoTIFF, LAS/LAZ, GeoJSON/KML, EXIF GPS photos, SRT/GPX video) place their pin automatically. For unreferenced 3D models/scans, <strong>click anywhere on the map</strong> to set an approximate spot (you can fine-tune X, Y, Z &amp; rotation later in MyEarth &rarr; Adjust Placement).
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="col-md-4">
-                                        <label for="upload-capture_method" style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:5px;display:block;">Methodology / Sensor</label>
-                                        <input type="text" id="upload-capture_method" name="capture_method" value="{pmethod}" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:13px;" placeholder="e.g. DJI Mavic 3E RTK / LiDAR / Terrestrial Scan" />
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label for="upload-lat" style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:5px;display:block;">Latitude (WGS84)</label>
-                                        <input type="text" id="upload-lat" name="lat" value="{plat}" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:13px;" />
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label for="upload-lon" style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:5px;display:block;">Longitude (WGS84)</label>
-                                        <input type="text" id="upload-lon" name="lon" value="{plon}" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:13px;" />
-                                    </div>
+
                                     <div class="col-12">
                                         <label for="upload-description" style="font-size:11.5px;color:#cbd5e1;font-weight:600;margin-bottom:5px;display:block;">Task / Asset Description</label>
                                         <textarea id="upload-description" name="description" rows="2" class="form-control" style="background:#161c18;border:1px solid rgba(255,255,255,0.16);color:#fff;font-size:13px;">{pdesc}</textarea>

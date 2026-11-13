@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MosaicEarth GCP Studio · Open-Source Photogrammetry &amp; 3DGS Control Points</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="./gcp-studio.css" />
+</head>
+<body>
+  <div class="studio-shell">
+    <header class="studio-topbar">
+      <div class="brand-group">
+        <span class="brand-mark">&#8982;</span>
+        <div>
+          <div class="brand-title">MosaicEarth <span>GCP Studio</span></div>
+          <div id="studioSubtitle" style="font-size:10.5px;color:#98aba0;">Open-Source Ground Control &amp; Check Point Tagging · Photogrammetry &amp; Metric 3D Gaussian Splatting</div>
+        </div>
+        <span id="studioModeBadge" class="mode-pill">Standalone Mode</span>
+      </div>
+
+      <div class="topbar-controls">
+        <select id="crsSelect" class="crs-select" aria-label="Coordinate Reference System"></select>
+        <input id="crsCustomInput" type="text" class="crs-custom-input" placeholder="e.g. EPSG:25831+5782" style="display:none;width:155px;" />
+
+        <button type="button" class="btn-studio" id="btnLoadImages" title="Load local photos or extracted video frames">+ Images</button>
+        <input type="file" id="inpImages" accept=".jpg,.jpeg,.png,.webp" multiple hidden />
+
+        <button type="button" class="btn-studio" id="btnImportCsv" title="Import surveyor CSV / TXT or existing ODM gcp_list.txt">+ Import CSV / GCP</button>
+        <input type="file" id="inpCsv" accept=".csv,.txt,.tsv" hidden />
+
+        <button type="button" class="btn-studio" id="btnExportOdm" title="Download OpenDroneMap / WebODM gcp_list.txt">Export gcp_list.txt</button>
+        <button type="button" class="btn-studio" id="btnExport3dgs" title="Download COLMAP / 3D Gaussian Splatting metric GCP JSON">Export 3DGS JSON</button>
+
+        <button type="button" class="btn-studio btn-studio--primary" id="btnAttachTask" style="display:none;">
+          &#10003; SAVE &amp; ATTACH TO TASK
+        </button>
+      </div>
+    </header>
+
+    <main class="studio-workspace">
+      <!-- Left: Satellite Map + GCP Table -->
+      <section class="left-column">
+        <div class="map-pane">
+          <div class="map-overlay-bar">
+            <div class="map-search-box">
+              <input type="search" id="inpPlaceSearch" placeholder="Search place or lat,lon..." />
+              <button type="button" class="btn-studio" id="btnPlaceSearch" style="height:25px;padding:0 8px;font-size:11px;">Go</button>
+            </div>
+            <button type="button" class="btn-studio btn-studio--accent" id="btnPickOnMap" style="height:31px;font-size:11px;" title="Click anywhere on the satellite map to create a Ground Control Point">
+              + Click Map to Add GCP
+            </button>
+          </div>
+          <div id="gcpMap"></div>
+        </div>
+
+        <div class="gcp-list-pane">
+          <div class="pane-header">
+            <h2 id="gcpCountHeading">Ground Control &amp; Check Points (0)</h2>
+            <div style="display:flex;gap:6px;">
+              <button type="button" class="btn-studio" id="btnAddManualGcp" style="height:27px;padding:0 9px;font-size:11px;">+ Add Row</button>
+            </div>
+          </div>
+          <div id="gcpTableScroll" class="gcp-table-scroll">
+            <div id="emptyGcpHint" style="padding:18px 12px;text-align:center;color:#98aba0;font-size:12px;line-height:1.55;">
+              <strong>1.</strong> Import your surveyor <code>.CSV / .TXT</code> or click <strong>+ Click Map to Add GCP</strong> on the satellite map above.<br/>
+              <strong>2.</strong> Select a GCP, choose a photo on the right, and click the exact pixel target (mark at least <strong>3 GCPs</strong> in <strong>3+ photos</strong>).
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Sub-Pixel Canvas Inspector + Smart Photo Strip -->
+      <section class="right-column">
+        <div class="inspector-toolbar">
+          <div id="activeImageTitle" style="font-weight:700;color:#edf4ee;">No image selected</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="activeGcpPrompt" style="font-size:11.5px;color:#bef264;">Select a GCP &amp; click pixel target</span>
+            <button type="button" class="btn-studio" id="btnResetZoom" style="height:26px;padding:0 9px;font-size:11px;">Fit Image</button>
+            <button type="button" class="btn-studio" id="btnClearObsOnImage" style="height:26px;padding:0 9px;font-size:11px;color:#fca5a5;">Clear Pin</button>
+          </div>
+        </div>
+
+        <div class="canvas-stage" id="canvasStage">
+          <canvas id="imageCanvas"></canvas>
+          <div class="loupe-box" id="loupeBox">
+            <canvas id="loupeCanvas" width="156" height="156"></canvas>
+            <div class="loupe-caption" id="loupeCoords">px: 0, py: 0</div>
+          </div>
+          <div class="empty-canvas-hint" id="emptyCanvasHint">
+            <div style="font-size:32px;color:#99CC00;margin-bottom:8px;">&#8982;</div>
+            <strong style="color:#fff;font-size:14px;">Load Photos or Open from a MosaicEarth Task</strong>
+            <p style="max-width:420px;font-size:12.5px;margin-top:6px;">
+              Scroll wheel to zoom up to 32&times; with the live sub-pixel magnifier loupe, drag to pan, and left-click to tag the active Ground Control Point.
+            </p>
+          </div>
+        </div>
+
+        <div class="photo-strip">
+          <div class="photo-strip-header">
+            <span id="photoStripCount">Images (0) — automatically sorted by proximity to selected GCP when EXIF GPS is available</span>
+            <span id="overallSummaryStats" style="color:#99CC00;font-weight:700;">0 valid GCPs · 0 pixel observations</span>
+          </div>
+          <div class="photo-strip-items" id="photoStripItems"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="studioToast" class="toast-banner" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script type="module" src="./gcp-studio.js"></script>
+</body>
+</html>

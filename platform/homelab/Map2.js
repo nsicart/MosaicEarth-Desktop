@@ -964,6 +964,16 @@ function mosaicScheduleAssetQuery(immediate) {
     mosaicAssetQueryTimer = window.setTimeout(function(){ mosaicQueryAssetsInView(0, generation); }, immediate ? 0 : 180);
 }
 
+function mosaicHasExplicitCoords(lat, lon) {
+    if (lat == null || lon == null) return false;
+    var sLat = String(lat).trim().replace(',', '.');
+    var sLon = String(lon).trim().replace(',', '.');
+    if (!sLat || !sLon) return false;
+    var nLat = Number(sLat), nLon = Number(sLon);
+    if (!isFinite(nLat) || !isFinite(nLon)) return false;
+    return Math.abs(nLat) > 1e-5 || Math.abs(nLon) > 1e-5;
+}
+
 function loadAllAssets(latMarket, lonMarket, families, preservedCamera) {
     mosaicActiveFamilies = String(families || "");
     mosaicFocusedAssetKey = ""; mosaicFocusedAssetUntil = 0; mosaicCardPresence = {}; mosaicLastCardSignature = "";
@@ -979,7 +989,7 @@ function loadAllAssets(latMarket, lonMarket, families, preservedCamera) {
     $("#items").html('<div class="map-empty-state"><strong>Loading the global asset network</strong><span>Preparing lightweight discovery markers…</span></div>');
     if (isNewViewer) {
         if (preservedCamera) viewer.camera.setView({ destination:preservedCamera.destination, orientation:{ direction:preservedCamera.direction, up:preservedCamera.up } });
-        else if (latMarket != null && lonMarket != null) viewer.camera.setView({destination:Cesium.Cartesian3.fromDegrees(Number(lonMarket),Number(latMarket),2000),orientation:{heading:0,pitch:MosaicCesiumRuntime.topDownOffset(1).pitch,roll:0}});
+        else if (mosaicHasExplicitCoords(latMarket, lonMarket)) viewer.camera.setView({destination:Cesium.Cartesian3.fromDegrees(Number(String(lonMarket).replace(',', '.')),Number(String(latMarket).replace(',', '.')),2000),orientation:{heading:0,pitch:MosaicCesiumRuntime.topDownOffset(1).pitch,roll:0}});
         else if (heightMove > 0) viewer.camera.setView({destination:Cesium.Cartesian3.fromDegrees(Number(lonMove),Number(latMove),Number(heightMove)),orientation:{heading:0,pitch:MosaicCesiumRuntime.topDownOffset(1).pitch,roll:0}});
     }
     mosaicScheduleAssetQuery(true);
@@ -999,9 +1009,13 @@ mosaicTemporalFilter = MosaicTemporalFilter.mount({ containerId:"globalTemporalF
 document.getElementById('mapExtension').addEventListener('change', mosaicTemporalFilterChanged);
 
 if (tipo != "0") {
-    loadCesium(tipo, latMarket.replace(',', '.'), lonMarket.replace(',', '.'));
+    var initLat = mosaicHasExplicitCoords(latMarket, lonMarket) ? String(latMarket).replace(',', '.') : null;
+    var initLon = mosaicHasExplicitCoords(latMarket, lonMarket) ? String(lonMarket).replace(',', '.') : null;
+    loadCesium(tipo, initLat, initLon);
 } else {
-    loadCesium(0, null, null);
+    var initLat0 = mosaicHasExplicitCoords(latMarket, lonMarket) ? String(latMarket).replace(',', '.') : null;
+    var initLon0 = mosaicHasExplicitCoords(latMarket, lonMarket) ? String(lonMarket).replace(',', '.') : null;
+    loadCesium(0, initLat0, initLon0);
 }
 
 

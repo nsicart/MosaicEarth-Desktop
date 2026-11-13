@@ -18,8 +18,8 @@ Photogrammetry, Gaussian splatting and a geospatial workspace for Windows and Li
 
 ## What you can do
 
-- **Make maps from photographs.** NodeODX/ODX reconstructs orthophotos, elevation models, point clouds and textured meshes. Choose Fast or Complete according to the outputs you need.
-- **Reconstruct Gaussian scenes.** COLMAP and OpenSplat turn overlapping imagery into navigable 3D Gaussian models.
+- **Make maximum-quality maps & 3D models from photographs or drone video.** NodeODX/ODX reconstructs full-resolution orthophotos, DSM & DTM elevation models, dense point clouds and textured meshes — including automatic sharp keyframe extraction from video (`.mp4`/`.mov` + `.srt`/`.gpx`) and unreferenced 3D reconstruction.
+- **Reconstruct Gaussian scenes & align with Ground Control Points.** COLMAP and OpenSplat turn overlapping imagery or video into high-quality 3D Gaussian models, with built-in **MosaicEarth GCP Studio** (`/GCPStudio.aspx`, [MIT open source](https://github.com/nsicart/MosaicEarth-GCP-Studio)) for sub-pixel GCP & Check Point alignment in both Photogrammetry and 3DGS.
 - **Organize your work in MyEarth.** Keep projects, surveys, source files and completed products together, with local and cloud storage clearly separated.
 - **Compose scenes in MyMosaics.** Combine georeferenced layers and models, inspect them in 3D and explore with Fly View.
 - **Use your GPU when compatible.** Automatic mode checks NVIDIA CUDA access inside Docker and selects GPU or CPU for each engine. CPU-only operation remains available; not every processing stage uses the GPU.
@@ -88,6 +88,6 @@ Dependency revisions and notices are included in [third-party licenses](THIRD_PA
 | Build packages or contribute | [Build](BUILD.md) · [Contributing and repository map](CONTRIBUTING.md) |
 | Report a problem | [GitHub issues](https://github.com/nsicart/MosaicEarth-Desktop/issues) · [Private security reports](SECURITY.md) |
 
-Current source version: **0.4.4**, with open-source connectors **0.4.0** (`connectors-v0.4.0`). Download published, verified installers from the [releases page](https://github.com/nsicart/MosaicEarth-Desktop/releases). Windows and Linux x86-64 are the supported distribution targets; there is no macOS installer. The Windows trusted-publisher certificate is pending: OpenPGP signatures verify release artifacts but do not remove Windows SmartScreen/unknown-publisher warnings.
+Current source version: **0.4.4**, with standalone open-source connectors **0.4.0** and **MosaicEarth GCP Studio 0.1.0** ([see all repositories](CONNECTORS.md)). Download published, verified installers from the [releases page](https://github.com/nsicart/MosaicEarth-Desktop/releases). Windows and Linux x86-64 are the supported distribution targets; there is no macOS installer. The Windows trusted-publisher certificate is pending: OpenPGP signatures verify release artifacts but do not remove Windows SmartScreen/unknown-publisher warnings.
 
 MosaicEarth Desktop is licensed under **[AGPL-3.0](LICENSE)**. See [NOTICE](NOTICE) and [third-party licenses](THIRD_PARTY_LICENSES.md) for bundled components. The software license is separate from licenses for user-uploaded data and map imagery.

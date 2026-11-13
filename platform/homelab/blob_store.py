@@ -718,6 +718,8 @@ class LocalBlobStore:
                 pass
         return None
 
+    read_bytes = read_bytes_from_cloud
+
     def save_bytes(self, container: str, blob_name: str, data: bytes) -> Path:
         p = self.resolve_path(container, blob_name)
         if p is None:

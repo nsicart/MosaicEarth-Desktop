@@ -2887,24 +2887,34 @@ class MosaicEarthDataStore:
             return sorted(existing_approved)
 
     def get_subprojects_family(self, project_id: int) -> Tuple[int, List[Dict[str, Any]]]:
-        """Returns (root_project_id, list_of_subprojects_in_family) for hierarchical Project -> Subprojects -> Assets."""
+        """Returns (root_project_id, list_of_subprojects_in_family) for hierarchical Project -> Survey -> Task -> Assets."""
         with self.lock:
-            current = None
-            for p in self.tables.get("dbo.WEB_PROJECTS", []):
-                if int(p.get("ID") or 0) == int(project_id) and p.get("ACTIVO", True):
-                    current = p
-                    break
+            active_by_id = {
+                int(p.get("ID") or 0): p
+                for p in self.tables.get("dbo.WEB_PROJECTS", [])
+                if p.get("ACTIVO", True) and int(p.get("ID") or 0) > 0
+            }
+            current = active_by_id.get(int(project_id))
             if not current:
                 return int(project_id), []
-            root_id = int(current.get("PARENT_PROJECT_ID") or 0) or int(current.get("ID") or 0)
-            family = []
-            for p in self.tables.get("dbo.WEB_PROJECTS", []):
-                if not p.get("ACTIVO", True):
-                    continue
-                pid = int(p.get("ID") or 0)
-                parent_id = int(p.get("PARENT_PROJECT_ID") or 0)
-                if pid == root_id or parent_id == root_id:
-                    family.append(copy.deepcopy(p))
+            root_id = int(current.get("ID") or 0)
+            visited = {root_id}
+            for _ in range(8):
+                up_id = int((active_by_id.get(root_id) or {}).get("PARENT_PROJECT_ID") or 0)
+                if up_id <= 0 or up_id in visited or up_id not in active_by_id:
+                    break
+                visited.add(up_id)
+                root_id = up_id
+            family_ids = {root_id}
+            changed = True
+            while changed:
+                changed = False
+                for pid, p in active_by_id.items():
+                    parent_id = int(p.get("PARENT_PROJECT_ID") or 0)
+                    if parent_id in family_ids and pid not in family_ids:
+                        family_ids.add(pid)
+                        changed = True
+            family = [copy.deepcopy(active_by_id[pid]) for pid in family_ids if pid in active_by_id]
             family.sort(key=lambda r: (0 if int(r.get("ID") or 0) == root_id else 1, int(r.get("ID") or 0)))
             return root_id, family
 
@@ -4266,7 +4276,11 @@ class MosaicEarthDataStore:
         ).strip().lower()
         desc_text = f"{raw_preset} {proj.get('DESCRIPTION') or ''} {proj.get('NAME') or ''}".lower()
 
-        if explicit_dsm is not None:
+        is_unreferenced = bool(proj.get("UNREFERENCED_PHOTOGRAMMETRY"))
+
+        if is_unreferenced:
+            enable_dsm = False
+        elif explicit_dsm is not None:
             enable_dsm = bool(explicit_dsm)
         elif proj.get("ENABLE_DSM") is not None:
             enable_dsm = bool(proj.get("ENABLE_DSM"))
@@ -4279,13 +4293,15 @@ class MosaicEarthDataStore:
         )
         non_terrain_3d_keywords = ("facade", "façana", "monument", "building", "edifici", "object", "3d_model", "statue")
 
-        if explicit_dtm is not None:
+        if is_unreferenced:
+            enable_dtm = False
+        elif explicit_dtm is not None:
             enable_dtm = bool(explicit_dtm)
         elif proj.get("ENABLE_DTM") is not None:
             enable_dtm = bool(proj.get("ENABLE_DTM"))
         elif any(k in raw_preset for k in non_terrain_3d_keywords):
             enable_dtm = False
-        elif any(k in desc_text for k in terrain_keywords):
+        elif raw_preset == "complete" or any(k in desc_text for k in terrain_keywords):
             enable_dtm = True
         else:
             # Default policy: DSM=True, DTM=False unless topography/mapping preset or explicit ENABLE_DTM=True
@@ -4302,9 +4318,9 @@ class MosaicEarthDataStore:
             cli_args.append("--dtm")
 
         is_fast_ortho = raw_preset in ("fast_ortho", "rapid_ortho", "emergency_ortho", "fast-orthophoto")
-        is_high_quality = raw_preset in ("high_quality", "ultra", "high", "precision", "survey_grade")
-        is_3d_facade = any(k in raw_preset for k in non_terrain_3d_keywords)
-        is_topography = enable_dtm or any(k in raw_preset for k in terrain_keywords)
+        is_high_quality = raw_preset in ("complete", "high_quality", "ultra", "high", "precision", "survey_grade")
+        is_3d_facade = is_unreferenced or any(k in raw_preset for k in non_terrain_3d_keywords)
+        is_topography = (not is_unreferenced) and (enable_dtm or any(k in raw_preset for k in terrain_keywords))
 
         # Configure dense reconstruction & quality parameters according to preset
         if is_fast_ortho:
@@ -4581,7 +4597,18 @@ class MosaicEarthDataStore:
                                 pass
                             _set_prog(pct)
 
-                    if proc.returncode == 0 and (job_dir / "odm_orthophoto" / "odm_orthophoto.tif").is_file():
+                    has_native_output = (
+                        (job_dir / "odm_orthophoto" / "odm_orthophoto.tif").is_file()
+                        or (
+                            bool(proj.get("UNREFERENCED_PHOTOGRAMMETRY"))
+                            and (
+                                (job_dir / "odm_texturing").exists()
+                                or (job_dir / "odm_texturing_25d").exists()
+                                or (job_dir / "3d_tiles").exists()
+                            )
+                        )
+                    )
+                    if proc.returncode == 0 and has_native_output:
                         _set_prog(99)
                         self.complete_photogrammetry_task(project_id, user_id, native_job_dir=job_dir)
                         return

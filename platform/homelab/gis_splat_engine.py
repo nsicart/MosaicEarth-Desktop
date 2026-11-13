@@ -2209,7 +2209,7 @@ def build_gaussian_splatting_from_media(
     detected_gps: List[Tuple[float, float, float]] = []
     has_video_input = False
 
-    preset_key = str(quality_preset or "STANDARD").strip().lower()
+    preset_key = str(quality_preset or "HIGH_QUALITY").strip().lower()
     preset_map = {
         "fast": {"preset_id": "FAST", "max_dim": 960, "max_views": 48, "iters": 3000},
         "balanced": {"preset_id": "STANDARD", "max_dim": 1600, "max_views": 120, "iters": 7000},
@@ -2217,11 +2217,28 @@ def build_gaussian_splatting_from_media(
         "high": {"preset_id": "HIGH_QUALITY", "max_dim": 2048, "max_views": 240, "iters": 15000},
         "high_quality": {"preset_id": "HIGH_QUALITY", "max_dim": 2048, "max_views": 240, "iters": 15000},
     }
-    preset_cfg = preset_map.get(preset_key, preset_map["standard"])
+    preset_cfg = preset_map.get(preset_key, preset_map["high_quality"])
     preset_id = str(preset_cfg["preset_id"])
     target_max_dim = 256 if allow_synthetic_cpu_fallback else int(preset_cfg["max_dim"])
     target_max_views = 16 if allow_synthetic_cpu_fallback else int(preset_cfg["max_views"])
     target_iters = 150 if allow_synthetic_cpu_fallback else int(preset_cfg["iters"])
+
+    # Pre-scan optional companion GPS telemetry (.srt / .gpx / .csv)
+    companion_telemetry_samples: List[Dict[str, Any]] = []
+    for t_name, t_bytes in media_files:
+        t_ext = Path(t_name).suffix.lower()
+        if t_ext in (".srt", ".gpx", ".csv") and t_bytes:
+            try:
+                from .geo_video import parse_telemetry_file
+                with tempfile.NamedTemporaryFile(suffix=t_ext) as tf_t:
+                    tf_t.write(t_bytes)
+                    tf_t.flush()
+                    _, parsed_samples = parse_telemetry_file(Path(tf_t.name), t_name)
+                    if parsed_samples:
+                        companion_telemetry_samples = sorted(parsed_samples, key=lambda r: float(r.get("t_ms") or 0))
+                        break
+            except Exception:
+                pass
 
     for fname, fbytes in media_files:
         ext = Path(fname).suffix.lower().lstrip(".")
@@ -2314,7 +2331,7 @@ def build_gaussian_splatting_from_media(
             except Exception:
                 pass
 
-        elif ext in ("mp4", "mov", "webm", "avi", "mkv"):
+        elif ext in ("mp4", "mov", "webm", "m4v", "avi", "mkv"):
             has_video_input = True
             ffmpeg_bin = shutil.which("ffmpeg")
             if not ffmpeg_bin:
@@ -2327,6 +2344,22 @@ def build_gaussian_splatting_from_media(
                 with tempfile.TemporaryDirectory(prefix="me_gs_vid_") as tmpd:
                     vid_path = Path(tmpd) / f"input.{ext}"
                     vid_path.write_bytes(fbytes)
+                    vid_samples = list(companion_telemetry_samples)
+                    if not vid_samples:
+                        try:
+                            from .geo_video import _is_valid_lat_lon, probe_video_metadata_and_embedded_telemetry
+                            v_probe = probe_video_metadata_and_embedded_telemetry(vid_path)
+                            if v_probe.get("samples"):
+                                vid_samples = sorted(list(v_probe["samples"]), key=lambda r: float(r.get("t_ms") or 0))
+                            elif _is_valid_lat_lon(v_probe.get("tag_lat"), v_probe.get("tag_lon")):
+                                vid_samples = [{
+                                    "t_ms": 0,
+                                    "lat": float(v_probe["tag_lat"]),
+                                    "lon": float(v_probe["tag_lon"]),
+                                    "alt_m": float(v_probe.get("tag_alt") or 0.0),
+                                }]
+                        except Exception:
+                            vid_samples = []
                     cmd = [
                         ffmpeg_bin, "-y", "-ss", "1.5", "-i", str(vid_path),
                         "-vf", f"fps=2,scale='min({min(target_max_dim, 1280)},iw)':-2",
@@ -2334,11 +2367,16 @@ def build_gaussian_splatting_from_media(
                         str(Path(tmpd) / "frame_%04d.jpg"),
                     ]
                     subprocess.run(cmd, capture_output=True, timeout=120)
-                    for fp in sorted(Path(tmpd).glob("frame_*.jpg")):
+                    from .video_photogrammetry import interpolate_telemetry_at_ms
+                    for f_idx, fp in enumerate(sorted(Path(tmpd).glob("frame_*.jpg"))):
                         try:
+                            t_ms = (1.5 + f_idx * 0.5) * 1000.0
+                            v_gps = interpolate_telemetry_at_ms(vid_samples, t_ms) if vid_samples else None
+                            if v_gps:
+                                detected_gps.append(v_gps)
                             with Image.open(fp) as im:
                                 arr = _resize_frame_preserving_aspect(im, target_max_dim)
-                                candidate_frames.append((_laplacian_sharpness_score(arr), arr, fp.name, None))
+                                candidate_frames.append((_laplacian_sharpness_score(arr), arr, fp.name, v_gps))
                         except Exception:
                             pass
 
@@ -2424,6 +2462,40 @@ def build_gaussian_splatting_from_media(
         except Exception:
             pass
 
+    gcp_sim3_applied = False
+    if cloud_job_key and ":" in str(cloud_job_key) and (out_dir / "cameras_sfm.json").is_file():
+        try:
+            from .db_store import get_store
+            from .processing_architecture import triangulate_gcp_observations_sim3
+            gs_pid = int(str(cloud_job_key).split(":")[1])
+            gs_proj = get_store().get_project(gs_pid) or {}
+            gcp_obs_doc = gs_proj.get("GCP_OBSERVATIONS")
+            if isinstance(gcp_obs_doc, dict) and gcp_obs_doc.get("points"):
+                cam_doc = json.loads((out_dir / "cameras_sfm.json").read_text(encoding="utf-8"))
+                gcp_fit = triangulate_gcp_observations_sim3(
+                    cam_doc.get("cameras") or [], gcp_obs_doc, frame_gps_map=frame_gps_map
+                )
+                if gcp_fit and gcp_fit.get("is_metric_aligned"):
+                    s_g = float(gcp_fit["sim3_scale"])
+                    R_g = np.asarray(gcp_fit["sim3_rotation_matrix"], dtype=np.float32)
+                    t_g = np.asarray(gcp_fit["sim3_translation_enu_m"], dtype=np.float32)
+                    if 1e-4 < s_g < 1e5 and np.all(np.isfinite(R_g)) and np.all(np.isfinite(t_g)):
+                        pos_all = (s_g * (pos_all.astype(np.float32) @ R_g.T)) + t_g
+                        if scales_all is not None:
+                            scales_all = scales_all.astype(np.float32) * s_g
+                        anc = gcp_fit.get("anchor_wgs84") or {}
+                        eff_lat = float(anc.get("lat", eff_lat))
+                        eff_lon = float(anc.get("lon", eff_lon))
+                        eff_alt = float(anc.get("alt", eff_alt))
+                        gcp_sim3_applied = True
+                        if (out_dir / "splat_benchmark.json").is_file():
+                            b_doc = json.loads((out_dir / "splat_benchmark.json").read_text(encoding="utf-8"))
+                            b_doc["georeferencing"] = gcp_fit
+                            b_doc["georeferencing_alignment"] = gcp_fit
+                            (out_dir / "splat_benchmark.json").write_text(json.dumps(b_doc, indent=2), encoding="utf-8")
+        except Exception:
+            gcp_sim3_applied = False
+
     ref_frame = frames_rgb[0] if frames_rgb else None
     ply_p, splat_p = _write_gaussian_splat_files_with_tiles(
         out_dir,
@@ -2439,7 +2511,7 @@ def build_gaussian_splatting_from_media(
         frame_img=ref_frame,
         render_mode=render_mode,
     )
-    if trained_gpu_ply.is_file():
+    if trained_gpu_ply.is_file() and not gcp_sim3_applied:
         # Preserve the full 62-property Inria 3DGS PLY from GPU training as model.ply
         shutil.copy2(trained_gpu_ply, out_dir / "model.ply")
         derived_spz_dir = out_dir / "derived" / "spz"

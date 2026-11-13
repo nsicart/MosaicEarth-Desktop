@@ -1720,21 +1720,26 @@ class ODMAdapter(PhotogrammetryEngineAdapter):
         # Photogrammetric Quality Gate: verify expected deliverables and deep-inspect inner content before declaring COMPLETED
         proj_obj = store.get_project(project_id) if (store and hasattr(store, "get_project")) else {}
         preset_str = str((proj_obj or {}).get("PROCESSING_PRESET") or "").lower()
-        is_fast_ortho_only = preset_str in ("fast_ortho", "rapid_ortho", "emergency_ortho", "fast")
-        expects_dsm = bool((proj_obj or {}).get("ENABLE_DSM", not is_fast_ortho_only))
-        expects_dtm = bool((proj_obj or {}).get("ENABLE_DTM", preset_str in ("terrain_mapping", "terrain", "dtm", "topography")))
+        is_unreferenced = bool((proj_obj or {}).get("UNREFERENCED_PHOTOGRAMMETRY"))
+        is_fast_ortho_only = (not is_unreferenced) and preset_str in ("fast_ortho", "rapid_ortho", "emergency_ortho", "fast")
+        expects_dsm = (not is_unreferenced) and bool((proj_obj or {}).get("ENABLE_DSM", not is_fast_ortho_only))
+        expects_dtm = (not is_unreferenced) and bool((proj_obj or {}).get("ENABLE_DTM", preset_str in ("terrain_mapping", "terrain", "dtm", "topography")))
         missing: List[str] = []
-        if not res.orthophoto_master:
-            missing.append("orthophoto")
-        if not is_fast_ortho_only:
-            if not res.pointcloud_master:
-                missing.append("pointcloud")
-            if not res.mesh_master:
+        if is_unreferenced:
+            if not res.mesh_master and not res.pointcloud_master:
                 missing.append("mesh")
-        if expects_dsm and not res.dsm_master:
-            missing.append("dsm")
-        if expects_dtm and not res.dtm_master:
-            missing.append("dtm")
+        else:
+            if not res.orthophoto_master:
+                missing.append("orthophoto")
+            if not is_fast_ortho_only:
+                if not res.pointcloud_master:
+                    missing.append("pointcloud")
+                if not res.mesh_master:
+                    missing.append("mesh")
+            if expects_dsm and not res.dsm_master:
+                missing.append("dsm")
+            if expects_dtm and not res.dtm_master:
+                missing.append("dtm")
 
         deep_inspection: Dict[str, Any] = {}
         inner_master_checksums: Dict[str, str] = {}
@@ -3459,6 +3464,181 @@ def align_colmap_cameras_sim3_umeyama(
         "p50_error_m": round(p50_err, 4),
         "p90_error_m": round(p90_err, 4),
         "per_camera_residuals_m": residuals_list,
+    }
+
+
+def triangulate_gcp_observations_sim3(
+    cameras: List[Dict[str, Any]],
+    gcp_json_doc: Dict[str, Any],
+    frame_gps_map: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Triangulates 2D sub-pixel Ground Control Point observations (`GCP_OBSERVATIONS` from MosaicEarth GCP Studio)
+    across calibrated COLMAP / OpenSplat cameras (`cameras_sfm.json`) and fits an exact metric `Sim(3)`
+    (`scale`, `R`, `t`) from COLMAP 3D space to local ENU meters (`CONTROL_VERIFIED`).
+    """
+    import math as _math
+    import numpy as np
+
+    if not cameras or not isinstance(gcp_json_doc, dict):
+        return None
+    points = gcp_json_doc.get("points") or []
+    if len(points) < 3:
+        return None
+
+    gps_map = frame_gps_map or {}
+    cam_by_name: Dict[str, Dict[str, Any]] = {}
+    cam_iter = [
+        ({**v, "image_name": k} if isinstance(v, dict) and not v.get("img_name") and not v.get("image_name") else v)
+        for k, v in cameras.items()
+    ] if isinstance(cameras, dict) else list(cameras)
+    for c in cam_iter:
+        if not isinstance(c, dict):
+            continue
+        nm = str(c.get("img_name") or c.get("image_name") or "").strip()
+        if nm:
+            cam_by_name[nm] = c
+            cam_by_name[Path(nm).name] = c
+            orig_nm = str((gps_map.get(nm) or {}).get("orig_name") or "").strip()
+            if orig_nm:
+                cam_by_name[orig_nm] = c
+                cam_by_name[Path(orig_nm).name] = c
+
+    def _triangulate_rays(obs_list: List[Dict[str, Any]]) -> Optional[np.ndarray]:
+        A = np.zeros((3, 3), dtype=np.float64)
+        b = np.zeros(3, dtype=np.float64)
+        used = 0
+        for ob in obs_list:
+            im_key = str(ob.get("image") or "").strip()
+            cam = cam_by_name.get(im_key) or cam_by_name.get(Path(im_key).name)
+            if not cam:
+                continue
+            pos = cam.get("position") if cam.get("position") is not None else (cam.get("camera_center") if cam.get("camera_center") is not None else cam.get("C"))
+            rot = cam.get("rotation") if cam.get("rotation") is not None else cam.get("rotation_c2w")
+            if rot is None and cam.get("R") is not None:
+                rot = np.asarray(cam.get("R"), dtype=np.float64).T
+            w_c = float(cam.get("width") or 0.0)
+            h_c = float(cam.get("height") or 0.0)
+            fx = float(cam.get("fx") or (max(w_c, h_c) * 1.15 if w_c and h_c else 1000.0))
+            fy = float(cam.get("fy") or fx)
+            cx = float(cam.get("cx") or (w_c * 0.5 if w_c else 500.0))
+            cy = float(cam.get("cy") or (h_c * 0.5 if h_c else 400.0))
+            if pos is None or rot is None or len(pos) != 3 or len(rot) != 3:
+                continue
+
+            px = float(ob["px"] if ob.get("px") is not None else (ob.get("u") or 0.0))
+            py = float(ob["py"] if ob.get("py") is not None else (ob.get("v") or 0.0))
+            src_w = float(ob.get("image_width") or 0.0)
+            src_h = float(ob.get("image_height") or 0.0)
+            if src_w > 0 and w_c > 0 and abs(src_w - w_c) > 1.0:
+                px *= w_c / src_w
+            if src_h > 0 and h_c > 0 and abs(src_h - h_c) > 1.0:
+                py *= h_c / src_h
+
+            # Camera-space unit ray (COLMAP convention: +X right, +Y down, +Z forward)
+            d_cam = np.array([(px - cx) / fx, (py - cy) / fy, 1.0], dtype=np.float64)
+            d_cam /= max(1e-12, float(np.linalg.norm(d_cam)))
+            R_c2w = np.asarray(rot, dtype=np.float64)
+            d_w = R_c2w @ d_cam
+            d_w /= max(1e-12, float(np.linalg.norm(d_w)))
+            C_w = np.asarray(pos, dtype=np.float64)
+
+            P_proj = np.eye(3, dtype=np.float64) - np.outer(d_w, d_w)
+            A += P_proj
+            b += P_proj @ C_w
+            used += 1
+        if used < 2:
+            return None
+        try:
+            pt_3d, *_ = np.linalg.lstsq(A, b, rcond=None)
+            if np.all(np.isfinite(pt_3d)):
+                return pt_3d
+        except Exception:
+            return None
+        return None
+
+    control_tri: List[Tuple[str, np.ndarray, float, float, float]] = []
+    check_tri: List[Tuple[str, np.ndarray, float, float, float]] = []
+
+    for p in points:
+        lat_v = p.get("lat")
+        lon_v = p.get("lon")
+        z_v = float(p.get("z") or 0.0)
+        if lat_v is None or lon_v is None:
+            continue
+        pt_col = _triangulate_rays(p.get("observations") or [])
+        if pt_col is None:
+            continue
+        tup = (str(p.get("label") or "GCP"), pt_col, float(lat_v), float(lon_v), z_v)
+        if str(p.get("role") or "gcp").lower() == "check":
+            check_tri.append(tup)
+        else:
+            control_tri.append(tup)
+
+    if len(control_tri) < 3:
+        return None
+
+    lat0 = float(np.mean([t[2] for t in control_tri]))
+    lon0 = float(np.mean([t[3] for t in control_tri]))
+    alt0 = float(np.mean([t[4] for t in control_tri]))
+    cos_lat0 = _math.cos(_math.radians(lat0))
+    m_per_deg_lat = 111132.92 - 559.82 * _math.cos(2.0 * _math.radians(lat0))
+    m_per_deg_lon = 111412.84 * cos_lat0
+
+    def _to_enu(lat_p: float, lon_p: float, z_p: float) -> List[float]:
+        return [
+            (lon_p - lon0) * m_per_deg_lon,
+            (lat_p - lat0) * m_per_deg_lat,
+            z_p - alt0,
+        ]
+
+    X = np.array([t[1] for t in control_tri], dtype=np.float64)
+    Y = np.array([_to_enu(t[2], t[3], t[4]) for t in control_tri], dtype=np.float64)
+
+    mu_x = np.mean(X, axis=0)
+    mu_y = np.mean(Y, axis=0)
+    Xc = X - mu_x
+    Yc = Y - mu_y
+    var_x = float(np.mean(np.sum(Xc ** 2, axis=1)))
+    if var_x < 1e-12:
+        return None
+    cov = (Yc.T @ Xc) / float(len(X))
+    U, D, Vt = np.linalg.svd(cov)
+    S_diag = np.eye(3, dtype=np.float64)
+    if np.linalg.det(U) * np.linalg.det(Vt) < 0:
+        S_diag[2, 2] = -1.0
+    R_fit = U @ S_diag @ Vt
+    s_fit = float(np.trace(np.diag(D) @ S_diag) / var_x)
+    t_fit = mu_y - s_fit * (R_fit @ mu_x)
+
+    Y_hat = (s_fit * (X @ R_fit.T)) + t_fit
+    diff = Y_hat - Y
+    err_3d = np.linalg.norm(diff, axis=1)
+    rmse_3d = float(np.sqrt(np.mean(err_3d ** 2)))
+    rmse_xy = float(np.sqrt(np.mean(np.sum(diff[:, :2] ** 2, axis=1))))
+    rmse_z = float(np.sqrt(np.mean(diff[:, 2] ** 2)))
+
+    check_rmse_3d = None
+    if check_tri:
+        Xc_chk = np.array([t[1] for t in check_tri], dtype=np.float64)
+        Yc_chk = np.array([_to_enu(t[2], t[3], t[4]) for t in check_tri], dtype=np.float64)
+        Yhat_chk = (s_fit * (Xc_chk @ R_fit.T)) + t_fit
+        check_rmse_3d = round(float(np.sqrt(np.mean(np.sum((Yhat_chk - Yc_chk) ** 2, axis=1)))), 4)
+
+    return {
+        "georeferencing_state": "CONTROL_VERIFIED",
+        "alignment_method": "GCP_RayTriangulation_Sim3_Umeyama",
+        "is_metric_aligned": True,
+        "matched_gcp_count": len(control_tri),
+        "check_point_count": len(check_tri),
+        "anchor_wgs84": {"lat": round(lat0, 7), "lon": round(lon0, 7), "alt": round(alt0, 3)},
+        "sim3_scale": round(s_fit, 6),
+        "sim3_rotation_matrix": [[round(float(v), 6) for v in row] for row in R_fit],
+        "sim3_translation_enu_m": [round(float(v), 4) for v in t_fit],
+        "rmse_3d_m": round(rmse_3d, 4),
+        "rmse_xy_m": round(rmse_xy, 4),
+        "rmse_z_m": round(rmse_z, 4),
+        "check_point_rmse_3d_m": check_rmse_3d,
     }
 
 

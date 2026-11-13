@@ -249,6 +249,20 @@ async def route_custom_mymap_js():
     )
 
 
+@app.get("/js/front/Project.js")
+async def route_custom_project_js():
+    src_js = Path(__file__).with_name("Project.js")
+    if not src_js.is_file():
+        src_js = LIVE_WEB_ROOT / "js" / "front" / "Project.js"
+    if not src_js.is_file():
+        raise HTTPException(status_code=404, detail="Project.js not found")
+    return Response(
+        content=src_js.read_bytes(),
+        media_type="application/javascript; charset=utf-8",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
+
+
 # Mount static directories from 4dtwinmaps-live (including /fonts and /Web for exact typography & login styling)
 for mount_path, folder_name in [
     ("/assets", "assets"),
@@ -278,7 +292,19 @@ async def desktop_static_cache_middleware(request: Request, call_next):
             "/Resources/", "/resources/", "/Potree/", "/Scripts/",
             "/Admin/assets/", "/admin/assets/", "/Images/", "/images/",
         )
-        if path_str not in ("/js/front/MosaicCesiumRuntime.js", "/js/front/Map2.js", "/js/front/MyMap.js") and path_str.startswith(static_prefixes):
+        if path_str not in (
+            "/js/front/MosaicCesiumRuntime.js",
+            "/js/front/MosaicAnnotations.js",
+            "/js/front/MosaicSharePortal.js",
+            "/js/front/MosaicMeasure.js",
+            "/js/front/Mosaic4DTimeline.js",
+            "/js/front/MosaicPano360.js",
+            "/js/front/MosaicGeoVideo.js",
+            "/js/front/MosaicPrint3D.js",
+            "/js/front/Map2.js",
+            "/js/front/MyMap.js",
+            "/js/front/Project.js",
+        ) and path_str.startswith(static_prefixes):
             cached = await _ensure_desktop_static_file(path_str)
             if cached and cached.is_file():
                 from .blob_store import guess_mime_type
@@ -2119,7 +2145,7 @@ async def route_project_detail(
         pid_resolved = int(proj.get("ID") or 0)
         state_id = int(proj.get("STATE_ID") or 3)
         zip_uploaded = 1 if (bool(proj.get("ZIP_UPLOADED")) or state_id == 4) else 0
-        if state_id == 4 and zip_uploaded == 1 and request.query_params.get("upload") != "1":
+        if state_id == 4 and zip_uploaded == 1 and request.query_params.get("inspect") != "1":
             root_pid, _ = store.get_subprojects_family(pid_resolved)
             return RedirectResponse(
                 url=f"/{normalize_lang(lang)}/Projects?open_project={root_pid}#taskNode_{pid_resolved}",
@@ -3271,15 +3297,56 @@ async def webmethod_project_detail(method_name: str, request: Request):
 
     if m in ("createsubproject", "createsurveytask"):
         survey_id = int(body.get("surveyId") or body.get("survey_id") or body.get("parentProjectId") or body.get("parent_project_id") or body.get("project_id") or 0)
+        target_project_id = int(body.get("targetProjectId") or body.get("target_project_id") or 0)
+        quick_create = bool(body.get("quickCreate") or body.get("quick_create"))
+        custom_proj_name = str(body.get("projectName") or body.get("project_name") or "").strip()
+        custom_srv_name = str(body.get("surveyName") or body.get("survey_name") or "").strip()
         sub_name = str(body.get("name") or "").strip()
         sub_kind = str(body.get("projectKind") or body.get("kind") or "processing").strip().lower()
         c_date = str(body.get("creationDate") or body.get("creation_date") or "").strip()
         method_str = str(body.get("methodology") or "").strip()
         sub_desc = str(body.get("description") or "").strip()
+        today_iso = c_date[:10] if len(c_date) >= 10 else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if not sub_name and quick_create:
+            kind_labels = {
+                "processing": "Photogrammetry",
+                "gaussian": "Gaussian Splat",
+                "media": "360° & Geo-Media",
+                "external": "GIS & 3D Import",
+            }
+            sub_name = f"{kind_labels.get(sub_kind, 'GIS & 3D Import')} · {today_iso}"
         if not sub_name:
             return aspnet_d({"ok": False, "message": "Enter a name."})
         srv_row = store.get_project(survey_id) if survey_id > 0 else None
-        root_pid = int((srv_row.get("PARENT_PROJECT_ID") if srv_row else 0) or survey_id)
+        if srv_row and int(srv_row.get("CREATE_ID") or srv_row.get("USER_ID") or 0) != uid:
+            srv_row = None
+            survey_id = 0
+        if survey_id <= 0:
+            proj_row = store.get_project(target_project_id) if target_project_id > 0 else None
+            if proj_row and int(proj_row.get("CREATE_ID") or proj_row.get("USER_ID") or 0) == uid:
+                root_pid = int(proj_row.get("ID") or target_project_id)
+            else:
+                auto_proj_name = custom_proj_name or f"Project {today_iso}"
+                root_pid = store.create_project(
+                    uid,
+                    auto_proj_name,
+                    kind="processing",
+                    description="",
+                    is_project_container=True,
+                )
+            auto_srv_name = custom_srv_name or f"Survey {today_iso}"
+            survey_id = store.create_project(
+                uid,
+                auto_srv_name,
+                kind="processing",
+                description="",
+                parent_project_id=root_pid,
+                is_survey_container=True,
+                survey_date=today_iso,
+            )
+        else:
+            root_pid = int((srv_row.get("PARENT_PROJECT_ID") if srv_row else 0) or survey_id)
+        real_kind = "external" if sub_kind == "media" else sub_kind
         new_pid = store.create_project(
             uid,
             sub_name,
@@ -3287,7 +3354,7 @@ async def webmethod_project_detail(method_name: str, request: Request):
             description=sub_desc,
             parent_project_id=root_pid,
             survey_id=survey_id,
-            creation_date=c_date,
+            creation_date=c_date or today_iso,
             methodology=method_str,
             task_description=sub_desc,
         )
@@ -3297,7 +3364,7 @@ async def webmethod_project_detail(method_name: str, request: Request):
             url = f"/Client/GaussianProject.aspx?id={new_pid}"
         else:
             url = f"/Client/Project.aspx?id={new_pid}"
-        return aspnet_d({"ok": True, "id": new_pid, "url": url, "redirectUrl": url})
+        return aspnet_d({"ok": True, "id": new_pid, "projectId": root_pid, "surveyId": survey_id, "url": url, "redirectUrl": url})
 
     if m == "requestpublish":
         pid = int(body.get("project_id") or 0)
@@ -3335,21 +3402,49 @@ async def webmethod_project_detail(method_name: str, request: Request):
             if int(project.get("STATE_ID") or 0) in (1, 2):
                 return aspnet_d("OK")
             target_mode = str(body.get("target_mode") or "auto").strip().lower()
-            preset = str(body.get("processing_preset") or "").strip().lower()
-            if preset and preset not in {"fast_ortho", "complete"}:
+            raw_preset = str(body.get("processing_preset") or "").strip().lower()
+            if raw_preset and raw_preset not in {"fast_ortho", "complete", "high_quality"}:
                 return aspnet_d("ERROR:Unknown photogrammetry preset.")
-            with store.lock:
-                for p in store.tables.get("dbo.WEB_PROJECTS", []):
-                    if int(p.get("ID") or 0) == pid:
-                        p["ENABLE_DTM"] = preset != "fast_ortho"
-                        if preset:
-                            p["ENABLE_DSM"] = preset == "complete"
-                            p["PROCESSING_PRESET"] = preset
-                        store.persist_table("dbo.WEB_PROJECTS")
-                        break
+            preset = "fast_ortho" if raw_preset == "fast_ortho" else "complete"
             files = store.get_project_files(pid)
             if not files:
                 return aspnet_d("nofiles")
+
+            gps_count = 0
+            for f_item in files:
+                try:
+                    fl_lat = float(f_item.get("LATITUD") or 0.0)
+                    fl_lon = float(f_item.get("LONGITUD") or 0.0)
+                    if (abs(fl_lat) > 1e-5 or abs(fl_lon) > 1e-5) and not (
+                        abs(fl_lat - 41.8205) < 1e-4 and abs(fl_lon - 1.8676) < 1e-4 and not f_item.get("HAS_EXIF_GPS")
+                    ):
+                        gps_count += 1
+                except Exception:
+                    pass
+
+            with store.lock:
+                for p in store.tables.get("dbo.WEB_PROJECTS", []):
+                    if int(p.get("ID") or 0) == pid:
+                        if body.get("lat") not in (None, "") and body.get("lon") not in (None, ""):
+                            try:
+                                b_lat = float(str(body["lat"]).replace(",", "."))
+                                b_lon = float(str(body["lon"]).replace(",", "."))
+                                if -90.0 <= b_lat <= 90.0 and -180.0 <= b_lon <= 180.0:
+                                    p["LATITUD"] = round(b_lat, 6)
+                                    p["LONGITUD"] = round(b_lon, 6)
+                            except Exception:
+                                pass
+                        has_georef = bool(gps_count >= 3 or p.get("PHOTOGRAMMETRY_CONTROL"))
+                        p["UNREFERENCED_PHOTOGRAMMETRY"] = not has_georef
+                        p["PROCESSING_PRESET"] = preset
+                        if has_georef:
+                            p["ENABLE_DSM"] = preset != "fast_ortho"
+                            p["ENABLE_DTM"] = preset != "fast_ortho"
+                        else:
+                            p["ENABLE_DSM"] = False
+                            p["ENABLE_DTM"] = False
+                        store.persist_table("dbo.WEB_PROJECTS")
+                        break
 
             route = store.resolve_processing_backend(uid, target_mode=target_mode, probe_local_live=True)
             if not route.get("ok"):
@@ -3846,8 +3941,8 @@ async def handler_project_image_upload(request: Request):
             continue
         orig_name = Path(val.filename).name
         safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", orig_name)
-        if not safe_name.lower().endswith((".jpg", ".jpeg", ".png")):
-            failed.append({"OriginalName": orig_name, "Status": "failed", "Message": "Only JPG, JPEG and PNG source images are accepted."})
+        if not safe_name.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+            failed.append({"OriginalName": orig_name, "Status": "failed", "Message": "Only JPG, JPEG, PNG and WEBP source images are accepted."})
             continue
         blob_rel = f"{folder}/{safe_name}"
         _, file_size, _, data = await blob_store.save_upload_stream(
@@ -3867,7 +3962,14 @@ async def handler_project_image_upload(request: Request):
             content_type=getattr(val, "content_type", "image/jpeg") or "image/jpeg",
             **photo_meta,
         )
-        accepted.append({"OriginalName": orig_name, "StoredName": safe_name, "Status": "uploaded"})
+        accepted.append({
+            "OriginalName": orig_name,
+            "StoredName": safe_name,
+            "Status": "uploaded",
+            "Lat": photo_meta.get("lat"),
+            "Lon": photo_meta.get("lon"),
+            "HasExifGps": bool(photo_meta.get("lat") is not None and photo_meta.get("lon") is not None),
+        })
 
     return JSONResponse({
         "Success": len(failed) == 0,
@@ -3909,7 +4011,7 @@ def asset_upload_quote(request: Request, project_id: int):
 
 @app.put("/api/v2/tasks/{project_id}/asset-uploads/{upload_id}")
 def start_asset_upload(request: Request, project_id: int, upload_id: str, payload: dict):
-    from .asset_uploads import CHUNK_BYTES, GAUSSIAN_MODELS, UploadError, normalize_files
+    from .asset_uploads import CHUNK_BYTES, GAUSSIAN_MODELS, GAUSSIAN_TELEMETRY, UploadError, normalize_files
     try:
         upload = _asset_upload(request, project_id, upload_id)
         project = upload.require_owner()
@@ -3917,7 +4019,10 @@ def start_asset_upload(request: Request, project_id: int, upload_id: str, payloa
         if payload.get("origin") != origin:
             raise UploadError("This upload does not match the task type.", 409)
         files = normalize_files(payload.get("files"), origin)
-        if origin == "gaussian" and Path(files[0]["name"]).suffix.lower() not in GAUSSIAN_MODELS:
+        non_telem_exts = {Path(f["name"]).suffix.lower() for f in files if Path(f["name"]).suffix.lower() not in GAUSSIAN_TELEMETRY}
+        # Note: .zip archives on Gaussian may contain pre-trained .ply/.splat/.spz models (0 € free import),
+        # so engine availability is verified in finish() once the archive contents are inspected.
+        if origin == "gaussian" and not (non_telem_exts <= (GAUSSIAN_MODELS | {".zip"})):
             if os.environ.get("MOSAICEARTH_DESKTOP_LOCAL") == "1":
                 import shutil
                 if not (shutil.which("colmap") and shutil.which(os.environ.get("MOSAICEARTH_OPENSPLAT_BIN", "opensplat"))):
@@ -3930,10 +4035,10 @@ def start_asset_upload(request: Request, project_id: int, upload_id: str, payloa
         safe_details = {k: str(details.get(k) or "").strip()[:2000]
                         for k in ("title", "description", "capture_date", "capture_method")}
         if origin == "gaussian":
-            preset = str(details.get("quality_preset") or "STANDARD").upper()
+            preset = str(details.get("quality_preset") or "HIGH_QUALITY").upper()
             if preset not in {"FAST", "STANDARD", "HIGH_QUALITY"}:
                 raise UploadError("Choose a supported Gaussian quality preset.")
-            safe_details["quality_preset"] = preset
+            safe_details["quality_preset"] = "HIGH_QUALITY"
         for key, limit in (("lat", 90), ("lon", 180)):
             if details.get(key) not in (None, ""):
                 try:
@@ -3947,6 +4052,310 @@ def start_asset_upload(request: Request, project_id: int, upload_id: str, payloa
         return {**result, "chunk_bytes": CHUNK_BYTES}
     except UploadError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from None
+
+
+@app.post("/api/v2/tasks/{project_id}/location")
+def update_task_initial_location(request: Request, project_id: int, payload: dict):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    store = get_store()
+    with store.lock:
+        proj = next((p for p in store.tables.get("dbo.WEB_PROJECTS", []) if int(p.get("ID") or 0) == project_id and p.get("ACTIVO", True)), None)
+        if not proj or int(proj.get("CREATE_ID") or 0) != int(user["ID"]):
+            raise HTTPException(status_code=404, detail="Task not found.")
+        try:
+            lat = float(str(payload.get("lat")).replace(",", "."))
+            lon = float(str(payload.get("lon")).replace(",", "."))
+        except Exception:
+            raise HTTPException(status_code=422, detail="Invalid coordinates.") from None
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            raise HTTPException(status_code=422, detail="Coordinates out of WGS84 range.")
+        proj["LATITUD"] = round(lat, 6)
+        proj["LONGITUD"] = round(lon, 6)
+        store.persist_table("dbo.WEB_PROJECTS")
+    return {"ok": True, "lat": round(lat, 6), "lon": round(lon, 6)}
+
+
+@app.post("/api/v2/uploads/inspect-georef")
+async def api_inspect_upload_georef(request: Request):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    from .video_photogrammetry import inspect_uploaded_georef_preview
+    form = await request.form()
+    file_obj = form.get("file")
+    if not file_obj or not hasattr(file_obj, "read"):
+        return {"georeferenced": False}
+    filename = str(form.get("filename") or getattr(file_obj, "filename", "") or "upload.bin")
+    raw = await file_obj.read(24 * 1024 * 1024)
+    return inspect_uploaded_georef_preview(filename, raw)
+
+
+@app.post("/api/v2/tasks/{project_id}/photogrammetry-video-stage")
+async def api_stage_photogrammetry_video(request: Request, project_id: int):
+    import tempfile
+    from starlette.concurrency import run_in_threadpool
+    from .video_photogrammetry import extract_photogrammetry_frames_from_video
+
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    store = get_store()
+    proj = store.get_project(project_id)
+    if not proj or int(proj.get("CREATE_ID") or 0) != int(user["ID"]):
+        raise HTTPException(status_code=404, detail="Task not found.")
+    if int(proj.get("STATE_ID") or 0) in (1, 2):
+        raise HTTPException(status_code=409, detail="Task is currently processing.")
+
+    form = await request.form()
+    vid_file = form.get("video")
+    telem_file = form.get("telemetry")
+    if not vid_file or not hasattr(vid_file, "read"):
+        raise HTTPException(status_code=422, detail="Attach a video file (.mp4, .mov, .webm, or .m4v).")
+    vid_name = Path(str(getattr(vid_file, "filename", "") or "capture.mp4")).name
+    vid_ext = Path(vid_name).suffix.lower()
+    if vid_ext not in {".mp4", ".mov", ".webm", ".m4v"}:
+        raise HTTPException(status_code=415, detail="Unsupported video format. Use MP4, MOV, WebM, or M4V.")
+
+    with tempfile.TemporaryDirectory(prefix="me_stage_vid_") as tmpd:
+        v_path = Path(tmpd) / f"source{vid_ext}"
+        total_written = 0
+        with v_path.open("wb") as fp:
+            while True:
+                chunk = await vid_file.read(2 * 1024 * 1024)
+                if not chunk:
+                    break
+                total_written += len(chunk)
+                if total_written > 1024**3:
+                    raise HTTPException(status_code=413, detail="Video exceeds 1 GiB limit.")
+                fp.write(chunk)
+
+        t_path = None
+        t_name = ""
+        if telem_file and hasattr(telem_file, "read") and getattr(telem_file, "filename", ""):
+            t_name = Path(str(telem_file.filename)).name
+            t_ext = Path(t_name).suffix.lower()
+            if t_ext in {".srt", ".gpx", ".csv"}:
+                t_path = Path(tmpd) / f"telem{t_ext}"
+                t_path.write_bytes(await telem_file.read(16 * 1024 * 1024))
+
+        try:
+            res = await run_in_threadpool(
+                extract_photogrammetry_frames_from_video,
+                store,
+                get_blob_store(),
+                project_id,
+                int(user["ID"]),
+                v_path,
+                vid_name,
+                t_path,
+                t_name,
+            )
+            return res
+        except ValueError as ve:
+            raise HTTPException(status_code=422, detail=str(ve)) from None
+
+
+@app.get("/GCPStudio.aspx")
+@app.get("/{lang}/GCPStudio")
+@app.get("/gcp-studio/")
+def serve_gcp_studio_index(request: Request, lang: str = "en"):
+    studio_dir = Path(__file__).resolve().parent / "gcp_studio"
+    idx = studio_dir / "index.html"
+    if not idx.is_file():
+        raise HTTPException(status_code=404, detail="GCP Studio bundle not found.")
+    html_txt = idx.read_text(encoding="utf-8")
+    html_txt = html_txt.replace('href="./gcp-studio.css"', 'href="/gcp-studio/gcp-studio.css"')
+    html_txt = html_txt.replace('src="./gcp-studio.js"', 'src="/gcp-studio/gcp-studio.js"')
+    return HTMLResponse(html_txt)
+
+
+@app.get("/gcp-studio/{asset_path:path}")
+def serve_gcp_studio_asset(asset_path: str):
+    studio_dir = (Path(__file__).resolve().parent / "gcp_studio").resolve()
+    target = (studio_dir / asset_path).resolve()
+    if studio_dir not in target.parents or not target.is_file():
+        raise HTTPException(status_code=404, detail="Asset not found.")
+    media_map = {".js": "application/javascript", ".css": "text/css", ".html": "text/html", ".json": "application/json"}
+    return Response(content=target.read_bytes(), media_type=media_map.get(target.suffix.lower(), "application/octet-stream"))
+
+
+@app.get("/api/v2/tasks/{project_id}/gcp-studio-context")
+def api_gcp_studio_context(request: Request, project_id: int):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    store = get_store()
+    proj = store.get_project(project_id)
+    if not proj or int(proj.get("CREATE_ID") or 0) != int(user["ID"]):
+        raise HTTPException(status_code=404, detail="Task not found.")
+
+    images_out = []
+    p_files = store.get_project_files(project_id)
+    for pf in p_files:
+        fn = str(pf.get("FILENAME") or pf.get("FILE_NAME") or pf.get("NAME") or "").strip()
+        if not fn or not fn.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+            continue
+        fl_lat = pf.get("LATITUD")
+        fl_lon = pf.get("LONGITUD")
+        has_real_gps = False
+        try:
+            lat_f, lon_f = float(fl_lat or 0.0), float(fl_lon or 0.0)
+            has_real_gps = (abs(lat_f) > 1e-5 or abs(lon_f) > 1e-5) and not (
+                abs(lat_f - 41.8205) < 1e-4 and abs(lon_f - 1.8676) < 1e-4 and not pf.get("HAS_EXIF_GPS")
+            )
+        except Exception:
+            lat_f, lon_f = 0.0, 0.0
+        images_out.append({
+            "name": fn,
+            "url": f"/api/v2/tasks/{project_id}/gcp-studio-image/{fn}",
+            "lat": lat_f if has_real_gps else None,
+            "lon": lon_f if has_real_gps else None,
+            "alt": float(pf.get("ALTURA") or pf.get("ALTITUD") or 0.0) if has_real_gps else None,
+        })
+
+    if not images_out:
+        up_root = Path(store.data_dir) / "asset_uploads"
+        if up_root.is_dir():
+            from .photo_metadata import source_photo_metadata
+            for up_dir in sorted(up_root.glob(f"{project_id}_*"), key=lambda d: d.stat().st_mtime, reverse=True):
+                manifest = up_dir / "upload.json"
+                if not manifest.is_file():
+                    continue
+                try:
+                    import json as _json
+                    m_data = _json.loads(manifest.read_text(encoding="utf-8"))
+                    for idx_f, mf in enumerate(m_data.get("files") or []):
+                        fn = Path(str(mf.get("name") or "")).name
+                        if not fn.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                            continue
+                        staged_p = up_dir / f"file_{idx_f}.part"
+                        if not staged_p.is_file():
+                            staged_p = up_dir / fn
+                        if staged_p.is_file() and staged_p.stat().st_size > 0:
+                            meta = source_photo_metadata(staged_p.read_bytes()[:131072])
+                            images_out.append({
+                                "name": fn,
+                                "url": f"/api/v2/tasks/{project_id}/gcp-studio-image/{fn}",
+                                "lat": meta.get("lat"),
+                                "lon": meta.get("lon"),
+                                "alt": meta.get("alt"),
+                            })
+                    if images_out:
+                        break
+                except Exception:
+                    continue
+
+    gcp_txt = ""
+    ctrl = proj.get("PHOTOGRAMMETRY_CONTROL")
+    if isinstance(ctrl, dict) and ctrl.get("path"):
+        try:
+            raw_b = get_blob_store().read_bytes_from_cloud("imagenes", str(ctrl["path"]))
+            if raw_b:
+                gcp_txt = raw_b.decode("utf-8", errors="ignore")
+        except Exception:
+            gcp_txt = ""
+
+    return {
+        "ok": True,
+        "project_id": project_id,
+        "title": str(proj.get("NAME") or f"Task #{project_id}"),
+        "lat": float(proj.get("LATITUD") or 0.0),
+        "lon": float(proj.get("LONGITUD") or 0.0),
+        "images": images_out,
+        "gcp_list_txt": gcp_txt,
+        "gcp_json": proj.get("GCP_OBSERVATIONS") or None,
+    }
+
+
+@app.get("/api/v2/tasks/{project_id}/gcp-studio-image/{filename}")
+def api_gcp_studio_image(request: Request, project_id: int, filename: str):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    store = get_store()
+    proj = store.get_project(project_id)
+    if not proj or int(proj.get("CREATE_ID") or 0) != int(user["ID"]):
+        raise HTTPException(status_code=404, detail="Task not found.")
+    safe_fn = re.sub(r"[^A-Za-z0-9._-]", "_", Path(filename).name)
+    folder = str(proj.get("FOLDER") or "")
+    raw = get_blob_store().read_bytes_from_cloud("imagenes", f"{folder}/{safe_fn}")
+    if not raw:
+        up_root = Path(store.data_dir) / "asset_uploads"
+        if up_root.is_dir():
+            import json as _json
+            for up_dir in sorted(up_root.glob(f"{project_id}_*"), key=lambda d: d.stat().st_mtime, reverse=True):
+                manifest = up_dir / "upload.json"
+                if not manifest.is_file():
+                    continue
+                try:
+                    m_data = _json.loads(manifest.read_text(encoding="utf-8"))
+                    for idx_f, mf in enumerate(m_data.get("files") or []):
+                        fn = Path(str(mf.get("name") or "")).name
+                        if fn == filename or re.sub(r"[^A-Za-z0-9._-]", "_", fn) == safe_fn:
+                            staged_p = up_dir / f"file_{idx_f}.part"
+                            if not staged_p.is_file():
+                                staged_p = up_dir / fn
+                            if staged_p.is_file():
+                                raw = staged_p.read_bytes()
+                                break
+                except Exception:
+                    continue
+                if raw:
+                    break
+    if not raw:
+        raise HTTPException(status_code=404, detail="Image not found.")
+    ext = Path(safe_fn).suffix.lower()
+    mime = "image/png" if ext == ".png" else ("image/webp" if ext == ".webp" else "image/jpeg")
+    return Response(content=raw, media_type=mime, headers={"Cache-Control": "private, max-age=3600"})
+
+
+@app.post("/api/v2/tasks/{project_id}/gcp-control")
+def api_save_gcp_studio_control(request: Request, project_id: int, payload: dict):
+    import hashlib
+    import math
+
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    store = get_store()
+    gcp_txt = str(payload.get("gcp_list_txt") or "").strip()
+    gcp_json = payload.get("gcp_json") if isinstance(payload.get("gcp_json"), dict) else {}
+    lines = [ln.strip() for ln in gcp_txt.splitlines() if ln.strip() and not ln.startswith("#")]
+    if len(lines) < 4:
+        raise HTTPException(status_code=422, detail="At least 3 GCP observations and a CRS header are required.")
+    for row_ln in lines[1:]:
+        parts = row_ln.split()
+        if len(parts) < 6 or not all(math.isfinite(float(v)) for v in parts[:5]):
+            raise HTTPException(status_code=422, detail="Invalid observation row in gcp_list.txt.")
+
+    pts = [p for p in (gcp_json.get("points") or []) if isinstance(p, dict) and p.get("lat") is not None and p.get("lon") is not None]
+    centroid = None
+    if pts:
+        centroid = {
+            "lat": round(sum(float(p["lat"]) for p in pts) / len(pts), 6),
+            "lon": round(sum(float(p["lon"]) for p in pts) / len(pts), 6),
+        }
+
+    with store.lock:
+        proj = next((p for p in store.tables.get("dbo.WEB_PROJECTS", []) if int(p.get("ID") or 0) == project_id and p.get("ACTIVO", True)), None)
+        if not proj or int(proj.get("CREATE_ID") or 0) != int(user["ID"]):
+            raise HTTPException(status_code=404, detail="Task not found.")
+        if int(proj.get("STATE_ID") or 0) in (1, 2):
+            raise HTTPException(status_code=409, detail="Wait until current processing finishes.")
+        data_b = ("\n".join(lines) + "\n").encode("utf-8")
+        sha = hashlib.sha256(data_b).hexdigest()
+        rel = f"{proj['FOLDER']}/control/{sha}/gcp_list.txt"
+        get_blob_store().save_bytes("imagenes", rel, data_b)
+        proj["PHOTOGRAMMETRY_CONTROL"] = {"name": "gcp_list.txt", "path": rel, "sha256": sha, "kind": "gcp"}
+        proj["GCP_OBSERVATIONS"] = gcp_json
+        if centroid:
+            proj["LATITUD"] = centroid["lat"]
+            proj["LONGITUD"] = centroid["lon"]
+        store.persist_table("dbo.WEB_PROJECTS")
+
+    return {"ok": True, "centroid": centroid, "sha256": sha}
 
 
 @app.get("/api/v2/tasks/{project_id}/asset-uploads/{upload_id}")
