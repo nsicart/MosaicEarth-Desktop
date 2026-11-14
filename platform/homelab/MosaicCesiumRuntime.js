@@ -1045,8 +1045,11 @@
         try {
             var sourceCamera = target.extras && target.extras.mosaicearthCamera;
             var validVector = function (v) { return Array.isArray(v) && v.length === 3 && v.every(function (n) { return typeof n === 'number' && isFinite(n) && Math.abs(n) <= 1e8; }); };
-            if (sourceCamera && sourceCamera.version === 1 && sourceCamera.space === 'root-z-up' &&
-                validVector(sourceCamera.position) && validVector(sourceCamera.direction) && validVector(sourceCamera.up) && target.root) {
+            var plausibleCamera = sourceCamera && (!sourceCamera.fov_y || (sourceCamera.fov_y >= 0.18 && sourceCamera.fov_y <= 1.85)) &&
+                validVector(sourceCamera.up) && validVector(sourceCamera.direction) &&
+                (sourceCamera.up[2] >= -0.05 || sourceCamera.direction[2] <= -0.75);
+            if (plausibleCamera && sourceCamera.version === 1 && sourceCamera.space === 'root-z-up' &&
+                validVector(sourceCamera.position) && target.root) {
                 var modelFrame = Cesium.Matrix4.multiply(target.modelMatrix || Cesium.Matrix4.IDENTITY, target.root.transform || Cesium.Matrix4.IDENTITY, new Cesium.Matrix4());
                 var eye = Cesium.Matrix4.multiplyByPoint(modelFrame, Cesium.Cartesian3.fromArray(sourceCamera.position), new Cesium.Cartesian3());
                 var forward = Cesium.Matrix4.multiplyByPointAsVector(modelFrame, Cesium.Cartesian3.fromArray(sourceCamera.direction), new Cesium.Cartesian3());

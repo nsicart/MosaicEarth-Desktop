@@ -8,6 +8,7 @@
     const base = "/api/v2/tasks/" + project + "/asset-uploads";
     const key = "mosaicearth:upload:" + project;
     const myearthUrl = form.dataset.myearthUrl || ("/en/Projects?open_project=" + project);
+    const liveBanner = document.getElementById("asset-upload-live-banner");
     const status = document.getElementById("asset-upload-status");
     const selection = document.getElementById("asset-upload-selection");
     const meter = document.getElementById("asset-upload-progress");
@@ -42,7 +43,16 @@
 
     const describe = file => ({name: file.name, size: file.size});
     const mib = bytes => (bytes / (1024 ** 2)).toFixed(1) + " MiB";
-    const message = text => { if (status) status.textContent = text; };
+    const syncBannerVisibility = () => {
+        if (!liveBanner) return;
+        const hasText = Boolean(status && status.textContent && status.textContent.trim());
+        const hasBar = Boolean(meter && !meter.hidden);
+        liveBanner.hidden = !(hasText || hasBar);
+    };
+    const message = text => {
+        if (status) status.textContent = text;
+        syncBannerVisibility();
+    };
 
     window.addEventListener("beforeunload", event => {
         if (!active) return;
@@ -303,6 +313,7 @@
         meter.value = done;
         const pct = total > 0 ? Math.floor((100 * done) / total) : 100;
         message("Uploading " + mib(done) + " / " + mib(total) + " (" + pct + "%) — keep this tab open until upload reaches 100%.");
+        syncBannerVisibility();
     }
 
     function transmit(path, bytes, digest, onProgress) {

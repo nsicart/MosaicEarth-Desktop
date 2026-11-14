@@ -3,6 +3,7 @@
 import hashlib
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -33,22 +34,85 @@ def prepare_colmap(project: Path, binary: str, log_path: Path, *, timeout=600) -
             subprocess.run([binary, *args], stdout=log, stderr=subprocess.STDOUT,
                            timeout=remaining, check=True)
 
+        single_cam_args = []
+        total_images = 0
+        try:
+            from PIL import Image
+            sizes = set()
+            for img_file in sorted((project / "images").iterdir()):
+                if img_file.is_file():
+                    total_images += 1
+                    with Image.open(img_file) as im_chk:
+                        sizes.add(im_chk.size)
+            if total_images > 0 and len(sizes) == 1:
+                single_cam_args = [
+                    "--ImageReader.single_camera", "1",
+                    "--ImageReader.camera_model", "SIMPLE_RADIAL",
+                    "--ImageReader.default_focal_length_factor", "0.85",
+                ]
+        except Exception:
+            single_cam_args = []
+
         run("feature_extractor", "--database_path", database, "--image_path", images,
-            "--SiftExtraction.use_gpu", "0")
+            "--SiftExtraction.use_gpu", "0", *single_cam_args)
         run("exhaustive_matcher", "--database_path", database, "--SiftMatching.use_gpu", "0")
         run("mapper", "--database_path", database, "--image_path", images, "--output_path", str(sparse),
-            "--Mapper.min_model_size", "4")
-        models = []
-        for candidate in sorted(sparse.iterdir()):
-            if (candidate / "images.bin").is_file():
-                with (candidate / "images.bin").open("rb") as registered:
-                    models.append((int.from_bytes(registered.read(8), "little"), candidate))
+            "--Mapper.min_model_size", "4", "--Mapper.init_min_tri_angle", "4")
+
+        def _collect_models(sp_dir: Path):
+            found = []
+            if sp_dir.is_dir():
+                for cand in sorted(sp_dir.iterdir()):
+                    if (cand / "images.bin").is_file():
+                        with (cand / "images.bin").open("rb") as reg_f:
+                            found.append((int.from_bytes(reg_f.read(8), "little"), cand))
+            return found
+
+        models = _collect_models(sparse)
+        best_count = max(models)[0] if models else 0
+        focal_collapsed = False
+        if models and single_cam_args:
+            try:
+                probe_txt = project / "_probe_txt"
+                shutil.rmtree(probe_txt, ignore_errors=True)
+                probe_txt.mkdir()
+                run("model_converter", "--input_path", str(max(models)[1]), "--output_path", str(probe_txt),
+                    "--output_type", "TXT")
+                for ln in (probe_txt / "cameras.txt").read_text().splitlines():
+                    if ln and not ln.startswith("#"):
+                        parts = ln.split()
+                        max_dim = max(float(parts[2]), float(parts[3]))
+                        f_est = float(parts[4])
+                        if f_est < 0.38 * max_dim or f_est > 2.4 * max_dim:
+                            focal_collapsed = True
+                        break
+                shutil.rmtree(probe_txt, ignore_errors=True)
+            except Exception:
+                pass
+
+        # Forward-motion EXIF-less video sequences suffer focal-length / Z-translation gauge collapse
+        # under free bundle adjustment. Re-run mapper with fixed nominal intrinsics if <60% registered or focal drifted.
+        if single_cam_args and (best_count < max(6, int(0.6 * total_images)) or focal_collapsed):
+            sparse_fixed = project / "sparse_fixed"
+            sparse_fixed.mkdir(exist_ok=True)
+            try:
+                run("mapper", "--database_path", database, "--image_path", images, "--output_path", str(sparse_fixed),
+                    "--Mapper.min_model_size", "4", "--Mapper.init_min_tri_angle", "4",
+                    "--Mapper.tri_min_angle", "1.0", "--Mapper.ba_refine_focal_length", "0",
+                    "--Mapper.ba_refine_extra_params", "0")
+                fixed_models = _collect_models(sparse_fixed)
+                if fixed_models and (max(fixed_models)[0] > best_count or (focal_collapsed and max(fixed_models)[0] >= 4)):
+                    models = fixed_models
+            except Exception:
+                pass
+
         if not models or max(models)[0] < 4:
             raise RuntimeError("COLMAP did not register at least four views in a single model.")
         _, best = max(models)
         canonical = sparse / "0"
         if best != canonical:
             if canonical.exists():
+                shutil.rmtree(project / "previous_model", ignore_errors=True)
                 canonical.rename(project / "previous_model")
             best.rename(canonical)
         text_model = project / "text_model"
@@ -94,7 +158,9 @@ class OpenSplatAdapter:
         self.cpu = cpu
 
     def train(self, project: Path, output: Path, preset: str, registered_names: list[str], *,
-              timeout=1800, iterations=None, progress=None, cancelled=None, input_format="COLMAP"):
+              timeout=None, iterations=None, progress=None, cancelled=None, input_format="COLMAP"):
+        if timeout is None:
+            timeout = float(os.environ.get("MOSAICEARTH_OPENSPLAT_TIMEOUT_SECONDS", "10800"))
         if len(registered_names) < 4:
             raise ValueError("OpenSplat requires at least four registered views")
         output.mkdir(parents=True, exist_ok=False)

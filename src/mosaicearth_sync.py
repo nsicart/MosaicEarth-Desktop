@@ -56,7 +56,7 @@ class Client:
         if self.canceled():
             raise SyncError("Transfer paused. Resume to continue from the saved offset.")
         data = payload if isinstance(payload, bytes) else json.dumps(payload).encode() if payload is not None else None
-        h = {"User-Agent": "MosaicEarth/0.4.4", "Accept": "application/json", "Content-Type": "application/octet-stream" if isinstance(payload, bytes) else "application/json"}
+        h = {"User-Agent": "MosaicEarth/0.4.5", "Accept": "application/json", "Content-Type": "application/octet-stream" if isinstance(payload, bytes) else "application/json"}
         if self.token:
             h["Authorization"] = "Bearer " + self.token
         h.update(headers or {})

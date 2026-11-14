@@ -579,6 +579,29 @@ def _write_khr_gaussian_splatting_glb_and_tileset(
             "content": {"uri": "tile_0.glb"},
         },
     }
+    # Compute outlier-resistant core focus sphere (`mosaicearthCapture`) so Cesium framing
+    # focuses on the dense reconstructed subject rather than distant sky/horizon floaters.
+    pos_arr = np.asarray(pos, dtype=np.float64)
+    if len(pos_arr) >= 8:
+        q_lo = np.percentile(pos_arr, 10.0, axis=0)
+        q_hi = np.percentile(pos_arr, 90.0, axis=0)
+        core_center_arr = (q_lo + q_hi) * 0.5
+        dists = np.linalg.norm(pos_arr - core_center_arr, axis=1)
+        core_radius = float(max(np.percentile(dists, 85.0), 1.5))
+    elif len(pos_arr) > 0:
+        core_center_arr = (np.asarray(v_min) + np.asarray(v_max)) * 0.5
+        core_radius = float(max(hx, hy, hz, 1.5))
+    else:
+        core_center_arr = np.zeros(3, dtype=np.float64)
+        core_radius = 10.0
+    tileset_extras: Dict[str, Any] = {
+        "mosaicearthCapture": {
+            "version": 1,
+            "space": "root-z-up",
+            "center": [float(x) for x in core_center_arr.tolist()],
+            "radius": float(min(core_radius, 50000.0)),
+        }
+    }
     ts_path = out_dir / "tileset.json"
     cameras_file = out_dir / "cameras_sfm.json"
     if cameras_file.is_file():
@@ -604,9 +627,20 @@ def _write_khr_gaussian_splatting_glb_and_tileset(
                 u_vec /= max(float(np.linalg.norm(u_vec)), 1e-12)
                 cam_dir = d_vec.tolist()
                 cam_up = u_vec.tolist()
-            tileset_obj["extras"] = {"mosaicearthCamera": {"version": 1, "space": "root-z-up",
-                "position": cam_pos, "direction": cam_dir,
-                "up": cam_up, "fov_y": 2 * math.atan(camera["height"] / (2 * camera["fy"]))}}
+            fy_val = float(camera.get("fy") or 0.0)
+            h_val = float(camera.get("height") or 0.0)
+            fov_y = (2.0 * math.atan(h_val / (2.0 * fy_val))) if (fy_val > 1e-3 and h_val > 0.0) else 0.0
+            is_upright = (not applied_sim3) or (cam_up[2] >= -0.05 or cam_dir[2] <= -0.75)
+            if len(cameras) >= 6 and 0.18 <= fov_y <= 1.85 and is_upright:
+                tileset_extras["mosaicearthCamera"] = {
+                    "version": 1,
+                    "space": "root-z-up",
+                    "position": cam_pos,
+                    "direction": cam_dir,
+                    "up": cam_up,
+                    "fov_y": fov_y,
+                }
+    tileset_obj["extras"] = tileset_extras
     ts_path.write_text(json.dumps(tileset_obj, indent=2), encoding="utf-8")
 
     transform_meta = {
@@ -1679,7 +1713,14 @@ def _persist_opensplat_result(ply, cameras, benchmark, out_dir, frame_gps_map, m
             target = out_dir / "validation" / name
             if source.resolve() != target.resolve():
                 shutil.copy2(source, target)
-    cam_centers = [{"image_name": camera["img_name"], "camera_center": camera["position"]} for camera in cameras]
+    cam_centers = [
+        {
+            "image_name": camera["img_name"],
+            "camera_center": camera["position"],
+            "camera_rotation": camera.get("rotation"),
+        }
+        for camera in cameras
+    ]
     fitted = align_colmap_cameras_sim3_umeyama(
         reg_images=cam_centers, frame_gps_map=frame_gps_map, manual_anchor_wgs84=manual_anchor_wgs84,
     )
@@ -3142,6 +3183,16 @@ def prepare_external_asset_derivatives(
             benchmark_path = out_dir / "splat_benchmark.json"
             if benchmark_path.is_file():
                 inspection["training_metrics"] = json.loads(benchmark_path.read_text())
+            georef_align = gs_info.get("georeferencing_alignment") or {}
+            if isinstance(georef_align, dict) and georef_align.get("is_metric_aligned"):
+                inspection["georeferenced"] = True
+                inspection["crs"] = "EPSG:4979"
+                inspection["crs_confidence"] = (
+                    "high"
+                    if georef_align.get("georeferencing_state") in ("GEOREFERENCED", "CONTROL_VERIFIED")
+                    else "medium"
+                )
+                inspection["georeferencing_alignment"] = georef_align
             eff_lat = float(gs_info.get("lat", eff_lat))
             eff_lon = float(gs_info.get("lon", eff_lon))
             eff_alt = float(gs_info.get("alt", eff_alt))

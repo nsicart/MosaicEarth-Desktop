@@ -6,6 +6,7 @@ import re
 import secrets
 import sqlite3
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote, unquote, urlencode
@@ -5243,18 +5244,49 @@ async def handler_external_asset_file(
         import io
         import zipfile
         buf = io.BytesIO()
+        written_count = 0
         with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             bundle_items = [
-                ("model.ply", [f"external/{pid}/{aid}/model.ply", f"external/{pid}/{aid}/point_cloud.ply"]),
-                ("model.spz", [f"external/{pid}/{aid}/model.spz"]),
-                ("transform.json", [f"external/{pid}/{aid}/transform.json"]),
-                ("quality/benchmark.json", [f"external/{pid}/{aid}/splat_benchmark.json"]),
-                ("quality/gate.json", [f"external/{pid}/{aid}/commercial_quality_gate.json"]),
-                ("quality/reference.png", [f"external/{pid}/{aid}/validation/reference.png"]),
-                ("quality/rendered.png", [f"external/{pid}/{aid}/validation/rendered.png"]),
-                ("geo_alignment.txt", [f"external/{pid}/{aid}/geo_alignment.txt"]),
-                ("splat_tileset/tileset.json", [f"external/{pid}/{aid}/tileset.json"]),
-                ("splat_tileset/tile_0.glb", [f"external/{pid}/{aid}/tile_0.glb", f"external/{pid}/{aid}/model.glb"]),
+                ("model.ply", [
+                    f"external/{pid}/{aid}/derived/splat/model.ply",
+                    f"external/{pid}/{aid}/model.ply",
+                    f"external/{pid}/{aid}/point_cloud.ply",
+                ]),
+                ("model.spz", [
+                    f"external/{pid}/{aid}/derived/splat/model.spz",
+                    f"external/{pid}/{aid}/model.spz",
+                ]),
+                ("transform.json", [
+                    f"external/{pid}/{aid}/metadata/transform.json",
+                    f"external/{pid}/{aid}/transform.json",
+                ]),
+                ("quality/benchmark.json", [
+                    f"external/{pid}/{aid}/metadata/splat_benchmark.json",
+                    f"external/{pid}/{aid}/splat_benchmark.json",
+                ]),
+                ("quality/gate.json", [
+                    f"external/{pid}/{aid}/metadata/commercial_quality_gate.json",
+                    f"external/{pid}/{aid}/commercial_quality_gate.json",
+                ]),
+                ("quality/reference.png", [
+                    f"external/{pid}/{aid}/validation/reference.png",
+                ]),
+                ("quality/rendered.png", [
+                    f"external/{pid}/{aid}/validation/rendered.png",
+                ]),
+                ("geo_alignment.txt", [
+                    f"external/{pid}/{aid}/metadata/geo_alignment.txt",
+                    f"external/{pid}/{aid}/geo_alignment.txt",
+                ]),
+                ("splat_tileset/tileset.json", [
+                    f"external/{pid}/{aid}/derived/3dtiles/tileset.json",
+                    f"external/{pid}/{aid}/tileset.json",
+                ]),
+                ("splat_tileset/tile_0.glb", [
+                    f"external/{pid}/{aid}/derived/3dtiles/tile_0.glb",
+                    f"external/{pid}/{aid}/tile_0.glb",
+                    f"external/{pid}/{aid}/model.glb",
+                ]),
             ]
             for arcname, rel_list in bundle_items:
                 file_bytes = None
@@ -5264,12 +5296,19 @@ async def handler_external_asset_file(
                         if loc and loc.is_file():
                             file_bytes = loc.read_bytes()
                             break
+                        if blob_store.is_s3_active():
+                            cloud_bytes = blob_store.read_bytes_from_cloud(cont, r_cand)
+                            if cloud_bytes is not None:
+                                file_bytes = cloud_bytes
+                                break
                     if file_bytes is not None:
                         break
                 if file_bytes is not None:
-                    zf.writestr(arcname, file_bytes)
+                    comp = zipfile.ZIP_STORED if arcname.endswith((".spz", ".glb", ".png")) else zipfile.ZIP_DEFLATED
+                    zf.writestr(arcname, file_bytes, compress_type=comp)
+                    written_count += 1
         zip_data = buf.getvalue()
-        if zip_data:
+        if written_count > 0 and zip_data:
             safe_slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(ext.get("TITLE") or f"splat_{aid}")).strip("_") or f"splat_{aid}"
             return Response(
                 content=zip_data,
@@ -5301,10 +5340,13 @@ async def handler_external_asset_file(
         layer_slug = re.sub(r"[^A-Za-z0-9_-]+", "_", str(request.query_params.get("layer") or "layer_0")).strip("_")
         mode_candidates.append(f"external/{pid}/{aid}/derived/vectors/layers/{layer_slug}.geojson")
     elif mode_low == "splat":
+        mode_candidates.append(f"external/{pid}/{aid}/derived/splat/model.splat")
         mode_candidates.append(f"external/{pid}/{aid}/model.splat")
     elif mode_low == "spz":
+        mode_candidates.append(f"external/{pid}/{aid}/derived/splat/model.spz")
         mode_candidates.append(f"external/{pid}/{aid}/model.spz")
     elif mode_low == "ply":
+        mode_candidates.append(f"external/{pid}/{aid}/derived/splat/model.ply")
         mode_candidates.append(f"external/{pid}/{aid}/model.ply")
         mode_candidates.append(f"external/{pid}/{aid}/point_cloud.ply")
     elif mode_low in ("transform", "metadata_transform"):

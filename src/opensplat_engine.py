@@ -3,6 +3,7 @@
 import hashlib
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -33,24 +34,85 @@ def prepare_colmap(project: Path, binary: str, log_path: Path, *, timeout=600) -
             subprocess.run([binary, *args], stdout=log, stderr=subprocess.STDOUT,
                            timeout=remaining, check=True)
 
+        single_cam_args = []
+        total_images = 0
+        try:
+            from PIL import Image
+            sizes = set()
+            for img_file in sorted((project / "images").iterdir()):
+                if img_file.is_file():
+                    total_images += 1
+                    with Image.open(img_file) as im_chk:
+                        sizes.add(im_chk.size)
+            if total_images > 0 and len(sizes) == 1:
+                single_cam_args = [
+                    "--ImageReader.single_camera", "1",
+                    "--ImageReader.camera_model", "SIMPLE_RADIAL",
+                    "--ImageReader.default_focal_length_factor", "0.85",
+                ]
+        except Exception:
+            single_cam_args = []
+
         run("feature_extractor", "--database_path", database, "--image_path", images,
-            "--SiftExtraction.use_gpu", "0", "--SiftExtraction.num_threads", "2",
-            "--SiftExtraction.max_image_size", "1600")
-        run("exhaustive_matcher", "--database_path", database, "--SiftMatching.use_gpu", "0",
-            "--SiftMatching.num_threads", "2")
+            "--SiftExtraction.use_gpu", "0", *single_cam_args)
+        run("exhaustive_matcher", "--database_path", database, "--SiftMatching.use_gpu", "0")
         run("mapper", "--database_path", database, "--image_path", images, "--output_path", str(sparse),
-            "--Mapper.min_model_size", "4", "--Mapper.num_threads", "2")
-        models = []
-        for candidate in sorted(sparse.iterdir()):
-            if (candidate / "images.bin").is_file():
-                with (candidate / "images.bin").open("rb") as registered:
-                    models.append((int.from_bytes(registered.read(8), "little"), candidate))
+            "--Mapper.min_model_size", "4", "--Mapper.init_min_tri_angle", "4")
+
+        def _collect_models(sp_dir: Path):
+            found = []
+            if sp_dir.is_dir():
+                for cand in sorted(sp_dir.iterdir()):
+                    if (cand / "images.bin").is_file():
+                        with (cand / "images.bin").open("rb") as reg_f:
+                            found.append((int.from_bytes(reg_f.read(8), "little"), cand))
+            return found
+
+        models = _collect_models(sparse)
+        best_count = max(models)[0] if models else 0
+        focal_collapsed = False
+        if models and single_cam_args:
+            try:
+                probe_txt = project / "_probe_txt"
+                shutil.rmtree(probe_txt, ignore_errors=True)
+                probe_txt.mkdir()
+                run("model_converter", "--input_path", str(max(models)[1]), "--output_path", str(probe_txt),
+                    "--output_type", "TXT")
+                for ln in (probe_txt / "cameras.txt").read_text().splitlines():
+                    if ln and not ln.startswith("#"):
+                        parts = ln.split()
+                        max_dim = max(float(parts[2]), float(parts[3]))
+                        f_est = float(parts[4])
+                        if f_est < 0.38 * max_dim or f_est > 2.4 * max_dim:
+                            focal_collapsed = True
+                        break
+                shutil.rmtree(probe_txt, ignore_errors=True)
+            except Exception:
+                pass
+
+        # Forward-motion EXIF-less video sequences suffer focal-length / Z-translation gauge collapse
+        # under free bundle adjustment. Re-run mapper with fixed nominal intrinsics if <60% registered or focal drifted.
+        if single_cam_args and (best_count < max(6, int(0.6 * total_images)) or focal_collapsed):
+            sparse_fixed = project / "sparse_fixed"
+            sparse_fixed.mkdir(exist_ok=True)
+            try:
+                run("mapper", "--database_path", database, "--image_path", images, "--output_path", str(sparse_fixed),
+                    "--Mapper.min_model_size", "4", "--Mapper.init_min_tri_angle", "4",
+                    "--Mapper.tri_min_angle", "1.0", "--Mapper.ba_refine_focal_length", "0",
+                    "--Mapper.ba_refine_extra_params", "0")
+                fixed_models = _collect_models(sparse_fixed)
+                if fixed_models and (max(fixed_models)[0] > best_count or (focal_collapsed and max(fixed_models)[0] >= 4)):
+                    models = fixed_models
+            except Exception:
+                pass
+
         if not models or max(models)[0] < 4:
             raise RuntimeError("COLMAP did not register at least four views in a single model.")
         _, best = max(models)
         canonical = sparse / "0"
         if best != canonical:
             if canonical.exists():
+                shutil.rmtree(project / "previous_model", ignore_errors=True)
                 canonical.rename(project / "previous_model")
             best.rename(canonical)
         text_model = project / "text_model"
@@ -96,7 +158,9 @@ class OpenSplatAdapter:
         self.cpu = cpu
 
     def train(self, project: Path, output: Path, preset: str, registered_names: list[str], *,
-              timeout=1800, iterations=None, progress=None, cancelled=None, input_format="COLMAP"):
+              timeout=None, iterations=None, progress=None, cancelled=None, input_format="COLMAP"):
+        if timeout is None:
+            timeout = float(os.environ.get("MOSAICEARTH_OPENSPLAT_TIMEOUT_SECONDS", "10800"))
         if len(registered_names) < 4:
             raise ValueError("OpenSplat requires at least four registered views")
         output.mkdir(parents=True, exist_ok=False)
@@ -117,6 +181,8 @@ class OpenSplatAdapter:
             "--downscale-factor", str(downscale), "--max-gaussians", str(max_splats),
             "--sh-degree", str(sh), "--refine-every", "100",
         ]
+        if Path("/worker/quality/quality.pt").is_file():
+            argv += ["--val-render", str((output / "validation").resolve())]
         if self.cpu:
             argv.append("--cpu")
         log = output / "opensplat.log"
@@ -191,5 +257,52 @@ class OpenSplatAdapter:
                                   "sh_degree": sh, "refine_every": 100, "force_cpu": self.cpu},
             "coordinate_frame": "input_sfm",
         }
+        try:
+            import resource
+            metadata["process_peak_rss_kib"] = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        except ImportError:
+            metadata["process_peak_rss_kib"] = None
+        for label, field in (("SSIM", "ssim_val"), ("LPIPS_squeeze_v01", "lpips_val")):
+            metric = re.search(r"validation " + label + r":\s*([^\s]+)", log_text)
+            if metric:
+                value = float(metric[1])
+                if not math.isfinite(value):
+                    raise RuntimeError("OpenSplat reported a non-finite validation metric")
+                metadata[field] = value
+        if metadata["lpips_val"] is not None:
+            metadata["lpips_method"] = "LPIPS v0.1, SqueezeNet 1.1, original held-out render, RGB in [-1,1]"
+            metadata["ssim_method"] = "RGB mean, Gaussian 11x11 sigma=1.5, valid window, range=1"
+            metadata["validation_images_sha256"] = {
+                name: hashlib.sha256((output / "validation" / name).read_bytes()).hexdigest()
+                for name in ("reference.png", "rendered.png")
+            }
         (output / "benchmark.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         return ply, cameras, metadata
+
+
+def train_with_cpu_fallback(binary, project, output, preset, names, *, cpu=False, fallback="", on_fallback=None, **kwargs):
+    """Retry a CUDA execution fault on CPU, preserving the failed GPU log."""
+    try:
+        return OpenSplatAdapter(binary, cpu=cpu).train(project, output, preset, names, **kwargs)
+    except RuntimeError:
+        if kwargs.get('cancelled') and kwargs['cancelled']():
+            raise
+        log_path = output / "opensplat.log"
+        error_log = log_path.read_text(errors="replace") if log_path.is_file() else ""
+        gpu_error = any(text in error_log.lower() for text in (
+            "cuda error", "cuda out of memory", "cuda runtime", "cuda driver", "cublas_status",
+            "cudnn_status", "no kernel image", "invalid device function", "cuda-capable device"))
+        if cpu or not fallback or not Path(fallback).is_file() or not gpu_error:
+            raise
+        # This directory contains only this failed attempt's generated files.
+        # The input photos and shared SfM reconstruction remain untouched.
+        shutil.rmtree(output)
+        if on_fallback:
+            on_fallback()
+        try:
+            ply, cameras, benchmark = OpenSplatAdapter(fallback, cpu=True).train(project, output, preset, names, **kwargs)
+        finally:
+            output.mkdir(parents=True, exist_ok=True)
+            (output / "opensplat-gpu-failed.log").write_text(error_log)
+        benchmark["gpu_fallback_reason"] = "CUDA execution failed; completed using the CPU engine. See opensplat-gpu-failed.log."
+        return ply, cameras, benchmark

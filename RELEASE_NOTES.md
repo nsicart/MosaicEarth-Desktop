@@ -1,3 +1,10 @@
+# 0.4.5 — isolated task upload workspaces, video photogrammetry, GCP Studio and 3DGS metric georeferencing
+
+- Unified dark-theme upload workflow across the four dedicated task workspaces (Photogrammetry, 3D Gaussian Splatting, GIS & 3D Scan / `.ZIP` Import, and 360° Panoramas & Geo-Video), with strict per-task mode isolation, above-the-fold live progress banners, automatic form locking while uploading or processing, and automatic return to MyEarth upon completion.
+- Maximum-quality reconstruction by default for both Photogrammetry (`NodeODX Complete`) and 3D Gaussian Splatting (`OpenSplat HIGH_QUALITY`), plus video keyframe extraction with DJI `.SRT` / `.GPX` / `.CSV` telemetry interpolation and interactive map placement for unreferenced datasets.
+- Integrated **MosaicEarth GCP Studio** for sub-pixel Ground Control Point marking on Photogrammetry and `Sim(3)` metric triangulation on 3D Gaussian Splatting, alongside standalone open-source repositories for GCP Studio and all eleven connectors.
+- Shared single-camera intrinsics and automatic forward-motion fixed-intrinsics fallback in COLMAP for uniform-resolution video/drone surveys, 1D trajectory roll stabilization in `Sim(3)` Umeyama alignment, outlier-resistant `mosaicearthCapture` framing in Cesium, zero-local-disk R2 archive streaming, and 3-hour local CPU/CUDA OpenSplat training timeouts.
+
 # 0.4.4 — consistent cloud pricing and shared-source cleanup
 
 - Cloud quotes use the same published Free / Pro / Studio prices and effective-image formula as the website. Storage is labelled in GiB and the 12 MiB size multiplier and billed-task minimum are explicit.

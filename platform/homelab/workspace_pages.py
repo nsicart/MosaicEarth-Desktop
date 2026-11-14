@@ -7210,9 +7210,21 @@ def _render_unified_task_upload_page(
             afmt = html.escape(str(a.get("OUTPUT_FORMAT") or a.get("SOURCE_FORMAT") or a.get("FORMAT") or "").upper())
         if not ready:
             detail = html.escape(str(a.get("STATUS_DETAIL") or "Original saved."))
+            orig_dl_href = f"/ExternalAssetFile.ashx?project_id={project_id}&amp;asset_id={aid}&amp;mode=original&amp;download=1"
             existing_rows_html.append(
-                f'<div class="mb-2"><strong>{atitle}</strong> · {afmt} source file · {detail} '
-                f'<a href="/ExternalAssetFile.ashx?project_id={project_id}&amp;asset_id={aid}&amp;mode=original&amp;download=1">Download original</a></div>'
+                f"""
+                <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;padding:11px 14px;background:#121714;border:1px solid rgba(245,158,11,0.35);border-radius:9px;margin-bottom:8px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span style="padding:2px 8px;border-radius:5px;background:rgba(245,158,11,0.16);border:1px solid rgba(245,158,11,0.45);color:#fde68a;font-size:10.5px;font-weight:700;">{afmt} &middot; PROCESSING</span>
+                        <div>
+                            <div style="font-size:13.5px;font-weight:700;color:#fff;">{atitle}</div>
+                            <div style="font-size:11.5px;color:#cbd5e1;">{afmt} source file &middot; {detail}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <a href="{orig_dl_href}" class="btn btn-sm" style="background:#1c221e;border:1px solid rgba(255,255,255,0.18);color:#e5e7eb;font-size:11px;">Download original</a>
+                    </div>
+                </div>"""
             )
             continue
         existing_rows_html.append(
@@ -7326,7 +7338,7 @@ def _render_unified_task_upload_page(
     <link rel="stylesheet" href="/assets/css/Projects.css?v=7" />
     <link rel="stylesheet" href="/assets/css/Project.css?v=7" />
     <link rel="stylesheet" href="/assets/css/external-asset-import.css?v=12" />
-    <script defer src="/js/front/AssetUpload.js?v=20261113-unified"></script>
+    <script defer src="/js/front/AssetUpload.js?v=20261114-livebanner"></script>
     <style>
         [data-asset-upload] input[type=date] { color-scheme: dark; }
         [data-asset-upload] button[type=submit]:disabled { opacity:1; color:#acbbb0!important; background:#253328!important; border-color:#48614f!important; }
@@ -7555,6 +7567,17 @@ def _render_unified_task_upload_page(
                                     <i class="fas fa-cloud-upload-alt me-1"></i> {card_section_heading}
                                 </div>
 
+                                <div id="asset-upload-live-banner" hidden style="margin-bottom:16px;padding:13px 16px;background:#0e1812;border:1px solid rgba(153,204,0,0.48);border-radius:10px;">
+                                    <progress id="asset-upload-progress" class="w-100" style="height:12px;accent-color:#99CC00;border-radius:999px;" aria-label="File upload progress" hidden></progress>
+                                    <p id="asset-upload-status" role="status" aria-live="polite" style="margin:6px 0 0 0;color:#e5f0ea;font-size:13px;font-weight:600;"></p>
+                                    <div class="d-flex flex-wrap gap-2 mt-2">
+                                        <a id="asset-upload-result" class="btn btn-sm btn-primary" hidden>Open result</a>
+                                        <button type="button" id="asset-upload-pause" class="btn btn-sm btn-secondary" hidden>Pause upload</button>
+                                        <button type="button" id="asset-upload-cancel" class="btn btn-sm btn-secondary" hidden>Cancel upload</button>
+                                        <button type="button" id="asset-upload-retry" class="btn btn-sm btn-primary" hidden>Retry using saved originals</button>
+                                    </div>
+                                </div>
+
                                 <div id="unifiedUploadFieldsWrap" class="row g-3">
                                     <div class="col-md-7">
                                         <div id="unifiedDropzone" class="me-unified-dropzone">
@@ -7619,13 +7642,7 @@ def _render_unified_task_upload_page(
                                     </div>
                                 </div>
 
-                                <p id="asset-upload-selection" class="mt-3"></p>
-                                <progress id="asset-upload-progress" class="w-100" aria-label="File upload progress" hidden></progress>
-                                <p id="asset-upload-status" role="status" aria-live="polite" class="mt-2"></p>
-                                <a id="asset-upload-result" class="btn btn-primary" hidden>Open result</a>
-                                <button type="button" id="asset-upload-pause" class="btn btn-secondary" hidden>Pause upload</button>
-                                <button type="button" id="asset-upload-cancel" class="btn btn-secondary" hidden>Cancel upload</button>
-                                <button type="button" id="asset-upload-retry" class="btn btn-primary" hidden>Retry using saved originals</button>
+                                <p id="asset-upload-selection" class="mt-3" style="color:#d9f99d;font-size:12.5px;font-weight:600;"></p>
                                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-4">
                                     <a class="btn btn-secondary" href="/{norm_lang}/Projects?open_project={root_pid}#taskNode_{project_id}">&larr; BACK TO MYEARTH</a>
                                     <button type="submit" class="btn btn-primary" style="font-weight:700;padding:9px 22px;">

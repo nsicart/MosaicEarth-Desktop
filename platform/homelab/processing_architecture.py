@@ -2542,19 +2542,29 @@ class BackgroundJobQueueManager:
         self.store.persist_table("dbo.MOSAICEARTH_BACKGROUND_JOBS")
 
     def ensure_workers_started(self) -> None:
+        if os.environ.get("MOSAICEARTH_EXTERNAL_WORKER_ONLY") == "1":
+            return
+        already_started = False
         with self._start_lock:
             if self._started:
-                return
-            self._started = True
-            self._recover_interrupted_jobs()
-            for idx in range(self.max_workers):
-                t = threading.Thread(
-                    target=self._worker_loop,
-                    name=f"MosaicEarth-BGWorker-{idx + 1}",
-                    daemon=True,
-                )
-                t.start()
-                self._workers.append(t)
+                already_started = True
+            else:
+                self._started = True
+                self._recover_interrupted_jobs()
+                for idx in range(self.max_workers):
+                    t = threading.Thread(
+                        target=self._worker_loop,
+                        name=f"MosaicEarth-BGWorker-{idx + 1}",
+                        daemon=True,
+                    )
+                    t.start()
+                    self._workers.append(t)
+        if already_started:
+            now_m = time.monotonic()
+            if now_m - getattr(self, "_last_orphan_recovery_mono", 0.0) >= 10.0:
+                self._last_orphan_recovery_mono = now_m
+                self._recover_interrupted_jobs()
+                self._wake_event.set()
 
     # Take the in-process store lock first so a worker cannot hold the file lock
     # while waiting for another thread to finish updating the store.
@@ -3299,6 +3309,7 @@ def align_colmap_cameras_sim3_umeyama(
     matched_src: List[List[float]] = []
     matched_enu: List[List[float]] = []
     matched_wgs: List[Tuple[str, float, float, float]] = []
+    matched_rot: List[Optional[np.ndarray]] = []
 
     for rinfo in reg_images:
         im_name = str(rinfo.get("image_name") or "")
@@ -3313,6 +3324,12 @@ def align_colmap_cameras_sim3_umeyama(
                 if c_world is not None and len(c_world) == 3:
                     matched_src.append([float(c_world[0]), float(c_world[1]), float(c_world[2])])
                     matched_wgs.append((orig_name, lat_v, lon_v, alt_v))
+                    rot_raw = rinfo.get("camera_rotation") or rinfo.get("rotation")
+                    try:
+                        rot_arr = np.asarray(rot_raw, dtype=np.float64) if rot_raw is not None else None
+                        matched_rot.append(rot_arr if (rot_arr is not None and rot_arr.shape == (3, 3) and np.all(np.isfinite(rot_arr))) else None)
+                    except Exception:
+                        matched_rot.append(None)
 
     if len(matched_wgs) < 3:
         has_manual = bool(
@@ -3411,6 +3428,38 @@ def align_colmap_cameras_sim3_umeyama(
                 best_inliers = inliers
         if np.count_nonzero(best_inliers) >= 4:
             best_s, best_R, best_t = _fit_umeyama(X[best_inliers], Y[best_inliers])
+
+    # Stabilize roll around nearly-collinear 1D trajectories (or inverted SVD frames) using
+    # calibrated camera orientations (`u_cam = -R[:,1]`, `d_cam = +R[:,2]`). For any upright
+    # gimbal pitch in [-90°..+30°], `(u_cam - d_cam)` strictly points into the +Up hemisphere.
+    inlier_rots = [matched_rot[i] for i in range(len(matched_rot)) if best_inliers[i] and matched_rot[i] is not None]
+    if inlier_rots:
+        X_in = X[best_inliers]
+        Y_in = Y[best_inliers]
+        Yc_in = Y_in - Y_in.mean(axis=0)
+        _, sv_y, vt_y = np.linalg.svd(Yc_in, full_matrices=False)
+        linearity_ratio = float(sv_y[1] / max(sv_y[0], 1e-9)) if len(sv_y) >= 2 else 0.0
+        upright_src = np.mean([(-r[:, 1] - r[:, 2]) for r in inlier_rots], axis=0)
+        w_enu = best_R @ upright_src
+        if linearity_ratio < 0.20 or float(w_enu[2]) < 0.0:
+            axis = vt_y[0] / max(float(np.linalg.norm(vt_y[0])), 1e-12)
+            w_perp = w_enu - float(np.dot(w_enu, axis)) * axis
+            w_cross = np.cross(axis, w_perp)
+            if abs(float(w_perp[2])) > 1e-9 or abs(float(w_cross[2])) > 1e-9:
+                phi = math.atan2(float(w_cross[2]), float(w_perp[2]))
+                c_p, s_p = math.cos(phi), math.sin(phi)
+                K_ax = np.array([
+                    [0.0, -axis[2], axis[1]],
+                    [axis[2], 0.0, -axis[0]],
+                    [-axis[1], axis[0], 0.0],
+                ], dtype=np.float64)
+                R_roll = np.eye(3, dtype=np.float64) + s_p * K_ax + (1.0 - c_p) * (K_ax @ K_ax)
+                cand_R = R_roll @ best_R
+                cand_t = Y_in.mean(axis=0) - best_s * (cand_R @ X_in.mean(axis=0))
+                cand_err = float(np.sqrt(np.mean(np.sum(((best_s * (X_in @ cand_R.T) + cand_t) - Y_in) ** 2, axis=1))))
+                cur_err = float(np.sqrt(np.mean(np.sum(((best_s * (X_in @ best_R.T) + best_t) - Y_in) ** 2, axis=1))))
+                if linearity_ratio < 0.20 or cand_err <= max(cur_err * 1.35, cur_err + 1.5):
+                    best_R, best_t = cand_R, cand_t
 
     Y_hat = (best_s * (X @ best_R.T)) + best_t
     diff = Y_hat - Y
